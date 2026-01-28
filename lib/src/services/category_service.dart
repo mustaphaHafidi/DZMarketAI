@@ -1,0 +1,83 @@
+import 'dart:convert';
+
+import 'package:dzmarket/src/config/supabase_options.dart';
+import 'package:dzmarket/src/services/rate_limiter.dart';
+import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class CategoryService {
+  static const Duration _cacheTtl = Duration(hours: 12);
+  static const _cacheKey = 'cache.categories.v3';
+  static List<Map<String, String>>? _cache;
+
+  Future<List<Map<String, String>>> fetchCategories() async {
+    if (_cache != null) return _cache!;
+    final cached = await _readCache();
+    if (cached != null) {
+      _cache = cached;
+      return cached;
+    }
+    try {
+      final rows = await RateLimiter.instance.run(
+        'categories.select',
+        () => supabase
+            .from(SupabaseTables.categories)
+            .select('id, name_fr, name_ar, icon, parent_id, sort_order, is_active')
+            .eq('is_active', true)
+            .order('sort_order')
+            .order('name_fr'),
+      );
+      final items = rows
+          .map(
+            (r) => {
+              'id': r['id']?.toString() ?? '',
+              'name_fr': r['name_fr']?.toString() ?? '',
+              'name_ar': r['name_ar']?.toString() ?? '',
+              'icon': r['icon']?.toString() ?? '',
+              'parent_id': r['parent_id']?.toString() ?? '',
+              'sort_order': r['sort_order']?.toString() ?? '',
+            },
+          )
+          .where((r) => r['id']!.isNotEmpty && r['name_fr']!.isNotEmpty)
+          .toList();
+      _cache = items;
+      await _writeCache(items);
+      return items;
+    } catch (_) {
+      return _cache ?? const [];
+    }
+  }
+
+  Future<List<Map<String, String>>?> _readCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_cacheKey);
+      if (raw == null) return null;
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      final ts = DateTime.tryParse(decoded['ts'] as String? ?? '');
+      if (ts == null || DateTime.now().difference(ts) > _cacheTtl) return null;
+      final items = (decoded['items'] as List)
+          .whereType<Map>()
+          .map(
+            (e) => e.map(
+              (k, v) => MapEntry(k.toString(), v?.toString() ?? ''),
+            ),
+          )
+          .toList();
+      return items;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _writeCache(List<Map<String, String>> items) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final payload = jsonEncode({
+        'ts': DateTime.now().toIso8601String(),
+        'items': items,
+      });
+      await prefs.setString(_cacheKey, payload);
+    } catch (_) {}
+  }
+}

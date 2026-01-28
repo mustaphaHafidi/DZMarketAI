@@ -1,0 +1,65 @@
+[
+  {"key":"women","name_fr":"Vetements femme","name_ar":"ملابس نسائية","icon":"woman","parent_key":null,"sort_order":1,"is_active":true},
+  {"key":"women_tops","name_fr":"Hauts","name_ar":"قمصان وبلوزات","icon":"tshirt","parent_key":"women","sort_order":2,"is_active":true},
+  {"key":"women_dresses","name_fr":"Robes","name_ar":"فساتين","icon":"dress","parent_key":"women","sort_order":3,"is_active":true},
+  {"key":"women_pants","name_fr":"Pantalons et jeans","name_ar":"سراويل وجينز","icon":"pants","parent_key":"women","sort_order":4,"is_active":true},
+  {"key":"women_skirts","name_fr":"Jupes","name_ar":"تنانير","icon":"skirt","parent_key":"women","sort_order":5,"is_active":true},
+  {"key":"women_outerwear","name_fr":"Manteaux et vestes","name_ar":"معاطف وسترات","icon":"coat","parent_key":"women","sort_order":6,"is_active":true},
+  {"key":"women_traditional","name_fr":"Traditionnel","name_ar":"تقليدي","icon":"traditional","parent_key":"women","sort_order":7,"is_active":true},
+
+  {"key":"men","name_fr":"Vetements homme","name_ar":"ملابس رجالية","icon":"man","parent_key":null,"sort_order":10,"is_active":true},
+  {"key":"men_tops","name_fr":"T-shirts et chemises","name_ar":"تي شيرت و قمصان","icon":"tshirt","parent_key":"men","sort_order":11,"is_active":true},
+  {"key":"men_pants","name_fr":"Pantalons et jeans","name_ar":"سراويل وجينز","icon":"pants","parent_key":"men","sort_order":12,"is_active":true},
+  {"key":"men_outerwear","name_fr":"Manteaux et vestes","name_ar":"معاطف وسترات","icon":"coat","parent_key":"men","sort_order":13,"is_active":true},
+  {"key":"men_traditional","name_fr":"Traditionnel","name_ar":"تقليدي","icon":"traditional","parent_key":"men","sort_order":14,"is_active":true},
+
+  {"key":"kids","name_fr":"Enfants et bebe","name_ar":"اطفال ورضع","icon":"kids","parent_key":null,"sort_order":20,"is_active":true},
+  {"key":"kids_girls","name_fr":"Fille","name_ar":"بنات","icon":"girl","parent_key":"kids","sort_order":21,"is_active":true},
+  {"key":"kids_boys","name_fr":"Garcon","name_ar":"اولاد","icon":"boy","parent_key":"kids","sort_order":22,"is_active":true},
+  {"key":"kids_baby","name_fr":"Bebe","name_ar":"رضع","icon":"baby","parent_key":"kids","sort_order":23,"is_active":true},
+
+  {"key":"shoes","name_fr":"Chaussures","name_ar":"احذية","icon":"shoes","parent_key":null,"sort_order":30,"is_active":true},
+  {"key":"shoes_women","name_fr":"Chaussures femme","name_ar":"احذية نسائية","icon":"shoes","parent_key":"shoes","sort_order":31,"is_active":true},
+  {"key":"shoes_men","name_fr":"Chaussures homme","name_ar":"احذية رجالية","icon":"shoes","parent_key":"shoes","sort_order":32,"is_active":true},
+  {"key":"shoes_kids","name_fr":"Chaussures enfants","name_ar":"احذية اطفال","icon":"shoes","parent_key":"shoes","sort_order":33,"is_active":true},
+
+  {"key":"bags","name_fr":"Sacs","name_ar":"حقائب","icon":"bag","parent_key":null,"sort_order":40,"is_active":true},
+  {"key":"bags_hand","name_fr":"Sacs a main","name_ar":"حقائب يد","icon":"bag","parent_key":"bags","sort_order":41,"is_active":true},
+  {"key":"bags_backpack","name_fr":"Sacs a dos","name_ar":"حقائب ظهر","icon":"backpack","parent_key":"bags","sort_order":42,"is_active":true},
+  {"key":"bags_luggage","name_fr":"Valises","name_ar":"حقائب سفر","icon":"luggage","parent_key":"bags","sort_order":43,"is_active":true},
+
+  {"key":"accessories","name_fr":"Accessoires","name_ar":"اكسسوارات","icon":"accessories","parent_key":null,"sort_order":50,"is_active":true},
+  {"key":"accessories_jewelry","name_fr":"Bijoux","name_ar":"مجوهرات","icon":"jewelry","parent_key":"accessories","sort_order":51,"is_active":true},
+  {"key":"accessories_watches","name_fr":"Montres","name_ar":"ساعات","icon":"watch","parent_key":"accessories","sort_order":52,"is_active":true},
+  {"key":"accessories_belts","name_fr":"Ceintures","name_ar":"احزمة","icon":"belt","parent_key":"accessories","sort_order":53,"is_active":true},
+
+  {"key":"beauty","name_fr":"Beaute","name_ar":"جمال","icon":"beauty","parent_key":null,"sort_order":60,"is_active":true},
+  {"key":"beauty_makeup","name_fr":"Maquillage","name_ar":"مكياج","icon":"makeup","parent_key":"beauty","sort_order":61,"is_active":true},
+  {"key":"beauty_skincare","name_fr":"Soin de la peau","name_ar":"عناية بالبشرة","icon":"skincare","parent_key":"beauty","sort_order":62,"is_active":true},
+  {"key":"beauty_hair","name_fr":"Cheveux","name_ar":"شعر","icon":"hair","parent_key":"beauty","sort_order":63,"is_active":true},
+  {"key":"beauty_perfume","name_fr":"Parfums","name_ar":"عطور","icon":"perfume","parent_key":"beauty","sort_order":64,"is_active":true},
+
+  {"key":"electronics","name_fr":"Electronique","name_ar":"الكترونيات","icon":"electronics","parent_key":null,"sort_order":70,"is_active":true},
+  {"key":"electronics_phones","name_fr":"Telephones","name_ar":"هواتف","icon":"phone","parent_key":"electronics","sort_order":71,"is_active":true},
+  {"key":"electronics_computers","name_fr":"Ordinateurs","name_ar":"حواسيب","icon":"laptop","parent_key":"electronics","sort_order":72,"is_active":true},
+  {"key":"electronics_gaming","name_fr":"Jeux video","name_ar":"العاب فيديو","icon":"gaming","parent_key":"electronics","sort_order":73,"is_active":true},
+
+  {"key":"home","name_fr":"Maison","name_ar":"المنزل","icon":"home","parent_key":null,"sort_order":80,"is_active":true},
+  {"key":"home_decor","name_fr":"Decoration","name_ar":"ديكور","icon":"decor","parent_key":"home","sort_order":81,"is_active":true},
+  {"key":"home_kitchen","name_fr":"Cuisine","name_ar":"مطبخ","icon":"kitchen","parent_key":"home","sort_order":82,"is_active":true},
+  {"key":"home_furniture","name_fr":"Meubles","name_ar":"اثاث","icon":"furniture","parent_key":"home","sort_order":83,"is_active":true},
+
+  {"key":"sports","name_fr":"Sport","name_ar":"رياضة","icon":"sport","parent_key":null,"sort_order":90,"is_active":true},
+  {"key":"sports_fitness","name_fr":"Fitness","name_ar":"لياقة","icon":"fitness","parent_key":"sports","sort_order":91,"is_active":true},
+  {"key":"sports_outdoor","name_fr":"Plein air","name_ar":"هواء طلق","icon":"outdoor","parent_key":"sports","sort_order":92,"is_active":true},
+
+  {"key":"books","name_fr":"Livres et media","name_ar":"كتب ووسائط","icon":"book","parent_key":null,"sort_order":100,"is_active":true},
+  {"key":"books_fiction","name_fr":"Romans","name_ar":"روايات","icon":"book","parent_key":"books","sort_order":101,"is_active":true},
+  {"key":"books_education","name_fr":"Scolaire","name_ar":"دراسي","icon":"education","parent_key":"books","sort_order":102,"is_active":true},
+
+  {"key":"toys","name_fr":"Jouets","name_ar":"العاب","icon":"toys","parent_key":null,"sort_order":110,"is_active":true},
+  {"key":"toys_baby","name_fr":"Jouets bebe","name_ar":"العاب رضع","icon":"toys","parent_key":"toys","sort_order":111,"is_active":true},
+
+  {"key":"auto","name_fr":"Auto et moto","name_ar":"سيارات ودراجات","icon":"auto","parent_key":null,"sort_order":120,"is_active":true},
+  {"key":"collectibles","name_fr":"Collection","name_ar":"مقتنيات","icon":"collectibles","parent_key":null,"sort_order":130,"is_active":true}
+]
