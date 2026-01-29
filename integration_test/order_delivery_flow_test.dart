@@ -68,7 +68,7 @@ void main() {
     final row = await Supabase.instance.client
         .from('orders')
         .select('id,status,payment_status')
-        .eq('id', orderId)
+        .eq('id', orderId!)
         .maybeSingle();
     expect(row?['status'], 'pending');
     expect(row?['payment_status'], 'pending');
