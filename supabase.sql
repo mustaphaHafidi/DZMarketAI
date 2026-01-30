@@ -801,6 +801,14 @@ alter table public.orders
 alter table public.orders drop constraint if exists orders_courier_id_fkey;
 alter table public.orders
   add constraint orders_courier_id_fkey foreign key (courier_id) references public.couriers(code) on delete set null;
+alter table public.orders
+  add column if not exists shipping_address_id bigint references public.addresses(id) on delete set null;
+alter table public.orders
+  add column if not exists shipping_option text;
+alter table public.orders
+  add column if not exists payment_method text;
+alter table public.orders
+  add column if not exists payment_status text;
 update public.orders
   set seller_id = (
     select owner_id from public.products p where p.id = public.orders.product_id
@@ -1184,6 +1192,8 @@ alter table public.chat_room_users enable row level security;
 drop policy if exists "chat_room_users select own" on public.chat_room_users;
 drop policy if exists "chat_room_users insert own" on public.chat_room_users;
 drop policy if exists "chat_room_users update own" on public.chat_room_users;
+drop policy if exists "chat_room_users insert by participants" on public.chat_room_users;
+drop policy if exists "chat_room_users update by participants" on public.chat_room_users;
 create policy "chat_room_users select own" on public.chat_room_users
   for select using (
     auth.uid() = user_id
@@ -1193,19 +1203,17 @@ create policy "chat_room_users select own" on public.chat_room_users
         and (r.buyer_id = auth.uid() or r.seller_id = auth.uid())
     )
   );
-create policy "chat_room_users insert own" on public.chat_room_users
+create policy "chat_room_users insert by participants" on public.chat_room_users
   for insert with check (
-    auth.uid() = user_id
-    and exists (
+    exists (
       select 1 from public.chat_rooms r
       where r.room_id = chat_room_users.room_id
         and (r.buyer_id = auth.uid() or r.seller_id = auth.uid())
     )
   );
-create policy "chat_room_users update own" on public.chat_room_users
+create policy "chat_room_users update by participants" on public.chat_room_users
   for update using (
-    auth.uid() = user_id
-    and exists (
+    exists (
       select 1 from public.chat_rooms r
       where r.room_id = chat_room_users.room_id
         and (r.buyer_id = auth.uid() or r.seller_id = auth.uid())
@@ -1381,6 +1389,24 @@ create table if not exists public.driver_positions (
   heading double precision,
   updated_at timestamptz default now()
 );
+drop policy if exists "chat_room_users insert by participants" on public.chat_room_users;
+drop policy if exists "chat_room_users update by participants" on public.chat_room_users;
+create policy "chat_room_users insert by participants" on public.chat_room_users
+  for insert with check (
+    exists (
+      select 1 from public.chat_rooms r
+      where r.room_id = chat_room_users.room_id
+        and (r.buyer_id = auth.uid() or r.seller_id = auth.uid())
+    )
+  );
+create policy "chat_room_users update by participants" on public.chat_room_users
+  for update using (
+    exists (
+      select 1 from public.chat_rooms r
+      where r.room_id = chat_room_users.room_id
+        and (r.buyer_id = auth.uid() or r.seller_id = auth.uid())
+    )
+  );
 alter table public.driver_positions enable row level security;
 drop policy if exists "positions visible to buyer seller driver" on public.driver_positions;
 drop policy if exists "positions insert by driver" on public.driver_positions;

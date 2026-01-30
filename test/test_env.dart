@@ -1,33 +1,36 @@
-import 'dart:io';
+import 'test_env_io.dart'
+    if (dart.library.html) 'test_env_web.dart' as env;
+
+String? _clean(String? value) {
+  if (value == null || value.isEmpty) return null;
+  return value;
+}
 
 class TestEnv {
-  static String? get supabaseUrl => Platform.environment['SUPABASE_URL'];
-  static String? get supabaseAnonKey => Platform.environment['SUPABASE_ANON_KEY'];
-  static String? get testEmail => Platform.environment['TEST_USER_EMAIL'];
-  static String? get testPassword => Platform.environment['TEST_USER_PASSWORD'];
-  static String? get testRoomId => Platform.environment['TEST_ROOM_ID'];
-  static String? get testProductId => Platform.environment['TEST_PRODUCT_ID'];
-  static String? get testBuyerId => Platform.environment['TEST_BUYER_ID'];
-  static String? get testSellerId => Platform.environment['TEST_SELLER_ID'];
-  static String? get testOrderId => Platform.environment['TEST_ORDER_ID'];
-  static String? get testCourierName => Platform.environment['TEST_COURIER_NAME'];
-  static String? get testCourierId => Platform.environment['TEST_COURIER_ID'];
-  static String? get testCourierApiKey =>
-      Platform.environment['TEST_COURIER_API_KEY'];
+  static String? get supabaseUrl => _clean(env.envSupabaseUrl());
+  static String? get supabaseAnonKey => _clean(env.envSupabaseAnonKey());
+  static String? get testEmail => _clean(env.envTestUserEmail());
+  static String? get testPassword => _clean(env.envTestUserPassword());
+  static String? get testRoomId => _clean(env.envTestRoomId());
+  static String? get testProductId => _clean(env.envTestProductId());
+  static String? get testBuyerId => _clean(env.envTestBuyerId());
+  static String? get testSellerId => _clean(env.envTestSellerId());
+  static String? get testOrderId => _clean(env.envTestOrderId());
+  static String? get testCourierName => _clean(env.envTestCourierName());
+  static String? get testCourierId => _clean(env.envTestCourierId());
+  static String? get testCourierApiKey => _clean(env.envTestCourierApiKey());
   static String? get testCourierApiSecret =>
-      Platform.environment['TEST_COURIER_API_SECRET'];
-  static String? get testOtherEmail =>
-      Platform.environment['TEST_OTHER_USER_EMAIL'];
+      _clean(env.envTestCourierApiSecret());
+  static String? get testOtherEmail => _clean(env.envTestOtherUserEmail());
   static String? get testOtherPassword =>
-      Platform.environment['TEST_OTHER_USER_PASSWORD'];
-  static String? get testOtherOrderId =>
-      Platform.environment['TEST_OTHER_ORDER_ID'];
-  static String? get testRoomId2 => Platform.environment['TEST_ROOM_ID_2'];
-  static String? get testProductId2 => Platform.environment['TEST_PRODUCT_ID_2'];
+      _clean(env.envTestOtherUserPassword());
+  static String? get testOtherOrderId => _clean(env.envTestOtherOrderId());
+  static String? get testRoomId2 => _clean(env.envTestRoomId2());
+  static String? get testProductId2 => _clean(env.envTestProductId2());
   static String? get testCourierCreateParcel =>
-      Platform.environment['TEST_COURIER_CREATE_PARCEL'];
+      _clean(env.envTestCourierCreateParcel());
   static String? get testShipmentSelectionJson =>
-      Platform.environment['TEST_SHIPMENT_SELECTION_JSON'];
+      _clean(env.envTestShipmentSelectionJson());
 
   static bool get hasSupabaseCreds =>
       (supabaseUrl ?? '').isNotEmpty && (supabaseAnonKey ?? '').isNotEmpty;

@@ -26,7 +26,7 @@ class MessageService {
     return row?['room_id']?.toString();
   }
   Stream<List<Message>> streamMessages(String roomId) {
-    final safeRoomId = InputSanitizer.sanitizeId(roomId, maxLength: 80);
+    final safeRoomId = InputSanitizer.sanitizeId(roomId, maxLength: 120);
     return RateLimiter.instance.stream(
       'messages.stream',
       () => supabase
@@ -74,7 +74,7 @@ class MessageService {
   }) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) throw StateError('User must be signed in to chat.');
-    final safeRoomId = InputSanitizer.sanitizeId(roomId, maxLength: 80);
+    final safeRoomId = InputSanitizer.sanitizeId(roomId, maxLength: 120);
     final safeContent = type == MessageType.image
         ? InputSanitizer.sanitizeUrl(content, maxLength: 400)
         : InputSanitizer.sanitizeText(content, maxLength: 800, allowNewlines: true);
@@ -103,7 +103,7 @@ class MessageService {
   Future<void> ensureRoomWithHello(String roomId) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return;
-    final safeRoomId = InputSanitizer.sanitizeId(roomId, maxLength: 80);
+    final safeRoomId = InputSanitizer.sanitizeId(roomId, maxLength: 120);
     final existing = await RateLimiter.instance.run(
       'messages.ensure.select',
       () => supabase
@@ -122,7 +122,7 @@ class MessageService {
   }
 
   Future<void> markRead(String roomId) async {
-    final safeRoomId = InputSanitizer.sanitizeId(roomId, maxLength: 80);
+    final safeRoomId = InputSanitizer.sanitizeId(roomId, maxLength: 120);
     await RateLimiter.instance.run(
       'chat_rooms.read',
       () =>

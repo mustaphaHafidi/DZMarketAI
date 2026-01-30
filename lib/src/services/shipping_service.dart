@@ -924,17 +924,19 @@ class ShippingService {
       if (apiKey.isEmpty || apiSecret.isEmpty) {
         return _fetchDbWilayas();
       }
-      return _fetchYalidineWilayas(
+      final list = await _fetchYalidineWilayas(
         apiKey: apiKey,
         apiSecret: apiSecret,
       );
+      return list.isEmpty ? _fetchDbWilayas() : list;
     } else if (safeCourierId.contains('ecotrack')) {
       if (apiKey.isEmpty) {
         return _fetchDbWilayas();
       }
-      return _fetchEcotrackWilayas(
+      final list = await _fetchEcotrackWilayas(
         apiKey: apiKey,
       );
+      return list.isEmpty ? _fetchDbWilayas() : list;
     }
     return _fetchDbWilayas();
   }
@@ -953,19 +955,21 @@ class ShippingService {
       if (apiKey.isEmpty || apiSecret.isEmpty) {
         return _fetchDbCommunes(safeWilayaCode);
       }
-      return _fetchYalidineCommunes(
+      final list = await _fetchYalidineCommunes(
         apiKey: apiKey,
         apiSecret: apiSecret,
         wilayaCode: safeWilayaCode,
       );
+      return list.isEmpty ? _fetchDbCommunes(safeWilayaCode) : list;
     } else if (safeCourierId.contains('ecotrack')) {
       if (apiKey.isEmpty) {
         return _fetchDbCommunes(safeWilayaCode);
       }
-      return _fetchEcotrackCommunes(
+      final list = await _fetchEcotrackCommunes(
         apiKey: apiKey,
         wilayaCode: safeWilayaCode,
       );
+      return list.isEmpty ? _fetchDbCommunes(safeWilayaCode) : list;
     }
     return _fetchDbCommunes(safeWilayaCode);
   }

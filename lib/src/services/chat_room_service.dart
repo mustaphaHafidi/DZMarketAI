@@ -114,7 +114,7 @@ class ChatRoomService {
     required String buyerId,
     required String sellerId,
   }) async {
-    final safeRoomId = InputSanitizer.sanitizeId(roomId, maxLength: 80);
+    final safeRoomId = InputSanitizer.sanitizeId(roomId, maxLength: 120);
     final safeProductId = InputSanitizer.sanitizeId(productId, maxLength: 64);
     final safeBuyerId = InputSanitizer.sanitizeId(buyerId, maxLength: 64);
     final safeSellerId = InputSanitizer.sanitizeId(sellerId, maxLength: 64);
@@ -130,10 +130,19 @@ class ChatRoomService {
   }
 
   Future<void> hideRoom(String roomId) async {
-    final safeRoomId = InputSanitizer.sanitizeId(roomId, maxLength: 80);
+    final safeRoomId = InputSanitizer.sanitizeId(roomId, maxLength: 120);
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) {
+      throw StateError('User must be signed in to hide a chat room');
+    }
+    final payload = {
+      'room_id': safeRoomId,
+      'user_id': userId,
+      'deleted_at': DateTime.now().toUtc().toIso8601String(),
+    };
     await RateLimiter.instance.run(
       'chat_rooms.hide',
-      () => supabase.rpc('hide_chat_room', params: {'p_room_id': safeRoomId}),
+      () => supabase.from('chat_room_users').upsert(payload),
     );
   }
 }
