@@ -20,6 +20,10 @@ String? envTestOtherUserEmail() =>
     const String.fromEnvironment('TEST_OTHER_USER_EMAIL');
 String? envTestOtherUserPassword() =>
     const String.fromEnvironment('TEST_OTHER_USER_PASSWORD');
+String? envTestSellerUserEmail() =>
+    const String.fromEnvironment('TEST_SELLER_USER_EMAIL');
+String? envTestSellerUserPassword() =>
+    const String.fromEnvironment('TEST_SELLER_USER_PASSWORD');
 String? envTestOtherOrderId() =>
     const String.fromEnvironment('TEST_OTHER_ORDER_ID');
 String? envTestRoomId2() => const String.fromEnvironment('TEST_ROOM_ID_2');

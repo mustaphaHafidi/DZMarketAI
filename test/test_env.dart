@@ -24,6 +24,9 @@ class TestEnv {
   static String? get testOtherEmail => _clean(env.envTestOtherUserEmail());
   static String? get testOtherPassword =>
       _clean(env.envTestOtherUserPassword());
+  static String? get testSellerEmail => _clean(env.envTestSellerUserEmail());
+  static String? get testSellerPassword =>
+      _clean(env.envTestSellerUserPassword());
   static String? get testOtherOrderId => _clean(env.envTestOtherOrderId());
   static String? get testRoomId2 => _clean(env.envTestRoomId2());
   static String? get testProductId2 => _clean(env.envTestProductId2());
@@ -55,6 +58,11 @@ class TestEnv {
   static bool get hasOtherAuthCreds =>
       (testOtherEmail ?? '').isNotEmpty &&
       (testOtherPassword ?? '').isNotEmpty &&
+      hasSupabaseCreds;
+
+  static bool get hasSellerAuthCreds =>
+      (testSellerEmail ?? '').isNotEmpty &&
+      (testSellerPassword ?? '').isNotEmpty &&
       hasSupabaseCreds;
 
   static bool get hasSecondChatRoom =>

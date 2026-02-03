@@ -90,6 +90,20 @@ String? envTestOtherOrderId() {
       : Platform.environment['TEST_OTHER_ORDER_ID'];
 }
 
+String? envTestSellerUserEmail() {
+  const value = String.fromEnvironment('TEST_SELLER_USER_EMAIL');
+  return value.isNotEmpty
+      ? value
+      : Platform.environment['TEST_SELLER_USER_EMAIL'];
+}
+
+String? envTestSellerUserPassword() {
+  const value = String.fromEnvironment('TEST_SELLER_USER_PASSWORD');
+  return value.isNotEmpty
+      ? value
+      : Platform.environment['TEST_SELLER_USER_PASSWORD'];
+}
+
 String? envTestRoomId2() {
   const value = String.fromEnvironment('TEST_ROOM_ID_2');
   return value.isNotEmpty ? value : Platform.environment['TEST_ROOM_ID_2'];

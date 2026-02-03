@@ -55,6 +55,7 @@ $parentRows = $parents | ForEach-Object {
 foreach ($chunk in (Chunk -Items $parentRows -Size 200)) {
   Invoke-Upsert -Table "categories" -OnConflict "slug" -Rows $chunk
 }
+Write-Host ("Parent categories: {0}" -f $parentRows.Count)
 
 $catMapUrl = "$supabaseUrl/rest/v1/categories?select=id,slug"
 $catMap = Invoke-RestMethod -Method Get -Uri $catMapUrl -Headers $headers
@@ -78,6 +79,7 @@ $childRows = $children | ForEach-Object {
 foreach ($chunk in (Chunk -Items $childRows -Size 200)) {
   Invoke-Upsert -Table "categories" -OnConflict "slug" -Rows $chunk
 }
+Write-Host ("Child categories: {0}" -f $childRows.Count)
 
 Write-Host "Seeding wilayas..."
 $wilayasPath = Join-Path $PSScriptRoot "..\\data\\wilayas_dz.csv"
@@ -88,6 +90,7 @@ $wilayaRows = $wilayas | ForEach-Object {
 foreach ($chunk in (Chunk -Items $wilayaRows -Size 500)) {
   Invoke-Upsert -Table "wilayas" -OnConflict "code" -Rows $chunk
 }
+Write-Host ("Wilayas: {0}" -f $wilayaRows.Count)
 
 Write-Host "Seeding communes..."
 $communesPath = Join-Path $PSScriptRoot "..\\data\\communes_dz.csv"
@@ -98,5 +101,6 @@ $communeRows = $communes | ForEach-Object {
 foreach ($chunk in (Chunk -Items $communeRows -Size 500)) {
   Invoke-Upsert -Table "communes" -OnConflict "wilaya_code,name_fr" -Rows $chunk
 }
+Write-Host ("Communes: {0}" -f $communeRows.Count)
 
 Write-Host "Seed completed."

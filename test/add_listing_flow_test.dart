@@ -98,11 +98,11 @@ void main() {
 
   // Skip: Stepper flow relies on widget-private state; cover via integration test.
   testWidgets('Add listing: required fields + stock validation', (tester) async {
-    tester.binding.window.physicalSizeTestValue = const Size(800, 1400);
-    tester.binding.window.devicePixelRatioTestValue = 1.0;
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1.0;
     addTearDown(() async {
-      tester.binding.window.clearPhysicalSizeTestValue();
-      tester.binding.window.clearDevicePixelRatioTestValue();
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
     });
 
     await tester.pumpWidget(const MaterialApp(home: AddListingPage()));
@@ -119,7 +119,7 @@ void main() {
       return find.byWidgetPredicate(
         (widget) =>
             widget is DropdownButtonFormField &&
-            widget.decoration?.labelText == label,
+            widget.decoration.labelText == label,
       );
     }
 
@@ -143,7 +143,7 @@ void main() {
       final finder = find.widgetWithText(SwitchListTile, label);
       expect(finder, findsOneWidget);
       final widget = tester.widget<SwitchListTile>(finder);
-      widget.onChanged?.call(!(widget.value ?? false));
+      widget.onChanged?.call(!widget.value);
     }
 
     // Step 0: add photo -> continue to step 1.

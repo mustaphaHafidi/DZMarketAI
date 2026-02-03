@@ -1,0 +1,16 @@
+{
+  "SUPABASE_URL": "https://your-project.supabase.co",
+  "SUPABASE_ANON_KEY": "your-supabase-anon-key",
+  "TEST_USER_EMAIL": "buyer@example.com",
+  "TEST_USER_PASSWORD": "buyer-password",
+  "TEST_SELLER_USER_EMAIL": "seller@example.com",
+  "TEST_SELLER_USER_PASSWORD": "seller-password",
+  "TEST_PRODUCT_ID": "your-product-id",
+  "TEST_ORDER_ID": "",
+  "TEST_COURIER_NAME": "Yalidine Express",
+  "TEST_COURIER_ID": "yalidine",
+  "TEST_COURIER_API_KEY": "your-courier-api-key",
+  "TEST_COURIER_API_SECRET": "your-courier-api-secret",
+  "TEST_COURIER_CREATE_PARCEL": "true",
+  "TEST_SHIPMENT_SELECTION_JSON": "{\"firstname\":\"Ali\",\"familyname\":\"Ben\",\"phone\":\"0550000000\",\"address\":\"Alger\",\"receiverCommune\":\"Alger Centre\",\"wilayaCode\":\"16\",\"price\":1200,\"productList\":\"Produit\",\"weight\":1,\"deliveryType\":\"home\",\"estimatedFee\":300}"
+}
