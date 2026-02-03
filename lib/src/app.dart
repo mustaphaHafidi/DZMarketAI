@@ -1,17 +1,30 @@
 import 'package:dzmarket/src/router.dart';
 import 'package:dzmarket/src/theme.dart';
+import 'package:dzmarket/src/widgets/app_state_scope.dart';
+import 'package:dzmarket/src/widgets/connectivity_banner.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:dzmarket/src/services/auth_service.dart';
+import 'package:dzmarket/src/services/analytics_service.dart';
+import 'package:dzmarket/src/services/session_controller.dart';
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class DZMarketApp extends StatelessWidget {
-  DZMarketApp({super.key, required this.scaffoldMessengerKey});
+  DZMarketApp({super.key, required this.scaffoldMessengerKey})
+      : _router = _buildRouter();
 
-  final _router = createRouter();
+  final GoRouter _router;
   final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey;
+
+  static GoRouter _buildRouter() {
+    final observer = AnalyticsService.instance.createObserver();
+    return createRouter(
+      observers: observer == null ? const [] : [observer],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,9 +69,20 @@ class DZMarketApp extends StatelessWidget {
               builder: (context, child) {
                 final resolved = Localizations.localeOf(context);
                 final isRtl = resolved.languageCode == 'ar';
-                return Directionality(
-                  textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
-                  child: child ?? const SizedBox.shrink(),
+                return AppStateScope(
+                  notifier: SessionController.instance,
+                  child: Directionality(
+                    textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
+                    child: Stack(
+                      children: [
+                        child ?? const SizedBox.shrink(),
+                        const Align(
+                          alignment: Alignment.topCenter,
+                          child: ConnectivityBanner(),
+                        ),
+                      ],
+                    ),
+                  ),
                 );
               },
             );

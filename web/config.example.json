@@ -1,4 +1,38 @@
 {
-  "supabaseUrl": "https://your-project.supabase.co",
-  "supabaseAnonKey": "YOUR_SUPABASE_ANON_KEY"
+  "dev": {
+    "__PLACEHOLDER__": true,
+    "supabaseUrl": "REPLACE_ME",
+    "supabaseAnonKey": "REPLACE_ME",
+    "apiKey": "REPLACE_ME",
+    "authDomain": "REPLACE_ME",
+    "projectId": "REPLACE_ME",
+    "storageBucket": "REPLACE_ME",
+    "messagingSenderId": "REPLACE_ME",
+    "appId": "REPLACE_ME",
+    "measurementId": "REPLACE_ME"
+  },
+  "staging": {
+    "__PLACEHOLDER__": true,
+    "supabaseUrl": "REPLACE_ME",
+    "supabaseAnonKey": "REPLACE_ME",
+    "apiKey": "REPLACE_ME",
+    "authDomain": "REPLACE_ME",
+    "projectId": "REPLACE_ME",
+    "storageBucket": "REPLACE_ME",
+    "messagingSenderId": "REPLACE_ME",
+    "appId": "REPLACE_ME",
+    "measurementId": "REPLACE_ME"
+  },
+  "prod": {
+    "__PLACEHOLDER__": true,
+    "supabaseUrl": "REPLACE_ME",
+    "supabaseAnonKey": "REPLACE_ME",
+    "apiKey": "REPLACE_ME",
+    "authDomain": "REPLACE_ME",
+    "projectId": "REPLACE_ME",
+    "storageBucket": "REPLACE_ME",
+    "messagingSenderId": "REPLACE_ME",
+    "appId": "REPLACE_ME",
+    "measurementId": "REPLACE_ME"
+  }
 }

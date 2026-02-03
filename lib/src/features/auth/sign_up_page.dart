@@ -53,7 +53,13 @@ class _SignUpPageState extends State<SignUpPage> {
         );
       }
       if (!mounted) return;
-      context.go('/');
+      final from = GoRouterState.of(context).uri.queryParameters['from'];
+      if (from != null && from.isNotEmpty) {
+        final target = Uri.tryParse(from);
+        context.go(target?.toString() ?? '/');
+      } else {
+        context.go('/');
+      }
     } on FormatException catch (e) {
       setState(() => _error = e.message);
     } on AuthException catch (e) {

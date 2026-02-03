@@ -25,20 +25,23 @@ class GoRouterRefreshStream extends ChangeNotifier {
   }
 }
 
-GoRouter createRouter() {
+GoRouter createRouter({List<NavigatorObserver> observers = const []}) {
   final auth = Supabase.instance.client.auth;
 
   return GoRouter(
     initialLocation: '/',
     debugLogDiagnostics: false,
     refreshListenable: GoRouterRefreshStream(auth.onAuthStateChange),
+    observers: observers,
     redirect: (context, state) {
       final session = auth.currentSession;
       final loggingIn = state.matchedLocation == '/sign-in';
       final signingUp = state.matchedLocation == '/sign-up';
 
       if (session == null) {
-        return (loggingIn || signingUp) ? null : '/sign-in';
+        if (loggingIn || signingUp) return null;
+        final from = Uri.encodeComponent(state.uri.toString());
+        return '/sign-in?from=$from';
       }
 
       if (loggingIn || signingUp) {
