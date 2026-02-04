@@ -1,4 +1,4 @@
-package com.mustapha.dzmarket
+package com.dzmarket.app
 
 import io.flutter.embedding.android.FlutterActivity
 

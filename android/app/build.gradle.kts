@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -8,7 +10,7 @@ plugins {
 }
 
 android {
-    namespace = "com.mustapha.dzmarket"
+    namespace = "com.dzmarket.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -22,7 +24,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.mustapha.dzmarket"
+        applicationId = "com.dzmarket.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -39,21 +41,21 @@ android {
             dimension = "env"
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
-            resValue("string", "app_name", "DZMarketAI Dev")
+            resValue("string", "app_name", "DZMarket Dev")
         }
         create("staging") {
             dimension = "env"
             applicationIdSuffix = ".staging"
             versionNameSuffix = "-staging"
-            resValue("string", "app_name", "DZMarketAI Staging")
+            resValue("string", "app_name", "DZMarket Staging")
         }
         create("prod") {
             dimension = "env"
-            resValue("string", "app_name", "DZMarketAI")
+            resValue("string", "app_name", "DZMarket")
         }
     }
 
-    val keystoreProperties = java.util.Properties()
+    val keystoreProperties = Properties()
     val keystorePropertiesFile = rootProject.file("key.properties")
     if (keystorePropertiesFile.exists()) {
         keystoreProperties.load(keystorePropertiesFile.inputStream())
@@ -80,18 +82,8 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
-            firebaseCrashlytics {
-                mappingFileUploadEnabled = true
-            }
         }
     }
-}
-
-dependencies {
-    implementation(platform("com.google.firebase:firebase-bom:34.7.0"))
-    implementation("com.google.firebase:firebase-analytics")
-    implementation("com.google.firebase:firebase-messaging")
-    implementation("com.google.firebase:firebase-crashlytics")
 }
 
 flutter {

@@ -1,4 +1,67 @@
 {
-  "__PLACEHOLDER__": true,
-  "note": "Replace with real google-services.json from Firebase Console"
+  "project_info": {
+    "project_number": "194169729687",
+    "project_id": "dzmarketai",
+    "storage_bucket": "dzmarketai.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:194169729687:android:9d22de24826ee3ba6f6fd2",
+        "android_client_info": {
+          "package_name": "com.dzmarket.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCos2pl8oBVPDOF8RtFvmYGTWQrFiTaXMw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:194169729687:android:dea79da98903f1ec6f6fd2",
+        "android_client_info": {
+          "package_name": "com.mustapha.dzmarket.dev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCos2pl8oBVPDOF8RtFvmYGTWQrFiTaXMw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:194169729687:android:placeholderdevdzmarketapp",
+        "android_client_info": {
+          "package_name": "com.dzmarket.app.dev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCos2pl8oBVPDOF8RtFvmYGTWQrFiTaXMw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
 }

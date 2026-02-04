@@ -1,4 +1,5 @@
 import 'package:dzmarket/src/config/supabase_options.dart';
+import 'package:dzmarket/src/models/conversation.dart';
 import 'package:dzmarket/src/services/chat_room_service.dart';
 import 'package:dzmarket/src/services/rate_limiter.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
@@ -12,6 +13,7 @@ class ConversationMeta {
     required this.productTitle,
     required this.productImage,
     required this.price,
+    required this.status,
     required this.sellerName,
     required this.buyerName,
     required this.sellerAvatar,
@@ -25,6 +27,7 @@ class ConversationMeta {
   final String productTitle;
   final String? productImage;
   final double? price;
+  final String? status;
   final String sellerName;
   final String buyerName;
   final String? sellerAvatar;
@@ -56,6 +59,7 @@ class ConversationMetaService {
       productTitle: 'Produit',
       productImage: null,
       price: null,
+      status: null,
       sellerName: 'Vendeur',
       buyerName: 'Acheteur',
       sellerAvatar: null,
@@ -84,7 +88,7 @@ class ConversationMetaService {
       'conversation.products',
       () => supabase
           .from(SupabaseTables.products)
-          .select('id,title,image_url,price,owner_id')
+          .select('id,title,image_url,price,owner_id,status')
           .filter('id', 'in', _inList(productIds)),
     );
     final profiles = await RateLimiter.instance.run(
@@ -128,6 +132,7 @@ class ConversationMetaService {
         buyerName: buyerName,
         sellerAvatar: sellerProfile?['avatar_url']?.toString(),
         buyerAvatar: buyerProfile?['avatar_url']?.toString(),
+        status: product?['status']?.toString(),
       );
       metas[base.roomId] = meta;
       _cache[base.roomId] = meta;
@@ -156,7 +161,7 @@ class ConversationMetaService {
       'conversation.products',
       () => supabase
           .from(SupabaseTables.products)
-          .select('id,title,image_url,price,owner_id')
+          .select('id,title,image_url,price,owner_id,status')
           .filter('id', 'in', _inList(productIds)),
     );
     final profiles = await RateLimiter.instance.run(
@@ -200,11 +205,87 @@ class ConversationMetaService {
         buyerName: buyerName,
         sellerAvatar: sellerProfile?['avatar_url']?.toString(),
         buyerAvatar: buyerProfile?['avatar_url']?.toString(),
+        status: product?['status']?.toString(),
       );
       metas[room.roomId] = meta;
       _cache[room.roomId] = meta;
     }
 
+    return metas;
+  }
+
+  Future<Map<String, ConversationMeta>> fetchManyForConversations(
+    List<Conversation> conversations,
+  ) async {
+    final metas = <String, ConversationMeta>{};
+    final filtered = conversations
+        .where((c) => c.productId != null && c.productId!.isNotEmpty)
+        .toList();
+    if (filtered.isEmpty) return metas;
+
+    final productIds = filtered.map((c) => c.productId!).toSet().toList();
+    final userIds = <String>{};
+    for (final c in filtered) {
+      if (c.buyerId != null) userIds.add(c.buyerId!);
+      if (c.sellerId != null) userIds.add(c.sellerId!);
+    }
+
+    final products = await RateLimiter.instance.run(
+      'conversation.products',
+      () => supabase
+          .from(SupabaseTables.products)
+          .select('id,title,image_url,price,owner_id,status')
+          .filter('id', 'in', _inList(productIds)),
+    );
+    final profiles = await RateLimiter.instance.run(
+      'conversation.profiles',
+      () => supabase
+          .from(SupabaseTables.profiles)
+          .select('id,full_name,email,avatar_url')
+          .filter('id', 'in', _inList(userIds.toList())),
+    );
+
+    final productMap = <String, Map<String, dynamic>>{};
+    for (final row in products) {
+      productMap[row['id'].toString()] = row;
+    }
+    final profileMap = <String, Map<String, dynamic>>{};
+    for (final row in profiles) {
+      profileMap[row['id'].toString()] = row;
+    }
+
+    for (final conv in filtered) {
+      final product = productMap[conv.productId];
+      final sellerProfile = conv.sellerId != null
+          ? profileMap[conv.sellerId]
+          : null;
+      final buyerProfile =
+          conv.buyerId != null ? profileMap[conv.buyerId] : null;
+      final sellerName =
+          (sellerProfile?['full_name'] as String?)?.trim().isNotEmpty == true
+              ? sellerProfile!['full_name'] as String
+              : (sellerProfile?['email'] as String? ?? 'Vendeur');
+      final buyerName =
+          (buyerProfile?['full_name'] as String?)?.trim().isNotEmpty == true
+              ? buyerProfile!['full_name'] as String
+              : (buyerProfile?['email'] as String? ?? 'Acheteur');
+      final meta = ConversationMeta(
+        roomId: conv.id,
+        productId: conv.productId!,
+        buyerId: conv.buyerId ?? '',
+        sellerId: conv.sellerId ?? '',
+        productTitle: product?['title']?.toString() ?? 'Produit',
+        productImage: product?['image_url']?.toString(),
+        price: (product?['price'] as num?)?.toDouble(),
+        sellerName: sellerName,
+        buyerName: buyerName,
+        sellerAvatar: sellerProfile?['avatar_url']?.toString(),
+        buyerAvatar: buyerProfile?['avatar_url']?.toString(),
+        status: product?['status']?.toString(),
+      );
+      metas[conv.id] = meta;
+      _cache[conv.id] = meta;
+    }
     return metas;
   }
 

@@ -12,6 +12,7 @@ import 'package:dzmarket/src/services/product_service.dart';
 import 'package:dzmarket/src/services/saved_search_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
+import 'package:dzmarket/src/widgets/refresh_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -48,6 +49,7 @@ class _ListingsPageState extends State<ListingsPage> {
     {'id': 'any', 'name_fr': 'Toutes categories', 'name_ar': 'كل الفئات'},
   ];
   final _conditions = ['any', 'new', 'like new', 'good', 'fair'];
+  final RefreshController _refreshController = RefreshController();
 
   @override
   void initState() {
@@ -129,7 +131,15 @@ class _ListingsPageState extends State<ListingsPage> {
                   : const Stream.empty(),
               builder: (context, favSnapshot) {
                 final favorites = favSnapshot.data ?? const <String>{};
-                return _buildProductsGrid(favorites, userId, currency, crossAxisCount);
+                return RefreshIndicator(
+                  onRefresh: () => _refreshController.run(context, _refresh),
+                  child: _buildProductsGrid(
+                    favorites,
+                    userId,
+                    currency,
+                    crossAxisCount,
+                  ),
+                );
 
               },
             ),
@@ -204,20 +214,37 @@ class _ListingsPageState extends State<ListingsPage> {
       _products = const [];
     });
 
-    final results = await ProductService().fetchProducts(
-      search: _safeSearch(),
-      categoryId: _safeCategory(),
-      condition: _safeCondition(),
-      minPrice: min,
-      maxPrice: max,
-      brand: _safeBrand(),
-      size: _safeSize(),
-      color: _safeColor(),
-      sort: _sort,
-      limit: _pageSize,
-      offset: 0,
-      excludeOwner: true,
-    );
+    List<Product> results = const [];
+    try {
+      results = await ProductService()
+          .fetchProducts(
+            search: _safeSearch(),
+            categoryId: _safeCategory(),
+            condition: _safeCondition(),
+            minPrice: min,
+            maxPrice: max,
+            brand: _safeBrand(),
+            size: _safeSize(),
+            color: _safeColor(),
+            sort: _sort,
+            limit: _pageSize,
+            offset: 0,
+            excludeOwner: true,
+          )
+          .timeout(const Duration(seconds: 10));
+    } on TimeoutException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Rafraîchissement trop long.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e')),
+        );
+      }
+    }
 
     if (!mounted || _activeQueryKey != key) return;
     setState(() {
@@ -236,20 +263,25 @@ class _ListingsPageState extends State<ListingsPage> {
     final max = _safeMaxPrice();
     setState(() => _loading = true);
 
-    final results = await ProductService().fetchProducts(
-      search: _safeSearch(),
-      categoryId: _safeCategory(),
-      condition: _safeCondition(),
-      minPrice: min,
-      maxPrice: max,
-      brand: _safeBrand(),
-      size: _safeSize(),
-      color: _safeColor(),
-      sort: _sort,
-      limit: _pageSize,
-      offset: _page * _pageSize,
-      excludeOwner: true,
-    );
+    List<Product> results = const [];
+    try {
+      results = await ProductService()
+          .fetchProducts(
+            search: _safeSearch(),
+            categoryId: _safeCategory(),
+            condition: _safeCondition(),
+            minPrice: min,
+            maxPrice: max,
+            brand: _safeBrand(),
+            size: _safeSize(),
+            color: _safeColor(),
+            sort: _sort,
+            limit: _pageSize,
+            offset: _page * _pageSize,
+            excludeOwner: true,
+          )
+          .timeout(const Duration(seconds: 10));
+    } catch (_) {}
 
     if (!mounted || _activeQueryKey != key) return;
     setState(() {

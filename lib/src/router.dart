@@ -83,11 +83,11 @@ GoRouter createRouter({List<NavigatorObserver> observers = const []}) {
           GoRoute(
             path: 'order/:id/chat',
             name: 'order-chat',
-            builder: (context, state) {
-              final orderId = state.pathParameters['id'] ?? '';
-              return ChatRoomPage(orderId: orderId, roomId: 'order:$orderId');
-            },
-          ),
+              builder: (context, state) {
+                final orderId = state.pathParameters['id'] ?? '';
+              return ChatRoomPage(conversationId: 'order:$orderId');
+              },
+            ),
           GoRoute(
             path: 'order/:id/track',
             name: 'order-track',

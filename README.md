@@ -40,7 +40,7 @@ flutter run
 Flavors are `dev`, `staging`, and `prod`. Pass the flavor and defines:
 
 ```powershell
-flutter run --flavor dev --dart-define=APP_ENV=dev --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...
+flutter run --flavor dev --dart-define=APP_FLAVOR=dev --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...
 ```
 
 Firebase on Android uses `google-services.json` per flavor:
@@ -74,26 +74,6 @@ Analytics and Crashlytics are enabled in release builds by default. You can over
 
 Web Firebase config comes from `web/config.json` (see `web/config.example.json`).
 Android uses `google-services.json` per flavor.
-
-Firebase setup (placeholders to replace):
-
-```
-android/app/src/dev/google-services.json
-android/app/src/staging/google-services.json
-android/app/src/prod/google-services.json
-web/config.json
-```
-
-Run commands:
-
-```powershell
-flutter run --flavor dev -t lib/main.dart --dart-define=APP_ENV=dev
-flutter run --flavor staging -t lib/main.dart --dart-define=APP_ENV=staging
-flutter run --flavor prod -t lib/main.dart --dart-define=APP_ENV=prod
-
-flutter run -d chrome --dart-define=APP_ENV=dev
-flutter build web --dart-define=APP_ENV=prod
-```
 
 ## Analyze
 

@@ -19,21 +19,19 @@ class FirebaseService {
   Future<void> init(AppConfig config) async {
     if (_initialized) return;
     try {
-      if (Firebase.apps.isEmpty) {
-        if (kIsWeb) {
-          if (config.firebaseOptions == null) {
-            AppLogger.warn('Firebase options missing for web; skipping init.');
-            _initialized = true;
-            _enabled = false;
-            return;
-          }
-          await Firebase.initializeApp(options: config.firebaseOptions);
-        } else {
-          await Firebase.initializeApp();
+      if (kIsWeb) {
+        if (config.firebaseOptions == null) {
+          AppLogger.warn('Firebase options missing for web; skipping init.');
+          _initialized = true;
+          _enabled = false;
+          return;
         }
+        await Firebase.initializeApp(options: config.firebaseOptions);
+      } else {
+        await Firebase.initializeApp();
       }
       _initialized = true;
-      _enabled = Firebase.apps.isNotEmpty;
+      _enabled = true;
     } catch (error, stackTrace) {
       AppLogger.warn('Firebase init failed', error: error, stackTrace: stackTrace);
       _initialized = true;

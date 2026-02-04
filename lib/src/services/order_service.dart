@@ -59,6 +59,18 @@ class OrderService {
     );
   }
 
+  Future<void> refreshOrders(String userId) async {
+    final safeUserId = InputSanitizer.sanitizeId(userId, maxLength: 64);
+    await RateLimiter.instance.run(
+      'orders.refresh.snapshot',
+      () => supabase
+          .from(SupabaseTables.orders)
+          .select('id')
+          .or('buyer_id.eq.$safeUserId,seller_id.eq.$safeUserId,driver_id.eq.$safeUserId')
+          .limit(20),
+    );
+  }
+
   Future<String?> createOrder({
     required String productId,
     String? shippingOption,

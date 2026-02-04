@@ -8,6 +8,7 @@ import 'package:dzmarket/src/services/review_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
+import 'package:dzmarket/src/widgets/refresh_controller.dart';
 import 'package:dzmarket/src/features/orders/widgets/shipment_info.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -22,6 +23,7 @@ class OrdersPage extends StatefulWidget {
 
 class _OrdersPageState extends State<OrdersPage> {
   final Set<String> _paying = {};
+  final RefreshController _refreshController = RefreshController();
 
   @override
   Widget build(BuildContext context) {
@@ -53,25 +55,31 @@ class _OrdersPageState extends State<OrdersPage> {
               child: Text(L10n.t(context, 'Aucun achat pour le moment.', 'لا توجد مشتريات حاليا.')),
             );
           }
-          return ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: filtered.length,
-            itemBuilder: (context, index) {
-              final order = filtered[index];
-              return _OrderCard(
-                order: order,
-                currency: currency,
-                isPaying: _paying.contains(order.id),
-                onPay: order.status == OrderStatus.pending && order.productPrice != null
-                    ? () => _payForOrder(
-                          context,
-                          order,
-                          service,
-                          paymentService,
-                        )
-                    : null,
-              );
-            },
+          return RefreshIndicator(
+            onRefresh: () => _refreshController.run(
+              context,
+              () => service.refreshOrders(userId),
+            ),
+            child: ListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: filtered.length,
+              itemBuilder: (context, index) {
+                final order = filtered[index];
+                return _OrderCard(
+                  order: order,
+                  currency: currency,
+                  isPaying: _paying.contains(order.id),
+                  onPay: order.status == OrderStatus.pending && order.productPrice != null
+                      ? () => _payForOrder(
+                            context,
+                            order,
+                            service,
+                            paymentService,
+                          )
+                      : null,
+                );
+              },
+            ),
           );
         },
       ),

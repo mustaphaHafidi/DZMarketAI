@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:firebase_core/firebase_core.dart';
 
 class AppConfig {
@@ -66,27 +66,18 @@ class AppConfig {
 
     if (kIsWeb) {
       final runtime = await _loadWebRuntimeConfig();
-      flavor = runtime['appFlavor'] ?? runtime['appEnv'] ?? flavor;
+      flavor = runtime['appFlavor'] ?? flavor;
       supabaseUrl = runtime['supabaseUrl'] ?? supabaseUrl;
       supabaseAnonKey = runtime['supabaseAnonKey'] ?? supabaseAnonKey;
-      firebaseApiKey =
-          runtime['firebaseApiKey'] ?? runtime['apiKey'] ?? firebaseApiKey;
-      firebaseAppId =
-          runtime['firebaseAppId'] ?? runtime['appId'] ?? firebaseAppId;
+      firebaseApiKey = runtime['firebaseApiKey'] ?? firebaseApiKey;
+      firebaseAppId = runtime['firebaseAppId'] ?? firebaseAppId;
       firebaseSenderId =
-          runtime['firebaseMessagingSenderId'] ??
-              runtime['messagingSenderId'] ??
-              firebaseSenderId;
-      firebaseProjectId =
-          runtime['firebaseProjectId'] ?? runtime['projectId'] ?? firebaseProjectId;
+          runtime['firebaseMessagingSenderId'] ?? firebaseSenderId;
+      firebaseProjectId = runtime['firebaseProjectId'] ?? firebaseProjectId;
       firebaseStorageBucket =
-          runtime['firebaseStorageBucket'] ??
-              runtime['storageBucket'] ??
-              firebaseStorageBucket;
+          runtime['firebaseStorageBucket'] ?? firebaseStorageBucket;
       firebaseMeasurementId =
-          runtime['firebaseMeasurementId'] ??
-              runtime['measurementId'] ??
-              firebaseMeasurementId;
+          runtime['firebaseMeasurementId'] ?? firebaseMeasurementId;
     }
 
     final analyticsEnabled =
@@ -140,24 +131,15 @@ class AppConfig {
 
 Future<Map<String, String>> _loadWebRuntimeConfig() async {
   try {
-    const env = String.fromEnvironment('APP_ENV', defaultValue: 'prod');
-    final raw = await rootBundle.loadString('web/config.json');
-    final data = jsonDecode(raw);
+    final uri = Uri.base.resolve('config.json');
+    final resp = await http.get(uri);
+    if (resp.statusCode < 200 || resp.statusCode >= 300) return {};
+    final data = jsonDecode(resp.body);
     if (data is! Map) return {};
-    Map? envMap;
-    if (data[env] is Map) {
-      envMap = data[env] as Map;
-    } else if (data['prod'] is Map) {
-      envMap = data['prod'] as Map;
-    }
-    final safeEnvMap = envMap;
-    if (safeEnvMap == null) return {};
-    String? pick(String key) => safeEnvMap[key]?.toString().trim();
+    String? pick(String key) => data[key]?.toString().trim();
     return {
       if (pick('appFlavor') != null && pick('appFlavor')!.isNotEmpty)
         'appFlavor': pick('appFlavor')!,
-      if (pick('appEnv') != null && pick('appEnv')!.isNotEmpty)
-        'appEnv': pick('appEnv')!,
       if (pick('supabaseUrl') != null && pick('supabaseUrl')!.isNotEmpty)
         'supabaseUrl': pick('supabaseUrl')!,
       if (pick('supabaseAnonKey') != null &&
@@ -165,33 +147,20 @@ Future<Map<String, String>> _loadWebRuntimeConfig() async {
         'supabaseAnonKey': pick('supabaseAnonKey')!,
       if (pick('firebaseApiKey') != null && pick('firebaseApiKey')!.isNotEmpty)
         'firebaseApiKey': pick('firebaseApiKey')!,
-      if (pick('apiKey') != null && pick('apiKey')!.isNotEmpty)
-        'apiKey': pick('apiKey')!,
       if (pick('firebaseAppId') != null && pick('firebaseAppId')!.isNotEmpty)
         'firebaseAppId': pick('firebaseAppId')!,
-      if (pick('appId') != null && pick('appId')!.isNotEmpty)
-        'appId': pick('appId')!,
       if (pick('firebaseMessagingSenderId') != null &&
           pick('firebaseMessagingSenderId')!.isNotEmpty)
         'firebaseMessagingSenderId': pick('firebaseMessagingSenderId')!,
-      if (pick('messagingSenderId') != null &&
-          pick('messagingSenderId')!.isNotEmpty)
-        'messagingSenderId': pick('messagingSenderId')!,
       if (pick('firebaseProjectId') != null &&
           pick('firebaseProjectId')!.isNotEmpty)
         'firebaseProjectId': pick('firebaseProjectId')!,
-      if (pick('projectId') != null && pick('projectId')!.isNotEmpty)
-        'projectId': pick('projectId')!,
       if (pick('firebaseStorageBucket') != null &&
           pick('firebaseStorageBucket')!.isNotEmpty)
         'firebaseStorageBucket': pick('firebaseStorageBucket')!,
-      if (pick('storageBucket') != null && pick('storageBucket')!.isNotEmpty)
-        'storageBucket': pick('storageBucket')!,
       if (pick('firebaseMeasurementId') != null &&
           pick('firebaseMeasurementId')!.isNotEmpty)
         'firebaseMeasurementId': pick('firebaseMeasurementId')!,
-      if (pick('measurementId') != null && pick('measurementId')!.isNotEmpty)
-        'measurementId': pick('measurementId')!,
     };
   } catch (_) {
     return {};

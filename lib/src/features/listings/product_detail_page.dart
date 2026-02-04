@@ -6,11 +6,10 @@ import 'package:cached_network_image_platform_interface/cached_network_image_pla
 import 'package:dzmarket/src/features/chat/chat_room_page.dart';
 import 'package:dzmarket/src/models/offer.dart';
 import 'package:dzmarket/src/models/product.dart';
+import 'package:dzmarket/src/services/chat_repository.dart';
 import 'package:dzmarket/src/services/favorite_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
-import 'package:dzmarket/src/services/message_service.dart';
-import 'package:dzmarket/src/services/chat_room_service.dart';
 import 'package:dzmarket/src/services/offer_service.dart';
 import 'package:dzmarket/src/services/order_service.dart';
 import 'package:dzmarket/src/services/payment_labels.dart';
@@ -262,12 +261,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     });
   }
 
-  String _roomIdForProduct(String buyerId, String sellerId) {
-    final safeProductId =
-        InputSanitizer.sanitizeId(widget.productId, maxLength: 64);
-    return 'product:$safeProductId:$buyerId:$sellerId';
-  }
-
   Future<void> _contactSeller() async {
     final userId = supabase.auth.currentUser?.id;
     if (_product == null) return;
@@ -278,28 +271,24 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       );
       return;
     }
-    final messageService = MessageService();
-    final existing = await messageService.findExistingProductRoom(
+    final repo = ChatRepository();
+    final conv = await repo.ensureConversation(
       productId: _product!.id,
       buyerId: userId,
       sellerId: _product!.ownerId,
     );
-    final roomId = existing ?? _roomIdForProduct(userId, _product!.ownerId);
-    await ChatRoomService().ensureRoom(
-      roomId: roomId,
-      productId: _product!.id,
-      buyerId: userId,
-      sellerId: _product!.ownerId,
-    );
-    await messageService.ensureRoomWithHello(roomId);
+    // Try to send a hello message; ignore duplicate/race errors.
+    try {
+      await repo.sendMessage(conv.id, 'Nouveau contact');
+    } catch (_) {
+      // If send failed (e.g., blocked), ignore for now; navigation still works.
+    }
     if (!mounted) return;
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ChatRoomPage(
-          roomId: roomId,
+          conversationId: conv.id,
           productId: _product!.id,
-          buyerId: userId,
-          sellerId: _product!.ownerId,
         ),
       ),
     );

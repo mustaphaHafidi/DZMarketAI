@@ -1,6 +1,5 @@
 import 'package:dzmarket/src/app.dart';
 import 'package:dzmarket/src/config/app_config.dart';
-import 'package:dzmarket/src/config/firebase_web_config_loader.dart';
 import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:dzmarket/src/services/notification_service.dart';
 import 'package:dzmarket/src/services/translation_service.dart';
@@ -10,7 +9,6 @@ import 'package:dzmarket/src/services/crashlytics_service.dart';
 import 'package:dzmarket/src/services/app_logger.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 Future<void> main() async {
@@ -35,12 +33,6 @@ Future<void> main() async {
     anonKey: config.supabaseAnonKey,
     // Supabase client auto-refreshes tokens by default; no extra options needed here.
   );
-  final webOptions = await FirebaseWebConfigLoader.load();
-  if (webOptions != null) {
-    await Firebase.initializeApp(options: webOptions);
-  } else {
-    await Firebase.initializeApp();
-  }
   await FirebaseService.instance.init(config);
   await TranslationService.instance.load();
   await ConnectivityService.instance.start();

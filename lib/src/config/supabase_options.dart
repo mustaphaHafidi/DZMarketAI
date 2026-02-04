@@ -28,6 +28,8 @@ class SupabaseTables {
   static const orders = 'orders';
   static const shipments = 'shipments';
   static const messages = 'messages';
+  static const conversations = 'conversations';
+  static const reads = 'reads';
   static const driverPositions = 'driver_positions';
   static const favorites = 'favorites';
   static const savedSearches = 'saved_searches';

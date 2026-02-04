@@ -1,4 +1,4 @@
-﻿-- DZMarket Supabase schema (normalized & indexed)
+-- DZMarket Supabase schema (normalized & indexed)
 -- Run in Supabase SQL editor. Idempotent where possible.
 
 -- Helpers --------------------------------------------------------------------
@@ -77,11 +77,11 @@ create policy "translations write service" on public.translations for insert
 
 insert into public.translations (key, locale, text) values
   ('browse', 'fr', 'Parcourir'),
-  ('browse', 'ar', 'ØªØµÙØ­'),
+  ('browse', 'ar', 'ÃƒÆ’Ã‹Å“Ãƒâ€šÃ‚ÂªÃƒÆ’Ã‹Å“Ãƒâ€šÃ‚ÂµÃƒÆ’Ã¢â€žÂ¢Ãƒâ€šÃ‚ÂÃƒÆ’Ã‹Å“Ãƒâ€šÃ‚Â­'),
   ('orders', 'fr', 'Commandes'),
-  ('orders', 'ar', 'Ø§Ù„Ø·Ù„Ø¨Ø§Øª'),
+  ('orders', 'ar', 'ÃƒÆ’Ã‹Å“Ãƒâ€šÃ‚Â§ÃƒÆ’Ã¢â€žÂ¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾ÃƒÆ’Ã‹Å“Ãƒâ€šÃ‚Â·ÃƒÆ’Ã¢â€žÂ¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾ÃƒÆ’Ã‹Å“Ãƒâ€šÃ‚Â¨ÃƒÆ’Ã‹Å“Ãƒâ€šÃ‚Â§ÃƒÆ’Ã‹Å“Ãƒâ€šÃ‚Âª'),
   ('chat', 'fr', 'Chat'),
-  ('chat', 'ar', 'Ø¯Ø±Ø¯Ø´Ø©')
+  ('chat', 'ar', 'ÃƒÆ’Ã‹Å“Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã‹Å“Ãƒâ€šÃ‚Â±ÃƒÆ’Ã‹Å“Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã‹Å“Ãƒâ€šÃ‚Â´ÃƒÆ’Ã‹Å“Ãƒâ€šÃ‚Â©')
 on conflict (key, locale) do nothing;
 
 -- Categories -----------------------------------------------------------------
@@ -222,16 +222,16 @@ update public.categories set name = coalesce(name, name_fr) where name is null;
 
 -- TOP LEVEL
 insert into public.categories (slug, name, name_fr, name_ar, parent_id, sort_order, is_active, icon) values
-('women','Femmes','Femmes','نساء',null,10,true,'woman'),
-('men','Hommes','Hommes','رجال',null,20,true,'man'),
-('kids','Enfants','Enfants','أطفال',null,30,true,'child_care'),
-('home','Maison','Maison','المنزل',null,40,true,'home'),
-('beauty','Beauté & Santé','Beauté & Santé','الجمال والصحة',null,50,true,'spa'),
-('electronics','Électronique','Électronique','إلكترونيات',null,60,true,'devices'),
-('sports','Sport & Outdoor','Sport & Outdoor','رياضة وخارجية',null,70,true,'sports_soccer'),
-('media','Livres & Divertissement','Livres & Divertissement','كتب وترفيه',null,80,true,'menu_book'),
-('toys','Jouets & Jeux','Jouets & Jeux','ألعاب',null,90,true,'toys'),
-('other','Autres','Autres','أخرى',null,100,true,'category')
+('women','Femmes','Femmes','Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â³ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¡',null,10,true,'woman'),
+('men','Hommes','Hommes','ÃƒËœÃ‚Â±ÃƒËœÃ‚Â¬ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾',null,20,true,'man'),
+('kids','Enfants','Enfants','ÃƒËœÃ‚Â£ÃƒËœÃ‚Â·Ãƒâ„¢Ã‚ÂÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾',null,30,true,'child_care'),
+('home','Maison','Maison','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â²Ãƒâ„¢Ã¢â‚¬Å¾',null,40,true,'home'),
+('beauty','BeautÃƒÆ’Ã‚Â© & SantÃƒÆ’Ã‚Â©','BeautÃƒÆ’Ã‚Â© & SantÃƒÆ’Ã‚Â©','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¬Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚ÂµÃƒËœÃ‚Â­ÃƒËœÃ‚Â©',null,50,true,'spa'),
+('electronics','ÃƒÆ’Ã¢â‚¬Â°lectronique','ÃƒÆ’Ã¢â‚¬Â°lectronique','ÃƒËœÃ‚Â¥Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã†â€™ÃƒËœÃ‚ÂªÃƒËœÃ‚Â±Ãƒâ„¢Ã‹â€ Ãƒâ„¢Ã¢â‚¬Â Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â§ÃƒËœÃ‚Âª',null,60,true,'devices'),
+('sports','Sport & Outdoor','Sport & Outdoor','ÃƒËœÃ‚Â±Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¶ÃƒËœÃ‚Â© Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â®ÃƒËœÃ‚Â§ÃƒËœÃ‚Â±ÃƒËœÃ‚Â¬Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â©',null,70,true,'sports_soccer'),
+('media','Livres & Divertissement','Livres & Divertissement','Ãƒâ„¢Ã†â€™ÃƒËœÃ‚ÂªÃƒËœÃ‚Â¨ Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚ÂªÃƒËœÃ‚Â±Ãƒâ„¢Ã‚ÂÃƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Â¡',null,80,true,'menu_book'),
+('toys','Jouets & Jeux','Jouets & Jeux','ÃƒËœÃ‚Â£Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¹ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¨',null,90,true,'toys'),
+('other','Autres','Autres','ÃƒËœÃ‚Â£ÃƒËœÃ‚Â®ÃƒËœÃ‚Â±Ãƒâ„¢Ã¢â‚¬Â°',null,100,true,'category')
 on conflict (slug) do update set
   name=excluded.name,
   name_fr=excluded.name_fr,
@@ -243,90 +243,90 @@ on conflict (slug) do update set
 
 -- WOMEN
 insert into public.categories (slug, name, name_fr, name_ar, parent_id, sort_order, is_active, icon) values
-('women-clothing','Vêtements','Vêtements','ملابس',(select id from public.categories where slug='women'),1,true,'checkroom'),
-('women-shoes','Chaussures','Chaussures','أحذية',(select id from public.categories where slug='women'),2,true,'hiking'),
-('women-bags','Sacs','Sacs','حقائب',(select id from public.categories where slug='women'),3,true,'work'),
-('women-accessories','Accessoires','Accessoires','إكسسوارات',(select id from public.categories where slug='women'),4,true,'watch'),
-('women-jewelry','Bijoux','Bijoux','مجوهرات',(select id from public.categories where slug='women'),5,true,'diamond'),
-('women-lingerie','Lingerie','Lingerie','ملابس داخلية',(select id from public.categories where slug='women'),6,true,'local_mall')
+('women-clothing','VÃƒÆ’Ã‚Âªtements','VÃƒÆ’Ã‚Âªtements','Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â³',(select id from public.categories where slug='women'),1,true,'checkroom'),
+('women-shoes','Chaussures','Chaussures','ÃƒËœÃ‚Â£ÃƒËœÃ‚Â­ÃƒËœÃ‚Â°Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â©',(select id from public.categories where slug='women'),2,true,'hiking'),
+('women-bags','Sacs','Sacs','ÃƒËœÃ‚Â­Ãƒâ„¢Ã¢â‚¬Å¡ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¦ÃƒËœÃ‚Â¨',(select id from public.categories where slug='women'),3,true,'work'),
+('women-accessories','Accessoires','Accessoires','ÃƒËœÃ‚Â¥Ãƒâ„¢Ã†â€™ÃƒËœÃ‚Â³ÃƒËœÃ‚Â³Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â§ÃƒËœÃ‚Â±ÃƒËœÃ‚Â§ÃƒËœÃ‚Âª',(select id from public.categories where slug='women'),4,true,'watch'),
+('women-jewelry','Bijoux','Bijoux','Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â¬Ãƒâ„¢Ã‹â€ Ãƒâ„¢Ã¢â‚¬Â¡ÃƒËœÃ‚Â±ÃƒËœÃ‚Â§ÃƒËœÃ‚Âª',(select id from public.categories where slug='women'),5,true,'diamond'),
+('women-lingerie','Lingerie','Lingerie','Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â³ ÃƒËœÃ‚Â¯ÃƒËœÃ‚Â§ÃƒËœÃ‚Â®Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â©',(select id from public.categories where slug='women'),6,true,'local_mall')
 on conflict (slug) do update set name=excluded.name, name_fr=excluded.name_fr, name_ar=excluded.name_ar, parent_id=excluded.parent_id, sort_order=excluded.sort_order, is_active=excluded.is_active, icon=excluded.icon;
 
 -- MEN
 insert into public.categories (slug, name, name_fr, name_ar, parent_id, sort_order, is_active, icon) values
-('men-clothing','Vêtements','Vêtements','ملابس',(select id from public.categories where slug='men'),1,true,'checkroom'),
-('men-shoes','Chaussures','Chaussures','أحذية',(select id from public.categories where slug='men'),2,true,'hiking'),
-('men-accessories','Accessoires','Accessoires','إكسسوارات',(select id from public.categories where slug='men'),3,true,'watch'),
-('men-bags','Sacs','Sacs','حقائب',(select id from public.categories where slug='men'),4,true,'work'),
-('men-watches','Montres','Montres','ساعات',(select id from public.categories where slug='men'),5,true,'watch')
+('men-clothing','VÃƒÆ’Ã‚Âªtements','VÃƒÆ’Ã‚Âªtements','Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â³',(select id from public.categories where slug='men'),1,true,'checkroom'),
+('men-shoes','Chaussures','Chaussures','ÃƒËœÃ‚Â£ÃƒËœÃ‚Â­ÃƒËœÃ‚Â°Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â©',(select id from public.categories where slug='men'),2,true,'hiking'),
+('men-accessories','Accessoires','Accessoires','ÃƒËœÃ‚Â¥Ãƒâ„¢Ã†â€™ÃƒËœÃ‚Â³ÃƒËœÃ‚Â³Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â§ÃƒËœÃ‚Â±ÃƒËœÃ‚Â§ÃƒËœÃ‚Âª',(select id from public.categories where slug='men'),3,true,'watch'),
+('men-bags','Sacs','Sacs','ÃƒËœÃ‚Â­Ãƒâ„¢Ã¢â‚¬Å¡ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¦ÃƒËœÃ‚Â¨',(select id from public.categories where slug='men'),4,true,'work'),
+('men-watches','Montres','Montres','ÃƒËœÃ‚Â³ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¹ÃƒËœÃ‚Â§ÃƒËœÃ‚Âª',(select id from public.categories where slug='men'),5,true,'watch')
 on conflict (slug) do update set name=excluded.name, name_fr=excluded.name_fr, name_ar=excluded.name_ar, parent_id=excluded.parent_id, sort_order=excluded.sort_order, is_active=excluded.is_active, icon=excluded.icon;
 
 -- KIDS
 insert into public.categories (slug, name, name_fr, name_ar, parent_id, sort_order, is_active, icon) values
-('kids-baby','Bébé (0-24 mois)','Bébé (0-24 mois)','رضع',(select id from public.categories where slug='kids'),1,true,'child_friendly'),
-('kids-clothing','Vêtements','Vêtements','ملابس',(select id from public.categories where slug='kids'),2,true,'checkroom'),
-('kids-shoes','Chaussures','Chaussures','أحذية',(select id from public.categories where slug='kids'),3,true,'hiking'),
-('kids-accessories','Accessoires','Accessoires','إكسسوارات',(select id from public.categories where slug='kids'),4,true,'backpack'),
-('kids-school','École','École','لوازم مدرسية',(select id from public.categories where slug='kids'),5,true,'school')
+('kids-baby','BÃƒÆ’Ã‚Â©bÃƒÆ’Ã‚Â© (0-24 mois)','BÃƒÆ’Ã‚Â©bÃƒÆ’Ã‚Â© (0-24 mois)','ÃƒËœÃ‚Â±ÃƒËœÃ‚Â¶ÃƒËœÃ‚Â¹',(select id from public.categories where slug='kids'),1,true,'child_friendly'),
+('kids-clothing','VÃƒÆ’Ã‚Âªtements','VÃƒÆ’Ã‚Âªtements','Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â³',(select id from public.categories where slug='kids'),2,true,'checkroom'),
+('kids-shoes','Chaussures','Chaussures','ÃƒËœÃ‚Â£ÃƒËœÃ‚Â­ÃƒËœÃ‚Â°Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â©',(select id from public.categories where slug='kids'),3,true,'hiking'),
+('kids-accessories','Accessoires','Accessoires','ÃƒËœÃ‚Â¥Ãƒâ„¢Ã†â€™ÃƒËœÃ‚Â³ÃƒËœÃ‚Â³Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â§ÃƒËœÃ‚Â±ÃƒËœÃ‚Â§ÃƒËœÃ‚Âª',(select id from public.categories where slug='kids'),4,true,'backpack'),
+('kids-school','ÃƒÆ’Ã¢â‚¬Â°cole','ÃƒÆ’Ã¢â‚¬Â°cole','Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â§ÃƒËœÃ‚Â²Ãƒâ„¢Ã¢â‚¬Â¦ Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â¯ÃƒËœÃ‚Â±ÃƒËœÃ‚Â³Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â©',(select id from public.categories where slug='kids'),5,true,'school')
 on conflict (slug) do update set name=excluded.name, name_fr=excluded.name_fr, name_ar=excluded.name_ar, parent_id=excluded.parent_id, sort_order=excluded.sort_order, is_active=excluded.is_active, icon=excluded.icon;
 
 -- HOME
 insert into public.categories (slug, name, name_fr, name_ar, parent_id, sort_order, is_active, icon) values
-('home-furniture','Meubles','Meubles','أثاث',(select id from public.categories where slug='home'),1,true,'weekend'),
-('home-decor','Décoration','Décoration','ديكور',(select id from public.categories where slug='home'),2,true,'auto_awesome'),
-('home-kitchen','Cuisine','Cuisine','مطبخ',(select id from public.categories where slug='home'),3,true,'kitchen'),
-('home-textiles','Textiles','Textiles','منسوجات',(select id from public.categories where slug='home'),4,true,'curtains'),
-('home-appliances','Électroménager','Électroménager','أجهزة منزلية',(select id from public.categories where slug='home'),5,true,'microwave')
+('home-furniture','Meubles','Meubles','ÃƒËœÃ‚Â£ÃƒËœÃ‚Â«ÃƒËœÃ‚Â§ÃƒËœÃ‚Â«',(select id from public.categories where slug='home'),1,true,'weekend'),
+('home-decor','DÃƒÆ’Ã‚Â©coration','DÃƒÆ’Ã‚Â©coration','ÃƒËœÃ‚Â¯Ãƒâ„¢Ã…Â Ãƒâ„¢Ã†â€™Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â±',(select id from public.categories where slug='home'),2,true,'auto_awesome'),
+('home-kitchen','Cuisine','Cuisine','Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â·ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â®',(select id from public.categories where slug='home'),3,true,'kitchen'),
+('home-textiles','Textiles','Textiles','Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â³Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â¬ÃƒËœÃ‚Â§ÃƒËœÃ‚Âª',(select id from public.categories where slug='home'),4,true,'curtains'),
+('home-appliances','ÃƒÆ’Ã¢â‚¬Â°lectromÃƒÆ’Ã‚Â©nager','ÃƒÆ’Ã¢â‚¬Â°lectromÃƒÆ’Ã‚Â©nager','ÃƒËœÃ‚Â£ÃƒËœÃ‚Â¬Ãƒâ„¢Ã¢â‚¬Â¡ÃƒËœÃ‚Â²ÃƒËœÃ‚Â© Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â²Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â©',(select id from public.categories where slug='home'),5,true,'microwave')
 on conflict (slug) do update set name=excluded.name, name_fr=excluded.name_fr, name_ar=excluded.name_ar, parent_id=excluded.parent_id, sort_order=excluded.sort_order, is_active=excluded.is_active, icon=excluded.icon;
 
 -- BEAUTY
 insert into public.categories (slug, name, name_fr, name_ar, parent_id, sort_order, is_active, icon) values
-('beauty-makeup','Maquillage','Maquillage','مكياج',(select id from public.categories where slug='beauty'),1,true,'brush'),
-('beauty-skincare','Soins de la peau','Soins de la peau','عناية بالبشرة',(select id from public.categories where slug='beauty'),2,true,'face'),
-('beauty-hair','Cheveux','Cheveux','الشعر',(select id from public.categories where slug='beauty'),3,true,'content_cut'),
-('beauty-fragrance','Parfums','Parfums','عطور',(select id from public.categories where slug='beauty'),4,true,'local_florist'),
-('beauty-wellness','Bienêtre','Bienêtre','عناية وصحة',(select id from public.categories where slug='beauty'),5,true,'favorite')
+('beauty-makeup','Maquillage','Maquillage','Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã†â€™Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¬',(select id from public.categories where slug='beauty'),1,true,'brush'),
+('beauty-skincare','Soins de la peau','Soins de la peau','ÃƒËœÃ‚Â¹Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â§Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â© ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â´ÃƒËœÃ‚Â±ÃƒËœÃ‚Â©',(select id from public.categories where slug='beauty'),2,true,'face'),
+('beauty-hair','Cheveux','Cheveux','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â´ÃƒËœÃ‚Â¹ÃƒËœÃ‚Â±',(select id from public.categories where slug='beauty'),3,true,'content_cut'),
+('beauty-fragrance','Parfums','Parfums','ÃƒËœÃ‚Â¹ÃƒËœÃ‚Â·Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â±',(select id from public.categories where slug='beauty'),4,true,'local_florist'),
+('beauty-wellness','BienÃƒÆ’Ã‚Âªtre','BienÃƒÆ’Ã‚Âªtre','ÃƒËœÃ‚Â¹Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â§Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â© Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚ÂµÃƒËœÃ‚Â­ÃƒËœÃ‚Â©',(select id from public.categories where slug='beauty'),5,true,'favorite')
 on conflict (slug) do update set name=excluded.name, name_fr=excluded.name_fr, name_ar=excluded.name_ar, parent_id=excluded.parent_id, sort_order=excluded.sort_order, is_active=excluded.is_active, icon=excluded.icon;
 
 -- ELECTRONICS
 insert into public.categories (slug, name, name_fr, name_ar, parent_id, sort_order, is_active, icon) values
-('electronics-phones','Téléphones','Téléphones','هواتف',(select id from public.categories where slug='electronics'),1,true,'smartphone'),
-('electronics-computers','Ordinateurs','Ordinateurs','حواسيب',(select id from public.categories where slug='electronics'),2,true,'laptop'),
-('electronics-tablets','Tablettes','Tablettes','أجهزة لوحية',(select id from public.categories where slug='electronics'),3,true,'tablet'),
-('electronics-audio','Audio','Audio','صوتيات',(select id from public.categories where slug='electronics'),4,true,'headphones'),
-('electronics-gaming','Gaming','Gaming','ألعاب',(select id from public.categories where slug='electronics'),5,true,'sports_esports'),
-('electronics-accessories','Accessoires','Accessoires','إكسسوارات',(select id from public.categories where slug='electronics'),6,true,'cable')
+('electronics-phones','TÃƒÆ’Ã‚Â©lÃƒÆ’Ã‚Â©phones','TÃƒÆ’Ã‚Â©lÃƒÆ’Ã‚Â©phones','Ãƒâ„¢Ã¢â‚¬Â¡Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â§ÃƒËœÃ‚ÂªÃƒâ„¢Ã‚Â',(select id from public.categories where slug='electronics'),1,true,'smartphone'),
+('electronics-computers','Ordinateurs','Ordinateurs','ÃƒËœÃ‚Â­Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â§ÃƒËœÃ‚Â³Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â¨',(select id from public.categories where slug='electronics'),2,true,'laptop'),
+('electronics-tablets','Tablettes','Tablettes','ÃƒËœÃ‚Â£ÃƒËœÃ‚Â¬Ãƒâ„¢Ã¢â‚¬Â¡ÃƒËœÃ‚Â²ÃƒËœÃ‚Â© Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â­Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â©',(select id from public.categories where slug='electronics'),3,true,'tablet'),
+('electronics-audio','Audio','Audio','ÃƒËœÃ‚ÂµÃƒâ„¢Ã‹â€ ÃƒËœÃ‚ÂªÃƒâ„¢Ã…Â ÃƒËœÃ‚Â§ÃƒËœÃ‚Âª',(select id from public.categories where slug='electronics'),4,true,'headphones'),
+('electronics-gaming','Gaming','Gaming','ÃƒËœÃ‚Â£Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¹ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¨',(select id from public.categories where slug='electronics'),5,true,'sports_esports'),
+('electronics-accessories','Accessoires','Accessoires','ÃƒËœÃ‚Â¥Ãƒâ„¢Ã†â€™ÃƒËœÃ‚Â³ÃƒËœÃ‚Â³Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â§ÃƒËœÃ‚Â±ÃƒËœÃ‚Â§ÃƒËœÃ‚Âª',(select id from public.categories where slug='electronics'),6,true,'cable')
 on conflict (slug) do update set name=excluded.name, name_fr=excluded.name_fr, name_ar=excluded.name_ar, parent_id=excluded.parent_id, sort_order=excluded.sort_order, is_active=excluded.is_active, icon=excluded.icon;
 
 -- SPORTS
 insert into public.categories (slug, name, name_fr, name_ar, parent_id, sort_order, is_active, icon) values
-('sports-clothing','Vêtements de sport','Vêtements de sport','ملابس رياضية',(select id from public.categories where slug='sports'),1,true,'sports'),
-('sports-shoes','Chaussures de sport','Chaussures de sport','أحذية رياضية',(select id from public.categories where slug='sports'),2,true,'hiking'),
-('sports-equipment','Équipement','Équipement','معدات',(select id from public.categories where slug='sports'),3,true,'fitness_center'),
-('sports-bikes','Vélos','Vélos','دراجات',(select id from public.categories where slug='sports'),4,true,'pedal_bike'),
-('sports-outdoor','Camping & Outdoor','Camping & Outdoor','تخييم وخارجية',(select id from public.categories where slug='sports'),5,true,'terrain')
+('sports-clothing','VÃƒÆ’Ã‚Âªtements de sport','VÃƒÆ’Ã‚Âªtements de sport','Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â³ ÃƒËœÃ‚Â±Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¶Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â©',(select id from public.categories where slug='sports'),1,true,'sports'),
+('sports-shoes','Chaussures de sport','Chaussures de sport','ÃƒËœÃ‚Â£ÃƒËœÃ‚Â­ÃƒËœÃ‚Â°Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â© ÃƒËœÃ‚Â±Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¶Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â©',(select id from public.categories where slug='sports'),2,true,'hiking'),
+('sports-equipment','ÃƒÆ’Ã¢â‚¬Â°quipement','ÃƒÆ’Ã¢â‚¬Â°quipement','Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â¹ÃƒËœÃ‚Â¯ÃƒËœÃ‚Â§ÃƒËœÃ‚Âª',(select id from public.categories where slug='sports'),3,true,'fitness_center'),
+('sports-bikes','VÃƒÆ’Ã‚Â©los','VÃƒÆ’Ã‚Â©los','ÃƒËœÃ‚Â¯ÃƒËœÃ‚Â±ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¬ÃƒËœÃ‚Â§ÃƒËœÃ‚Âª',(select id from public.categories where slug='sports'),4,true,'pedal_bike'),
+('sports-outdoor','Camping & Outdoor','Camping & Outdoor','ÃƒËœÃ‚ÂªÃƒËœÃ‚Â®Ãƒâ„¢Ã…Â Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Â¦ Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â®ÃƒËœÃ‚Â§ÃƒËœÃ‚Â±ÃƒËœÃ‚Â¬Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â©',(select id from public.categories where slug='sports'),5,true,'terrain')
 on conflict (slug) do update set name=excluded.name, name_fr=excluded.name_fr, name_ar=excluded.name_ar, parent_id=excluded.parent_id, sort_order=excluded.sort_order, is_active=excluded.is_active, icon=excluded.icon;
 
 -- MEDIA
 insert into public.categories (slug, name, name_fr, name_ar, parent_id, sort_order, is_active, icon) values
-('media-books','Livres','Livres','كتب',(select id from public.categories where slug='media'),1,true,'menu_book'),
-('media-movies','Films & Séries','Films & Séries','أفلام ومسلسلات',(select id from public.categories where slug='media'),2,true,'movie'),
-('media-music','Musique','Musique','موسيقى',(select id from public.categories where slug='media'),3,true,'music_note'),
-('media-games','Jeux vidéo','Jeux vidéo','ألعاب فيديو',(select id from public.categories where slug='media'),4,true,'sports_esports')
+('media-books','Livres','Livres','Ãƒâ„¢Ã†â€™ÃƒËœÃ‚ÂªÃƒËœÃ‚Â¨',(select id from public.categories where slug='media'),1,true,'menu_book'),
+('media-movies','Films & SÃƒÆ’Ã‚Â©ries','Films & SÃƒÆ’Ã‚Â©ries','ÃƒËœÃ‚Â£Ãƒâ„¢Ã‚ÂÃƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Â¦ Ãƒâ„¢Ã‹â€ Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â³Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â³Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â§ÃƒËœÃ‚Âª',(select id from public.categories where slug='media'),2,true,'movie'),
+('media-music','Musique','Musique','Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â³Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Å¡Ãƒâ„¢Ã¢â‚¬Â°',(select id from public.categories where slug='media'),3,true,'music_note'),
+('media-games','Jeux vidÃƒÆ’Ã‚Â©o','Jeux vidÃƒÆ’Ã‚Â©o','ÃƒËœÃ‚Â£Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¹ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¨ Ãƒâ„¢Ã‚ÂÃƒâ„¢Ã…Â ÃƒËœÃ‚Â¯Ãƒâ„¢Ã…Â Ãƒâ„¢Ã‹â€ ',(select id from public.categories where slug='media'),4,true,'sports_esports')
 on conflict (slug) do update set name=excluded.name, name_fr=excluded.name_fr, name_ar=excluded.name_ar, parent_id=excluded.parent_id, sort_order=excluded.sort_order, is_active=excluded.is_active, icon=excluded.icon;
 
 -- TOYS
 insert into public.categories (slug, name, name_fr, name_ar, parent_id, sort_order, is_active, icon) values
-('toys-figures','Figurines','Figurines','مجسمات',(select id from public.categories where slug='toys'),1,true,'smart_toy'),
-('toys-boardgames','Jeux de société','Jeux de société','ألعاب جماعية',(select id from public.categories where slug='toys'),2,true,'casino'),
-('toys-construction','Construction','Construction','تركيب وبناء',(select id from public.categories where slug='toys'),3,true,'construction'),
-('toys-baby','Jouets bébé','Jouets bébé','ألعاب للرضع',(select id from public.categories where slug='toys'),4,true,'child_friendly')
+('toys-figures','Figurines','Figurines','Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â¬ÃƒËœÃ‚Â³Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â§ÃƒËœÃ‚Âª',(select id from public.categories where slug='toys'),1,true,'smart_toy'),
+('toys-boardgames','Jeux de sociÃƒÆ’Ã‚Â©tÃƒÆ’Ã‚Â©','Jeux de sociÃƒÆ’Ã‚Â©tÃƒÆ’Ã‚Â©','ÃƒËœÃ‚Â£Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¹ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¨ ÃƒËœÃ‚Â¬Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¹Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â©',(select id from public.categories where slug='toys'),2,true,'casino'),
+('toys-construction','Construction','Construction','ÃƒËœÃ‚ÂªÃƒËœÃ‚Â±Ãƒâ„¢Ã†â€™Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â¨ Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â¨Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¡',(select id from public.categories where slug='toys'),3,true,'construction'),
+('toys-baby','Jouets bÃƒÆ’Ã‚Â©bÃƒÆ’Ã‚Â©','Jouets bÃƒÆ’Ã‚Â©bÃƒÆ’Ã‚Â©','ÃƒËœÃ‚Â£Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¹ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¨ Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â±ÃƒËœÃ‚Â¶ÃƒËœÃ‚Â¹',(select id from public.categories where slug='toys'),4,true,'child_friendly')
 on conflict (slug) do update set name=excluded.name, name_fr=excluded.name_fr, name_ar=excluded.name_ar, parent_id=excluded.parent_id, sort_order=excluded.sort_order, is_active=excluded.is_active, icon=excluded.icon;
 
 -- OTHER
 insert into public.categories (slug, name, name_fr, name_ar, parent_id, sort_order, is_active, icon) values
-('other-services','Services','Services','خدمات',(select id from public.categories where slug='other'),1,true,'support_agent'),
-('other-collectibles','Collections','Collections','مقتنيات',(select id from public.categories where slug='other'),2,true,'collections'),
-('other-misc','Divers','Divers','متنوع',(select id from public.categories where slug='other'),3,true,'more_horiz')
+('other-services','Services','Services','ÃƒËœÃ‚Â®ÃƒËœÃ‚Â¯Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â§ÃƒËœÃ‚Âª',(select id from public.categories where slug='other'),1,true,'support_agent'),
+('other-collectibles','Collections','Collections','Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã¢â‚¬Å¡ÃƒËœÃ‚ÂªÃƒâ„¢Ã¢â‚¬Â Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â§ÃƒËœÃ‚Âª',(select id from public.categories where slug='other'),2,true,'collections'),
+('other-misc','Divers','Divers','Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚ÂªÃƒâ„¢Ã¢â‚¬Â Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â¹',(select id from public.categories where slug='other'),3,true,'more_horiz')
 on conflict (slug) do update set name=excluded.name, name_fr=excluded.name_fr, name_ar=excluded.name_ar, parent_id=excluded.parent_id, sort_order=excluded.sort_order, is_active=excluded.is_active, icon=excluded.icon;
 
 -- Quick check
@@ -334,127 +334,127 @@ on conflict (slug) do update set name=excluded.name, name_fr=excluded.name_fr, n
 
 -- Seed wilayas (FR/AR)
 insert into public.wilayas (code, name_fr, name_ar) values
-('01','Adrar','أدرار'),
-('02','Chlef','الشلف'),
-('03','Laghouat','الأغواط'),
-('04','Oum El Bouaghi','أم البواقي'),
-('05','Batna','باتنة'),
-('06','Bejaia','بجاية'),
-('07','Biskra','بسكرة'),
-('08','Bechar','بشار'),
-('09','Blida','البليدة'),
-('10','Bouira','البويرة'),
-('11','Tamanrasset','تمنراست'),
-('12','Tebessa','تبسة'),
-('13','Tlemcen','تلمسان'),
-('14','Tiaret','تيارت'),
-('15','Tizi Ouzou','تيزي وزو'),
-('16','Alger','الجزائر'),
-('17','Djelfa','الجلفة'),
-('18','Jijel','جيجل'),
-('19','Setif','سطيف'),
-('20','Saida','سعيدة'),
-('21','Skikda','سكيكدة'),
-('22','Sidi Bel Abbes','سيدي بلعباس'),
-('23','Annaba','عنابة'),
-('24','Guelma','قالمة'),
-('25','Constantine','قسنطينة'),
-('26','Medea','المدية'),
-('27','Mostaganem','مستغانم'),
-('28','M''Sila','المسيلة'),
-('29','Mascara','معسكر'),
-('30','Ouargla','ورقلة'),
-('31','Oran','وهران'),
-('32','El Bayadh','البيض'),
-('33','Illizi','إليزي'),
-('34','Bordj Bou Arreridj','برج بوعريريج'),
-('35','Boumerdes','بومرداس'),
-('36','El Tarf','الطارف'),
-('37','Tindouf','تندوف'),
-('38','Tissemsilt','تيسمسيلت'),
-('39','El Oued','الوادي'),
-('40','Khenchela','خنشلة'),
-('41','Souk Ahras','سوق أهراس'),
-('42','Tipaza','تيبازة'),
-('43','Mila','ميلة'),
-('44','Ain Defla','عين الدفلى'),
-('45','Naama','النعامة'),
-('46','Ain Temouchent','عين تموشنت'),
-('47','Ghardaia','غرداية'),
-('48','Relizane','غليزان'),
-('49','El M''Ghair','المغير'),
-('50','El Meniaa','المنيعة'),
-('51','Ouled Djellal','أولاد جلال'),
-('52','Bordj Baji Mokhtar','برج باجي مختار'),
-('53','Beni Abbes','بني عباس'),
-('54','Timimoun','تيميمون'),
-('55','Touggourt','تقرت'),
-('56','Djanet','جانت'),
-('57','In Salah','عين صالح'),
-('58','In Guezzam','عين قزام')
+('01','Adrar','ÃƒËœÃ‚Â£ÃƒËœÃ‚Â¯ÃƒËœÃ‚Â±ÃƒËœÃ‚Â§ÃƒËœÃ‚Â±'),
+('02','Chlef','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â´Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã‚Â'),
+('03','Laghouat','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â£ÃƒËœÃ‚ÂºÃƒâ„¢Ã‹â€ ÃƒËœÃ‚Â§ÃƒËœÃ‚Â·'),
+('04','Oum El Bouaghi','ÃƒËœÃ‚Â£Ãƒâ„¢Ã¢â‚¬Â¦ ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¨Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¡Ãƒâ„¢Ã…Â '),
+('05','Batna','ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â§ÃƒËœÃ‚ÂªÃƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â©'),
+('06','Bejaia','ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â¬ÃƒËœÃ‚Â§Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â©'),
+('07','Biskra','ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â³Ãƒâ„¢Ã†â€™ÃƒËœÃ‚Â±ÃƒËœÃ‚Â©'),
+('08','Bechar','ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â´ÃƒËœÃ‚Â§ÃƒËœÃ‚Â±'),
+('09','Blida','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¨Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â¯ÃƒËœÃ‚Â©'),
+('10','Bouira','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¨Ãƒâ„¢Ã‹â€ Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â±ÃƒËœÃ‚Â©'),
+('11','Tamanrasset','ÃƒËœÃ‚ÂªÃƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â±ÃƒËœÃ‚Â§ÃƒËœÃ‚Â³ÃƒËœÃ‚Âª'),
+('12','Tebessa','ÃƒËœÃ‚ÂªÃƒËœÃ‚Â¨ÃƒËœÃ‚Â³ÃƒËœÃ‚Â©'),
+('13','Tlemcen','ÃƒËœÃ‚ÂªÃƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â³ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Â '),
+('14','Tiaret','ÃƒËœÃ‚ÂªÃƒâ„¢Ã…Â ÃƒËœÃ‚Â§ÃƒËœÃ‚Â±ÃƒËœÃ‚Âª'),
+('15','Tizi Ouzou','ÃƒËœÃ‚ÂªÃƒâ„¢Ã…Â ÃƒËœÃ‚Â²Ãƒâ„¢Ã…Â  Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â²Ãƒâ„¢Ã‹â€ '),
+('16','Alger','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¬ÃƒËœÃ‚Â²ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¦ÃƒËœÃ‚Â±'),
+('17','Djelfa','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¬Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã‚ÂÃƒËœÃ‚Â©'),
+('18','Jijel','ÃƒËœÃ‚Â¬Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â¬Ãƒâ„¢Ã¢â‚¬Å¾'),
+('19','Setif','ÃƒËœÃ‚Â³ÃƒËœÃ‚Â·Ãƒâ„¢Ã…Â Ãƒâ„¢Ã‚Â'),
+('20','Saida','ÃƒËœÃ‚Â³ÃƒËœÃ‚Â¹Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â¯ÃƒËœÃ‚Â©'),
+('21','Skikda','ÃƒËœÃ‚Â³Ãƒâ„¢Ã†â€™Ãƒâ„¢Ã…Â Ãƒâ„¢Ã†â€™ÃƒËœÃ‚Â¯ÃƒËœÃ‚Â©'),
+('22','Sidi Bel Abbes','ÃƒËœÃ‚Â³Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â¯Ãƒâ„¢Ã…Â  ÃƒËœÃ‚Â¨Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¹ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â§ÃƒËœÃ‚Â³'),
+('23','Annaba','ÃƒËœÃ‚Â¹Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â©'),
+('24','Guelma','Ãƒâ„¢Ã¢â‚¬Å¡ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â©'),
+('25','Constantine','Ãƒâ„¢Ã¢â‚¬Å¡ÃƒËœÃ‚Â³Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â·Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â©'),
+('26','Medea','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â¯Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â©'),
+('27','Mostaganem','Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â³ÃƒËœÃ‚ÂªÃƒËœÃ‚ÂºÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Â Ãƒâ„¢Ã¢â‚¬Â¦'),
+('28','M''Sila','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â³Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â©'),
+('29','Mascara','Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â¹ÃƒËœÃ‚Â³Ãƒâ„¢Ã†â€™ÃƒËœÃ‚Â±'),
+('30','Ouargla','Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â±Ãƒâ„¢Ã¢â‚¬Å¡Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â©'),
+('31','Oran','Ãƒâ„¢Ã‹â€ Ãƒâ„¢Ã¢â‚¬Â¡ÃƒËœÃ‚Â±ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Â '),
+('32','El Bayadh','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¨Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â¶'),
+('33','Illizi','ÃƒËœÃ‚Â¥Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â²Ãƒâ„¢Ã…Â '),
+('34','Bordj Bou Arreridj','ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â±ÃƒËœÃ‚Â¬ ÃƒËœÃ‚Â¨Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â¹ÃƒËœÃ‚Â±Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â±Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â¬'),
+('35','Boumerdes','ÃƒËœÃ‚Â¨Ãƒâ„¢Ã‹â€ Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â±ÃƒËœÃ‚Â¯ÃƒËœÃ‚Â§ÃƒËœÃ‚Â³'),
+('36','El Tarf','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â·ÃƒËœÃ‚Â§ÃƒËœÃ‚Â±Ãƒâ„¢Ã‚Â'),
+('37','Tindouf','ÃƒËœÃ‚ÂªÃƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â¯Ãƒâ„¢Ã‹â€ Ãƒâ„¢Ã‚Â'),
+('38','Tissemsilt','ÃƒËœÃ‚ÂªÃƒâ„¢Ã…Â ÃƒËœÃ‚Â³Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â³Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Âª'),
+('39','El Oued','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¯Ãƒâ„¢Ã…Â '),
+('40','Khenchela','ÃƒËœÃ‚Â®Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â´Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â©'),
+('41','Souk Ahras','ÃƒËœÃ‚Â³Ãƒâ„¢Ã‹â€ Ãƒâ„¢Ã¢â‚¬Å¡ ÃƒËœÃ‚Â£Ãƒâ„¢Ã¢â‚¬Â¡ÃƒËœÃ‚Â±ÃƒËœÃ‚Â§ÃƒËœÃ‚Â³'),
+('42','Tipaza','ÃƒËœÃ‚ÂªÃƒâ„¢Ã…Â ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â§ÃƒËœÃ‚Â²ÃƒËœÃ‚Â©'),
+('43','Mila','Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â©'),
+('44','Ain Defla','ÃƒËœÃ‚Â¹Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Â  ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¯Ãƒâ„¢Ã‚ÂÃƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã¢â‚¬Â°'),
+('45','Naama','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â¹ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â©'),
+('46','Ain Temouchent','ÃƒËœÃ‚Â¹Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Â  ÃƒËœÃ‚ÂªÃƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â´Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Âª'),
+('47','Ghardaia','ÃƒËœÃ‚ÂºÃƒËœÃ‚Â±ÃƒËœÃ‚Â¯ÃƒËœÃ‚Â§Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â©'),
+('48','Relizane','ÃƒËœÃ‚ÂºÃƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â²ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Â '),
+('49','El M''Ghair','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚ÂºÃƒâ„¢Ã…Â ÃƒËœÃ‚Â±'),
+('50','El Meniaa','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã¢â‚¬Â Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â¹ÃƒËœÃ‚Â©'),
+('51','Ouled Djellal','ÃƒËœÃ‚Â£Ãƒâ„¢Ã‹â€ Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¯ ÃƒËœÃ‚Â¬Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾'),
+('52','Bordj Baji Mokhtar','ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â±ÃƒËœÃ‚Â¬ ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¬Ãƒâ„¢Ã…Â  Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â®ÃƒËœÃ‚ÂªÃƒËœÃ‚Â§ÃƒËœÃ‚Â±'),
+('53','Beni Abbes','ÃƒËœÃ‚Â¨Ãƒâ„¢Ã¢â‚¬Â Ãƒâ„¢Ã…Â  ÃƒËœÃ‚Â¹ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â§ÃƒËœÃ‚Â³'),
+('54','Timimoun','ÃƒËœÃ‚ÂªÃƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã‹â€ Ãƒâ„¢Ã¢â‚¬Â '),
+('55','Touggourt','ÃƒËœÃ‚ÂªÃƒâ„¢Ã¢â‚¬Å¡ÃƒËœÃ‚Â±ÃƒËœÃ‚Âª'),
+('56','Djanet','ÃƒËœÃ‚Â¬ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Âª'),
+('57','In Salah','ÃƒËœÃ‚Â¹Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Â  ÃƒËœÃ‚ÂµÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â­'),
+('58','In Guezzam','ÃƒËœÃ‚Â¹Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Â  Ãƒâ„¢Ã¢â‚¬Å¡ÃƒËœÃ‚Â²ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Â¦')
 on conflict (code) do update set
   name_fr = excluded.name_fr,
   name_ar = excluded.name_ar;
 -- Seed communes (minimal placeholder list; replace with full dataset when available)
 insert into public.communes (wilaya_code, name_fr, name_ar) values
-('01','Adrar','أدرار'),
-('02','Chlef','الشلف'),
-('03','Laghouat','الأغواط'),
-('04','Oum El Bouaghi','أم البواقي'),
-('05','Batna','باتنة'),
-('06','Bejaia','بجاية'),
-('07','Biskra','بسكرة'),
-('08','Bechar','بشار'),
-('09','Blida','البليدة'),
-('10','Bouira','البويرة'),
-('11','Tamanrasset','تمنراست'),
-('12','Tebessa','تبسة'),
-('13','Tlemcen','تلمسان'),
-('14','Tiaret','تيارت'),
-('15','Tizi Ouzou','تيزي وزو'),
-('16','Alger Centre','الجزائر الوسطى'),
-('17','Djelfa','الجلفة'),
-('18','Jijel','جيجل'),
-('19','Setif','سطيف'),
-('20','Saida','سعيدة'),
-('21','Skikda','سكيكدة'),
-('22','Sidi Bel Abbes','سيدي بلعباس'),
-('23','Annaba','عنابة'),
-('24','Guelma','قالمة'),
-('25','Constantine','قسنطينة'),
-('26','Medea','المدية'),
-('27','Mostaganem','مستغانم'),
-('28','M''Sila','المسيلة'),
-('29','Mascara','معسكر'),
-('30','Ouargla','ورقلة'),
-('31','Oran','وهران'),
-('32','El Bayadh','البيض'),
-('33','Illizi','إليزي'),
-('34','Bordj Bou Arreridj','برج بوعريريج'),
-('35','Boumerdes','بومرداس'),
-('36','El Tarf','الطارف'),
-('37','Tindouf','تندوف'),
-('38','Tissemsilt','تيسمسيلت'),
-('39','El Oued','الوادي'),
-('40','Khenchela','خنشلة'),
-('41','Souk Ahras','سوق أهراس'),
-('42','Tipaza','تيبازة'),
-('43','Mila','ميلة'),
-('44','Ain Defla','عين الدفلى'),
-('45','Naama','النعامة'),
-('46','Ain Temouchent','عين تموشنت'),
-('47','Ghardaia','غرداية'),
-('48','Relizane','غليزان'),
-('49','El M''Ghair','المغير'),
-('50','El Meniaa','المنيعة'),
-('51','Ouled Djellal','أولاد جلال'),
-('52','Bordj Baji Mokhtar','برج باجي مختار'),
-('53','Beni Abbes','بني عباس'),
-('54','Timimoun','تيميمون'),
-('55','Touggourt','تقرت'),
-('56','Djanet','جانت'),
-('57','In Salah','عين صالح'),
-('58','In Guezzam','عين قزام')
+('01','Adrar','ÃƒËœÃ‚Â£ÃƒËœÃ‚Â¯ÃƒËœÃ‚Â±ÃƒËœÃ‚Â§ÃƒËœÃ‚Â±'),
+('02','Chlef','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â´Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã‚Â'),
+('03','Laghouat','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â£ÃƒËœÃ‚ÂºÃƒâ„¢Ã‹â€ ÃƒËœÃ‚Â§ÃƒËœÃ‚Â·'),
+('04','Oum El Bouaghi','ÃƒËœÃ‚Â£Ãƒâ„¢Ã¢â‚¬Â¦ ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¨Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¡Ãƒâ„¢Ã…Â '),
+('05','Batna','ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â§ÃƒËœÃ‚ÂªÃƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â©'),
+('06','Bejaia','ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â¬ÃƒËœÃ‚Â§Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â©'),
+('07','Biskra','ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â³Ãƒâ„¢Ã†â€™ÃƒËœÃ‚Â±ÃƒËœÃ‚Â©'),
+('08','Bechar','ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â´ÃƒËœÃ‚Â§ÃƒËœÃ‚Â±'),
+('09','Blida','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¨Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â¯ÃƒËœÃ‚Â©'),
+('10','Bouira','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¨Ãƒâ„¢Ã‹â€ Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â±ÃƒËœÃ‚Â©'),
+('11','Tamanrasset','ÃƒËœÃ‚ÂªÃƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â±ÃƒËœÃ‚Â§ÃƒËœÃ‚Â³ÃƒËœÃ‚Âª'),
+('12','Tebessa','ÃƒËœÃ‚ÂªÃƒËœÃ‚Â¨ÃƒËœÃ‚Â³ÃƒËœÃ‚Â©'),
+('13','Tlemcen','ÃƒËœÃ‚ÂªÃƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â³ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Â '),
+('14','Tiaret','ÃƒËœÃ‚ÂªÃƒâ„¢Ã…Â ÃƒËœÃ‚Â§ÃƒËœÃ‚Â±ÃƒËœÃ‚Âª'),
+('15','Tizi Ouzou','ÃƒËœÃ‚ÂªÃƒâ„¢Ã…Â ÃƒËœÃ‚Â²Ãƒâ„¢Ã…Â  Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â²Ãƒâ„¢Ã‹â€ '),
+('16','Alger Centre','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¬ÃƒËœÃ‚Â²ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¦ÃƒËœÃ‚Â± ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â³ÃƒËœÃ‚Â·Ãƒâ„¢Ã¢â‚¬Â°'),
+('17','Djelfa','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¬Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã‚ÂÃƒËœÃ‚Â©'),
+('18','Jijel','ÃƒËœÃ‚Â¬Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â¬Ãƒâ„¢Ã¢â‚¬Å¾'),
+('19','Setif','ÃƒËœÃ‚Â³ÃƒËœÃ‚Â·Ãƒâ„¢Ã…Â Ãƒâ„¢Ã‚Â'),
+('20','Saida','ÃƒËœÃ‚Â³ÃƒËœÃ‚Â¹Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â¯ÃƒËœÃ‚Â©'),
+('21','Skikda','ÃƒËœÃ‚Â³Ãƒâ„¢Ã†â€™Ãƒâ„¢Ã…Â Ãƒâ„¢Ã†â€™ÃƒËœÃ‚Â¯ÃƒËœÃ‚Â©'),
+('22','Sidi Bel Abbes','ÃƒËœÃ‚Â³Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â¯Ãƒâ„¢Ã…Â  ÃƒËœÃ‚Â¨Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¹ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â§ÃƒËœÃ‚Â³'),
+('23','Annaba','ÃƒËœÃ‚Â¹Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â©'),
+('24','Guelma','Ãƒâ„¢Ã¢â‚¬Å¡ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â©'),
+('25','Constantine','Ãƒâ„¢Ã¢â‚¬Å¡ÃƒËœÃ‚Â³Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â·Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â©'),
+('26','Medea','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â¯Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â©'),
+('27','Mostaganem','Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â³ÃƒËœÃ‚ÂªÃƒËœÃ‚ÂºÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Â Ãƒâ„¢Ã¢â‚¬Â¦'),
+('28','M''Sila','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â³Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â©'),
+('29','Mascara','Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â¹ÃƒËœÃ‚Â³Ãƒâ„¢Ã†â€™ÃƒËœÃ‚Â±'),
+('30','Ouargla','Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â±Ãƒâ„¢Ã¢â‚¬Å¡Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â©'),
+('31','Oran','Ãƒâ„¢Ã‹â€ Ãƒâ„¢Ã¢â‚¬Â¡ÃƒËœÃ‚Â±ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Â '),
+('32','El Bayadh','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¨Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â¶'),
+('33','Illizi','ÃƒËœÃ‚Â¥Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â²Ãƒâ„¢Ã…Â '),
+('34','Bordj Bou Arreridj','ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â±ÃƒËœÃ‚Â¬ ÃƒËœÃ‚Â¨Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â¹ÃƒËœÃ‚Â±Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â±Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â¬'),
+('35','Boumerdes','ÃƒËœÃ‚Â¨Ãƒâ„¢Ã‹â€ Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â±ÃƒËœÃ‚Â¯ÃƒËœÃ‚Â§ÃƒËœÃ‚Â³'),
+('36','El Tarf','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â·ÃƒËœÃ‚Â§ÃƒËœÃ‚Â±Ãƒâ„¢Ã‚Â'),
+('37','Tindouf','ÃƒËœÃ‚ÂªÃƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â¯Ãƒâ„¢Ã‹â€ Ãƒâ„¢Ã‚Â'),
+('38','Tissemsilt','ÃƒËœÃ‚ÂªÃƒâ„¢Ã…Â ÃƒËœÃ‚Â³Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â³Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Âª'),
+('39','El Oued','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¯Ãƒâ„¢Ã…Â '),
+('40','Khenchela','ÃƒËœÃ‚Â®Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â´Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â©'),
+('41','Souk Ahras','ÃƒËœÃ‚Â³Ãƒâ„¢Ã‹â€ Ãƒâ„¢Ã¢â‚¬Å¡ ÃƒËœÃ‚Â£Ãƒâ„¢Ã¢â‚¬Â¡ÃƒËœÃ‚Â±ÃƒËœÃ‚Â§ÃƒËœÃ‚Â³'),
+('42','Tipaza','ÃƒËœÃ‚ÂªÃƒâ„¢Ã…Â ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â§ÃƒËœÃ‚Â²ÃƒËœÃ‚Â©'),
+('43','Mila','Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â©'),
+('44','Ain Defla','ÃƒËœÃ‚Â¹Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Â  ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â¯Ãƒâ„¢Ã‚ÂÃƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã¢â‚¬Â°'),
+('45','Naama','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Â¹ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â©'),
+('46','Ain Temouchent','ÃƒËœÃ‚Â¹Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Â  ÃƒËœÃ‚ÂªÃƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã‹â€ ÃƒËœÃ‚Â´Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Âª'),
+('47','Ghardaia','ÃƒËœÃ‚ÂºÃƒËœÃ‚Â±ÃƒËœÃ‚Â¯ÃƒËœÃ‚Â§Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â©'),
+('48','Relizane','ÃƒËœÃ‚ÂºÃƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â²ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Â '),
+('49','El M''Ghair','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚ÂºÃƒâ„¢Ã…Â ÃƒËœÃ‚Â±'),
+('50','El Meniaa','ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã¢â‚¬Â Ãƒâ„¢Ã…Â ÃƒËœÃ‚Â¹ÃƒËœÃ‚Â©'),
+('51','Ouled Djellal','ÃƒËœÃ‚Â£Ãƒâ„¢Ã‹â€ Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¯ ÃƒËœÃ‚Â¬Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾'),
+('52','Bordj Baji Mokhtar','ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â±ÃƒËœÃ‚Â¬ ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â§ÃƒËœÃ‚Â¬Ãƒâ„¢Ã…Â  Ãƒâ„¢Ã¢â‚¬Â¦ÃƒËœÃ‚Â®ÃƒËœÃ‚ÂªÃƒËœÃ‚Â§ÃƒËœÃ‚Â±'),
+('53','Beni Abbes','ÃƒËœÃ‚Â¨Ãƒâ„¢Ã¢â‚¬Â Ãƒâ„¢Ã…Â  ÃƒËœÃ‚Â¹ÃƒËœÃ‚Â¨ÃƒËœÃ‚Â§ÃƒËœÃ‚Â³'),
+('54','Timimoun','ÃƒËœÃ‚ÂªÃƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Â¦Ãƒâ„¢Ã‹â€ Ãƒâ„¢Ã¢â‚¬Â '),
+('55','Touggourt','ÃƒËœÃ‚ÂªÃƒâ„¢Ã¢â‚¬Å¡ÃƒËœÃ‚Â±ÃƒËœÃ‚Âª'),
+('56','Djanet','ÃƒËœÃ‚Â¬ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Â ÃƒËœÃ‚Âª'),
+('57','In Salah','ÃƒËœÃ‚Â¹Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Â  ÃƒËœÃ‚ÂµÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Å¾ÃƒËœÃ‚Â­'),
+('58','In Guezzam','ÃƒËœÃ‚Â¹Ãƒâ„¢Ã…Â Ãƒâ„¢Ã¢â‚¬Â  Ãƒâ„¢Ã¢â‚¬Å¡ÃƒËœÃ‚Â²ÃƒËœÃ‚Â§Ãƒâ„¢Ã¢â‚¬Â¦')
 on conflict (wilaya_code, name_fr) do update set
   name_ar = excluded.name_ar;
 -- Products -------------------------------------------------------------------
@@ -1065,319 +1065,281 @@ alter table public.shipments
 alter table public.shipments
   add column if not exists status text default 'pending';
 
--- Messages -------------------------------------------------------------------
-create table if not exists public.messages (
-  id bigserial primary key,
-  room_id text not null, -- "general" or "order:<id>" or "product:<id>:buyer:seller"
-  content text not null,
-  type text not null default 'text', -- text | label | image
-  payload jsonb,
-  sender_id uuid not null references public.profiles(id) on delete cascade,
-  read_by jsonb default '[]',
-  created_at timestamptz default now()
-);
-alter table public.messages enable row level security;
-drop policy if exists "messages select" on public.messages;
-drop policy if exists "messages insert" on public.messages;
-create policy "messages select" on public.messages
-  for select using (
-    room_id = 'general'
-    or (
-      room_id like 'order:%'
-      and exists (
-        select 1 from public.orders o
-        where room_id = 'order:' || o.id
-          and (
-            auth.uid() = o.buyer_id
-            or auth.uid() = o.seller_id
-            or auth.uid() = o.driver_id
-          )
-      )
-    )
-    or (
-      room_id like 'product:%'
-      and exists (
-        select 1 from public.products p
-        where split_part(room_id, ':', 2)::bigint = p.id
-          and (
-            auth.uid() = p.owner_id
-            or auth.uid() = split_part(room_id, ':', 3)::uuid
-            or auth.uid() = split_part(room_id, ':', 4)::uuid
-          )
-      )
-    )
-  );
-create policy "messages insert" on public.messages
-  for insert with check (
-    sender_id = auth.uid()
-    and (
-      room_id = 'general'
-      or exists (
-        select 1 from public.orders o
-        where room_id = 'order:' || o.id
-          and (
-            auth.uid() = o.buyer_id
-            or auth.uid() = o.seller_id
-            or auth.uid() = o.driver_id
-          )
-      )
-      or (
-        room_id like 'product:%'
-        and exists (
-          select 1 from public.products p
-          where split_part(room_id, ':', 2)::bigint = p.id
-            and (
-              auth.uid() = p.owner_id
-              or auth.uid() = split_part(room_id, ':', 3)::uuid
-              or auth.uid() = split_part(room_id, ':', 4)::uuid
-            )
-        )
-      )
-    )
-  );
-create index if not exists messages_room_created_idx on public.messages (room_id, created_at);
+-- Chat v2 (conversations/messages/reads) -------------------------------------
+-- Cleanup legacy chat artifacts
+DROP FUNCTION IF EXISTS public.update_chat_room_last_message() CASCADE;
+DROP FUNCTION IF EXISTS public.mark_chat_room_read(text) CASCADE;
+DROP FUNCTION IF EXISTS public.hide_chat_room(text) CASCADE;
+DROP TRIGGER IF EXISTS messages_chat_rooms_touch ON public.messages;
+DROP VIEW IF EXISTS public.chat_rooms_visible;
+DROP TABLE IF EXISTS public.chat_room_users CASCADE;
+DROP TABLE IF EXISTS public.chat_rooms CASCADE;
+DROP TABLE IF EXISTS public.messages CASCADE;
+DROP TABLE IF EXISTS public.conversations CASCADE;
+DROP TABLE IF EXISTS public.reads CASCADE;
 
--- Chat rooms ----------------------------------------------------------------
-create table if not exists public.chat_rooms (
-  room_id text primary key,
-  product_id bigint references public.products(id) on delete set null,
-  buyer_id uuid references public.profiles(id) on delete set null,
-  seller_id uuid references public.profiles(id) on delete set null,
-  order_id bigint references public.orders(id) on delete set null,
-  last_message text,
-  last_message_type text,
+-- Conversations table (per buyer/seller, optional product)
+CREATE TABLE IF NOT EXISTS public.conversations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  buyer_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  seller_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  product_id bigint REFERENCES public.products(id) ON DELETE SET NULL,
+  last_message_at timestamptz DEFAULT now(),
+  last_message_text text,
+  buyer_hidden_at timestamptz,
+  seller_hidden_at timestamptz,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS conv_product_buyer_seller_uniq
+  ON public.conversations(product_id, buyer_id, seller_id)
+  WHERE product_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS conv_participants_last_msg_idx
+  ON public.conversations(buyer_id, seller_id, last_message_at DESC);
+
+-- Messages table (one-to-many)
+CREATE TABLE IF NOT EXISTS public.messages (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  conversation_id uuid NOT NULL REFERENCES public.conversations(id) ON DELETE CASCADE,
+  sender_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE SET NULL,
+  text text NOT NULL,
+  created_at timestamptz DEFAULT now(),
+  deleted_at timestamptz
+);
+
+-- Read states
+CREATE TABLE IF NOT EXISTS public.reads (
+  conversation_id uuid REFERENCES public.conversations(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  last_read_at timestamptz,
+  last_read_message_id uuid REFERENCES public.messages(id) ON DELETE SET NULL,
+  PRIMARY KEY (conversation_id, user_id)
+);
+
+-- Helpers
+CREATE OR REPLACE FUNCTION public.is_participant(p_conv uuid)
+RETURNS boolean LANGUAGE sql STABLE AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.conversations c
+    WHERE c.id = p_conv AND auth.uid() IN (c.buyer_id, c.seller_id)
+  );
+$$;
+
+-- RPC: ensure_conversation (idempotent create by product/buyer/seller)
+CREATE OR REPLACE FUNCTION public.ensure_conversation(p_product_id bigint,
+                                                     p_buyer_id uuid,
+                                                     p_seller_id uuid)
+RETURNS public.conversations
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  conv public.conversations;
+BEGIN
+  IF auth.uid() NOT IN (p_buyer_id, p_seller_id) THEN
+    RAISE EXCEPTION 'Forbidden' USING errcode = '42501';
+  END IF;
+
+  INSERT INTO public.conversations (product_id, buyer_id, seller_id, last_message_at, last_message_text)
+  VALUES (p_product_id, p_buyer_id, p_seller_id, now(), NULL)
+  ON CONFLICT (product_id, buyer_id, seller_id)
+    WHERE product_id IS NOT NULL
+    DO UPDATE SET last_message_at = greatest(EXCLUDED.last_message_at, public.conversations.last_message_at),
+                  updated_at = now()
+  RETURNING * INTO conv;
+
+  RETURN conv;
+END;
+$$;
+
+-- RPC: send_message
+CREATE OR REPLACE FUNCTION public.send_message(p_conversation_id uuid, p_text text)
+RETURNS public.messages
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  msg public.messages;
+  other uuid;
+BEGIN
+  IF NOT public.is_participant(p_conversation_id) THEN
+    RAISE EXCEPTION 'Forbidden' USING errcode = '42501';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.conversations WHERE id = p_conversation_id) THEN
+    RAISE EXCEPTION 'Conversation missing' USING errcode = 'P0002';
+  END IF;
+  SELECT CASE WHEN buyer_id = auth.uid() THEN seller_id ELSE buyer_id END
+    INTO other FROM public.conversations WHERE id = p_conversation_id;
+  IF EXISTS (
+    SELECT 1 FROM public.user_blocks b
+    WHERE (b.user_id = auth.uid() AND b.blocked_user_id = other)
+       OR (b.user_id = other AND b.blocked_user_id = auth.uid())
+  ) THEN
+    RAISE EXCEPTION 'blocked' USING errcode = '42501';
+  END IF;
+
+  INSERT INTO public.messages (conversation_id, sender_id, text)
+  VALUES (p_conversation_id, auth.uid(), p_text)
+  RETURNING * INTO msg;
+
+  UPDATE public.conversations
+  SET last_message_at   = msg.created_at,
+      last_message_text = msg.text,
+      updated_at        = now()
+  WHERE id = p_conversation_id;
+
+  RETURN msg;
+END;
+$$;
+
+-- RPC: delete_conversation (soft delete per user)
+CREATE OR REPLACE FUNCTION public.delete_conversation(p_conversation_id uuid)
+RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  IF NOT public.is_participant(p_conversation_id) THEN
+    RAISE EXCEPTION 'Forbidden' USING errcode = '42501';
+  END IF;
+
+  UPDATE public.conversations
+  SET buyer_hidden_at  = CASE WHEN buyer_id  = auth.uid() THEN now() ELSE buyer_hidden_at END,
+      seller_hidden_at = CASE WHEN seller_id = auth.uid() THEN now() ELSE seller_hidden_at END,
+      updated_at        = now()
+  WHERE id = p_conversation_id;
+END;
+$$;
+
+-- RPC: restore_conversation (unhide)
+DROP FUNCTION IF EXISTS public.restore_conversation(uuid);
+CREATE OR REPLACE FUNCTION public.restore_conversation(p_conversation_id uuid)
+RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  IF NOT public.is_participant(p_conversation_id) THEN
+    RAISE EXCEPTION 'Forbidden' USING errcode = '42501';
+  END IF;
+  UPDATE public.conversations
+  SET buyer_hidden_at  = CASE WHEN buyer_id  = auth.uid() THEN NULL ELSE buyer_hidden_at END,
+      seller_hidden_at = CASE WHEN seller_id = auth.uid() THEN NULL ELSE seller_hidden_at END,
+      updated_at        = now()
+  WHERE id = p_conversation_id;
+END;
+$$;
+
+-- RPC: mark_read
+CREATE OR REPLACE FUNCTION public.mark_read(p_conversation_id uuid, p_last_message_id uuid)
+RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  IF NOT public.is_participant(p_conversation_id) THEN
+    RAISE EXCEPTION 'Forbidden' USING errcode = '42501';
+  END IF;
+
+  INSERT INTO public.reads (conversation_id, user_id, last_read_at, last_read_message_id)
+  VALUES (p_conversation_id, auth.uid(), now(), p_last_message_id)
+  ON CONFLICT (conversation_id, user_id) DO UPDATE
+    SET last_read_at = excluded.last_read_at,
+        last_read_message_id = excluded.last_read_message_id;
+END;
+$$;
+
+-- RPC: get_conversations (pagination stable)
+DROP FUNCTION IF EXISTS public.get_conversations(integer, timestamptz, uuid) CASCADE;
+CREATE OR REPLACE FUNCTION public.get_conversations(p_limit int DEFAULT 20,
+                                                    p_cursor_last timestamptz DEFAULT NULL,
+                                                    p_cursor_id uuid DEFAULT NULL)
+RETURNS TABLE (
+  id uuid,
+  buyer_id uuid,
+  seller_id uuid,
+  product_id bigint,
   last_message_at timestamptz,
-  last_sender_id uuid references public.profiles(id) on delete set null,
-  unread_by_buyer integer not null default 0,
-  unread_by_seller integer not null default 0,
-  hidden_by text[] not null default '{}',
-  deleted_by_buyer boolean not null default false,
-  deleted_by_seller boolean not null default false,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);
-alter table public.chat_rooms add column if not exists updated_at timestamptz default now();
-alter table public.chat_rooms add column if not exists last_sender_id uuid;
-alter table public.chat_rooms add column if not exists unread_by_buyer integer default 0;
-alter table public.chat_rooms add column if not exists unread_by_seller integer default 0;
-alter table public.chat_rooms add column if not exists hidden_by text[] default '{}';
-alter table public.chat_rooms add column if not exists deleted_by_buyer boolean default false;
-alter table public.chat_rooms add column if not exists deleted_by_seller boolean default false;
-alter table public.chat_rooms enable row level security;
-drop policy if exists "chat rooms read" on public.chat_rooms;
-drop policy if exists "chat rooms insert" on public.chat_rooms;
-drop policy if exists "chat rooms update" on public.chat_rooms;
-create policy "chat rooms read" on public.chat_rooms
-  for select using (auth.uid() = buyer_id or auth.uid() = seller_id);
-create policy "chat rooms insert" on public.chat_rooms
-  for insert with check (auth.uid() = buyer_id or auth.uid() = seller_id);
-create policy "chat rooms update" on public.chat_rooms
-  for update using (auth.uid() = buyer_id or auth.uid() = seller_id);
-drop trigger if exists chat_rooms_touch on public.chat_rooms;
-create trigger chat_rooms_touch
-  before update on public.chat_rooms
-  for each row execute procedure public.touch_updated_at();
-create index if not exists chat_rooms_last_message_idx on public.chat_rooms (last_message_at desc);
-
--- Per-user visibility --------------------------------------------------------
-create table if not exists public.chat_room_users (
-  room_id text not null references public.chat_rooms(room_id) on delete cascade,
-  user_id uuid not null references public.profiles(id) on delete cascade,
-  deleted_at timestamptz,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now(),
-  primary key (room_id, user_id)
-);
-alter table public.chat_room_users enable row level security;
-drop policy if exists "chat_room_users select own" on public.chat_room_users;
-drop policy if exists "chat_room_users insert own" on public.chat_room_users;
-drop policy if exists "chat_room_users update own" on public.chat_room_users;
-drop policy if exists "chat_room_users insert by participants" on public.chat_room_users;
-drop policy if exists "chat_room_users update by participants" on public.chat_room_users;
-create policy "chat_room_users select own" on public.chat_room_users
-  for select using (
-    auth.uid() = user_id
-    and exists (
-      select 1 from public.chat_rooms r
-      where r.room_id = chat_room_users.room_id
-        and (r.buyer_id = auth.uid() or r.seller_id = auth.uid())
+  last_message_text text,
+  buyer_hidden_at timestamptz,
+  seller_hidden_at timestamptz
+) LANGUAGE sql STABLE AS $$
+  WITH base AS (
+    SELECT *
+    FROM public.conversations c
+    WHERE (
+      (auth.uid() = c.buyer_id AND c.buyer_hidden_at IS NULL)
+      OR (auth.uid() = c.seller_id AND c.seller_hidden_at IS NULL)
     )
-  );
-create policy "chat_room_users insert by participants" on public.chat_room_users
-  for insert with check (
-    exists (
-      select 1 from public.chat_rooms r
-      where r.room_id = chat_room_users.room_id
-        and (r.buyer_id = auth.uid() or r.seller_id = auth.uid())
+  ), filtered AS (
+    SELECT * FROM base b
+    WHERE (
+      p_cursor_last IS NULL
+      OR (b.last_message_at, b.id) < (p_cursor_last, p_cursor_id)
     )
-  );
-create policy "chat_room_users update by participants" on public.chat_room_users
-  for update using (
-    exists (
-      select 1 from public.chat_rooms r
-      where r.room_id = chat_room_users.room_id
-        and (r.buyer_id = auth.uid() or r.seller_id = auth.uid())
-    )
-  );
-
-drop view if exists public.chat_rooms_visible;
-create view public.chat_rooms_visible as
-select
-  cru.user_id,
-  cru.deleted_at,
-  r.room_id,
-  r.product_id,
-  r.buyer_id,
-  r.seller_id,
-  r.order_id,
-  r.last_message,
-  r.last_message_type,
-  r.last_message_at,
-  r.last_sender_id,
-  r.unread_by_buyer,
-  r.unread_by_seller,
-  r.hidden_by,
-  r.deleted_by_buyer,
-  r.deleted_by_seller,
-  r.created_at,
-  r.updated_at
-from public.chat_room_users cru
-join public.chat_rooms r on r.room_id = cru.room_id;
-
-
-create index if not exists chat_room_users_deleted_idx
-  on public.chat_room_users (user_id, deleted_at);
-
--- Backfill chat rooms from existing product messages.
-insert into public.chat_rooms (room_id, product_id, buyer_id, seller_id, last_message, last_message_type, last_message_at)
-select distinct on (m.room_id)
-  m.room_id,
-  split_part(m.room_id, ':', 2)::bigint as product_id,
-  split_part(m.room_id, ':', 3)::uuid as buyer_id,
-  split_part(m.room_id, ':', 4)::uuid as seller_id,
-  m.content as last_message,
-  m.type as last_message_type,
-  m.created_at as last_message_at
-from public.messages m
-where m.room_id like 'product:%'
-  and split_part(m.room_id, ':', 3) ~* '^[0-9a-f-]{36}$'
-  and split_part(m.room_id, ':', 4) ~* '^[0-9a-f-]{36}$'
-order by m.room_id, m.created_at desc
-on conflict (room_id) do update set
-  last_message = excluded.last_message,
-  last_message_type = excluded.last_message_type,
-  last_message_at = excluded.last_message_at;
-
-create or replace function public.update_chat_room_last_message()
-returns trigger as $$
-declare
-  v_buyer uuid;
-  v_seller uuid;
-  v_product bigint;
-  v_order bigint;
-begin
-  if new.room_id like 'product:%' then
-    if split_part(new.room_id, ':', 3) !~* '^[0-9a-f-]{36}$'
-      or split_part(new.room_id, ':', 4) !~* '^[0-9a-f-]{36}$' then
-      return new;
-    end if;
-    v_product := split_part(new.room_id, ':', 2)::bigint;
-    v_buyer := split_part(new.room_id, ':', 3)::uuid;
-    v_seller := split_part(new.room_id, ':', 4)::uuid;
-  elsif new.room_id like 'order:%' then
-    v_order := split_part(new.room_id, ':', 2)::bigint;
-    select buyer_id, seller_id into v_buyer, v_seller
-    from public.orders where id = v_order;
-    if v_buyer is null or v_seller is null then
-      return new;
-    end if;
-  else
-    return new;
-  end if;
-
-  insert into public.chat_rooms (
-    room_id,
-    product_id,
-    order_id,
-    buyer_id,
-    seller_id,
-    last_message,
-    last_message_type,
-    last_message_at,
-    last_sender_id
   )
-  values (
-    new.room_id,
-    v_product,
-    v_order,
-    v_buyer,
-    v_seller,
-    new.content,
-    new.type,
-    new.created_at,
-    new.sender_id
-  )
-  on conflict (room_id) do update set
-    last_message = excluded.last_message,
-    last_message_type = excluded.last_message_type,
-    last_message_at = excluded.last_message_at,
-    last_sender_id = excluded.last_sender_id,
-    unread_by_buyer = case
-      when new.sender_id = v_buyer then public.chat_rooms.unread_by_buyer
-      else public.chat_rooms.unread_by_buyer + 1 end,
-    unread_by_seller = case
-      when new.sender_id = v_seller then public.chat_rooms.unread_by_seller
-      else public.chat_rooms.unread_by_seller + 1 end,
-    deleted_by_buyer = false,
-    deleted_by_seller = false,
-    hidden_by = array_remove(public.chat_rooms.hidden_by, new.sender_id::text);
+  SELECT b.id, b.buyer_id, b.seller_id, b.product_id, b.last_message_at, b.last_message_text, b.buyer_hidden_at, b.seller_hidden_at
+  FROM filtered b
+  ORDER BY b.last_message_at DESC, b.id DESC
+  LIMIT p_limit;
+$$;
 
-  insert into public.chat_room_users (room_id, user_id, deleted_at)
-  values (new.room_id, v_buyer, null), (new.room_id, v_seller, null)
-  on conflict (room_id, user_id) do update set
-    deleted_at = null,
-    updated_at = now();
+-- User blocks ---------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.user_blocks (
+  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  blocked_user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  created_at timestamptz DEFAULT now(),
+  PRIMARY KEY (user_id, blocked_user_id)
+);
+ALTER TABLE public.user_blocks ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS blocks_select ON public.user_blocks;
+DROP POLICY IF EXISTS blocks_insert ON public.user_blocks;
+DROP POLICY IF EXISTS blocks_delete ON public.user_blocks;
+CREATE POLICY blocks_select ON public.user_blocks
+  FOR SELECT USING (auth.uid() = user_id OR auth.uid() = blocked_user_id);
+CREATE POLICY blocks_insert ON public.user_blocks
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY blocks_delete ON public.user_blocks
+  FOR DELETE USING (auth.uid() = user_id);
+-- RLS enable
+ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.messages     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.reads        ENABLE ROW LEVEL SECURITY;
 
-  return new;
-end;
-$$ language plpgsql;
+-- Conversations policies
+DROP POLICY IF EXISTS conv_select ON public.conversations;
+CREATE POLICY conv_select ON public.conversations
+  FOR SELECT USING (
+    auth.uid() IN (buyer_id, seller_id)
+  );
 
-create or replace function public.mark_chat_room_read(p_room_id text)
-  returns void as $$
-  begin
-    update public.chat_rooms
-    set unread_by_buyer = case when auth.uid() = buyer_id then 0 else unread_by_buyer end,
-        unread_by_seller = case when auth.uid() = seller_id then 0 else unread_by_seller end
-    where room_id = p_room_id;
-  end;
-$$ language plpgsql security definer;
+DROP POLICY IF EXISTS conv_insert ON public.conversations;
+CREATE POLICY conv_insert ON public.conversations
+  FOR INSERT WITH CHECK (auth.uid() IN (buyer_id, seller_id));
 
-create or replace function public.hide_chat_room(p_room_id text)
-  returns void as $$
-  begin
-    update public.chat_rooms
-    set deleted_by_buyer = case when auth.uid() = buyer_id then true else deleted_by_buyer end,
-        deleted_by_seller = case when auth.uid() = seller_id then true else deleted_by_seller end,
-        hidden_by = case
-          when hidden_by @> array[auth.uid()::text] then hidden_by
-          else array_append(hidden_by, auth.uid()::text)
-        end
-    where room_id = p_room_id;
+DROP POLICY IF EXISTS conv_update ON public.conversations;
+CREATE POLICY conv_update ON public.conversations
+  FOR UPDATE USING (auth.uid() IN (buyer_id, seller_id));
 
-    insert into public.chat_room_users (room_id, user_id, deleted_at)
-    values (p_room_id, auth.uid(), now())
-    on conflict (room_id, user_id) do update set
-      deleted_at = now(),
-      updated_at = now();
-  end;
-$$ language plpgsql security definer;
+-- Messages policies
+DROP POLICY IF EXISTS msg_select ON public.messages;
+CREATE POLICY msg_select ON public.messages
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM public.conversations c
+            WHERE c.id = conversation_id
+              AND auth.uid() IN (c.buyer_id, c.seller_id))
+  );
 
-drop trigger if exists messages_chat_rooms_touch on public.messages;
-create trigger messages_chat_rooms_touch
-  after insert on public.messages
-  for each row execute procedure public.update_chat_room_last_message();
+DROP POLICY IF EXISTS msg_insert ON public.messages;
+CREATE POLICY msg_insert ON public.messages
+  FOR INSERT WITH CHECK (
+    EXISTS (SELECT 1 FROM public.conversations c
+            WHERE c.id = conversation_id
+              AND auth.uid() IN (c.buyer_id, c.seller_id))
+    AND sender_id = auth.uid()
+  );
 
-create index if not exists chat_rooms_last_message_at_idx on public.chat_rooms (last_message_at desc);
+-- Reads policies
+DROP POLICY IF EXISTS reads_select ON public.reads;
+CREATE POLICY reads_select ON public.reads
+  FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS reads_upsert ON public.reads;
+CREATE POLICY reads_upsert ON public.reads
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+CREATE INDEX IF NOT EXISTS messages_sender_created_idx ON public.messages (sender_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS messages_conv_created_idx ON public.messages (conversation_id, created_at DESC);
 
 -- Driver positions -----------------------------------------------------------
 create table if not exists public.driver_positions (
@@ -1389,24 +1351,6 @@ create table if not exists public.driver_positions (
   heading double precision,
   updated_at timestamptz default now()
 );
-drop policy if exists "chat_room_users insert by participants" on public.chat_room_users;
-drop policy if exists "chat_room_users update by participants" on public.chat_room_users;
-create policy "chat_room_users insert by participants" on public.chat_room_users
-  for insert with check (
-    exists (
-      select 1 from public.chat_rooms r
-      where r.room_id = chat_room_users.room_id
-        and (r.buyer_id = auth.uid() or r.seller_id = auth.uid())
-    )
-  );
-create policy "chat_room_users update by participants" on public.chat_room_users
-  for update using (
-    exists (
-      select 1 from public.chat_rooms r
-      where r.room_id = chat_room_users.room_id
-        and (r.buyer_id = auth.uid() or r.seller_id = auth.uid())
-    )
-  );
 alter table public.driver_positions enable row level security;
 drop policy if exists "positions visible to buyer seller driver" on public.driver_positions;
 drop policy if exists "positions insert by driver" on public.driver_positions;
@@ -1814,7 +1758,7 @@ grant execute on function public.enqueue_job(text, jsonb, timestamptz) to servic
 create or replace function public.enforce_message_limits()
 returns trigger as $$
 begin
-  if length(new.content) > 2000 then
+  if length(new.text) > 2000 then
     raise exception 'message too long';
   end if;
   if not public.consume_rate_limit('msg:' || new.sender_id::text, 30, 60) then

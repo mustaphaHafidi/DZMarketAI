@@ -1,38 +1,11 @@
 {
-  "dev": {
-    "__PLACEHOLDER__": true,
-    "supabaseUrl": "REPLACE_ME",
-    "supabaseAnonKey": "REPLACE_ME",
-    "apiKey": "REPLACE_ME",
-    "authDomain": "REPLACE_ME",
-    "projectId": "REPLACE_ME",
-    "storageBucket": "REPLACE_ME",
-    "messagingSenderId": "REPLACE_ME",
-    "appId": "REPLACE_ME",
-    "measurementId": "REPLACE_ME"
-  },
-  "staging": {
-    "__PLACEHOLDER__": true,
-    "supabaseUrl": "REPLACE_ME",
-    "supabaseAnonKey": "REPLACE_ME",
-    "apiKey": "REPLACE_ME",
-    "authDomain": "REPLACE_ME",
-    "projectId": "REPLACE_ME",
-    "storageBucket": "REPLACE_ME",
-    "messagingSenderId": "REPLACE_ME",
-    "appId": "REPLACE_ME",
-    "measurementId": "REPLACE_ME"
-  },
-  "prod": {
-    "__PLACEHOLDER__": true,
-    "supabaseUrl": "REPLACE_ME",
-    "supabaseAnonKey": "REPLACE_ME",
-    "apiKey": "REPLACE_ME",
-    "authDomain": "REPLACE_ME",
-    "projectId": "REPLACE_ME",
-    "storageBucket": "REPLACE_ME",
-    "messagingSenderId": "REPLACE_ME",
-    "appId": "REPLACE_ME",
-    "measurementId": "REPLACE_ME"
-  }
+  "appFlavor": "dev",
+  "supabaseUrl": "https://your-project.supabase.co",
+  "supabaseAnonKey": "YOUR_SUPABASE_ANON_KEY",
+  "firebaseApiKey": "YOUR_FIREBASE_API_KEY",
+  "firebaseAppId": "YOUR_FIREBASE_APP_ID",
+  "firebaseMessagingSenderId": "YOUR_FIREBASE_SENDER_ID",
+  "firebaseProjectId": "YOUR_FIREBASE_PROJECT_ID",
+  "firebaseStorageBucket": "YOUR_FIREBASE_STORAGE_BUCKET",
+  "firebaseMeasurementId": "YOUR_FIREBASE_MEASUREMENT_ID"
 }
