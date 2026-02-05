@@ -1,6 +1,7 @@
-import 'package:dzmarket/src/features/orders/fulfillment_page.dart';
+﻿import 'package:dzmarket/src/features/orders/fulfillment_page.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/services/i18n.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -9,16 +10,33 @@ import 'package:url_launcher/url_launcher.dart';
 class ShipmentsDashboardPage extends StatelessWidget {
   const ShipmentsDashboardPage({super.key});
 
+  String _statusLabel(BuildContext context, String status) {
+    switch (status) {
+      case 'pending':
+        return L10n.tr(context, 'orders.status_pending');
+      case 'paid':
+        return L10n.tr(context, 'orders.status_paid');
+      case 'shipped':
+        return L10n.tr(context, 'orders.status_shipped');
+      case 'delivered':
+        return L10n.tr(context, 'orders.status_delivered');
+      case 'cancelled':
+        return L10n.tr(context, 'orders.status_cancelled');
+      default:
+        return status;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) {
-      return const Scaffold(body: Center(child: Text('Non connecté')));
+      return Scaffold(body: Center(child: Text(L10n.tr(context, 'profile.login_required'))));
     }
     final service = ShippingService();
     final dateFmt = DateFormat('dd/MM HH:mm');
     return Scaffold(
-      appBar: AppBar(title: const Text('Livraisons')),
+      appBar: AppBar(title: Text(L10n.tr(context, 'shipments.title'))),
       body: StreamBuilder<List<Map<String, dynamic>>>(
         stream: service.streamSellerShipments(userId),
         builder: (context, snapshot) {
@@ -27,7 +45,7 @@ class ShipmentsDashboardPage extends StatelessWidget {
           }
           final rows = snapshot.data ?? const [];
           if (rows.isEmpty) {
-            return const Center(child: Text('Aucune livraison'));
+            return Center(child: Text(L10n.tr(context, 'shipments.empty')));
           }
           return ListView.separated(
             itemCount: rows.length,
@@ -45,18 +63,51 @@ class ShipmentsDashboardPage extends StatelessWidget {
                   ? DateTime.tryParse(r['created_at'] as String)
                   : null;
               final orderId = r['order_id']?.toString() ?? '?';
+              final statusLabel = _statusLabel(context, status);
               return ListTile(
-                title: Text('Commande #$orderId · $carrier'),
+                title: Text(
+                  L10n.tr(
+                    context,
+                    'shipments.order_label',
+                    params: {'id': orderId, 'carrier': carrier},
+                  ),
+                ),
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Statut: $status'),
-                    Text('Tracking: $tracking'),
-                    if (cost != null) Text('Frais: $cost DA'),
-                    if (createdAt != null) Text('Créé: ${dateFmt.format(createdAt)}'),
+                    Text(
+                      L10n.tr(
+                        context,
+                        'shipments.status_label',
+                        params: {'status': statusLabel},
+                      ),
+                    ),
+                    Text(
+                      L10n.tr(
+                        context,
+                        'shipments.tracking_label',
+                        params: {'tracking': tracking},
+                      ),
+                    ),
+                    if (cost != null)
+                      Text(
+                        L10n.tr(
+                          context,
+                          'shipments.fee_label',
+                          params: {'amount': cost},
+                        ),
+                      ),
+                    if (createdAt != null)
+                      Text(
+                        L10n.tr(
+                          context,
+                          'shipments.created_label',
+                          params: {'date': dateFmt.format(createdAt)},
+                        ),
+                      ),
                     if (labelUrl != null)
                       Text(
-                        'Label prêt',
+                        L10n.tr(context, 'shipments.label_ready'),
                         style: TextStyle(color: Theme.of(context).colorScheme.primary),
                       ),
                     const SizedBox(height: 6),
@@ -66,7 +117,7 @@ class ShipmentsDashboardPage extends StatelessWidget {
                         TextButton.icon(
                           onPressed: () => _showStatusSheet(context, orderId, status),
                           icon: const Icon(Icons.sync_outlined, size: 18),
-                          label: const Text('Changer statut'),
+                          label: Text(L10n.tr(context, 'shipments.change_status')),
                         ),
                         if (labelUrl == null)
                           TextButton.icon(
@@ -78,13 +129,13 @@ class ShipmentsDashboardPage extends StatelessWidget {
                               );
                             },
                             icon: const Icon(Icons.local_shipping_outlined, size: 18),
-                            label: const Text('Générer bordereau'),
+                            label: Text(L10n.tr(context, 'shipments.generate_label')),
                           ),
                         if (labelUrl != null)
                           TextButton.icon(
                             onPressed: () => _openLabel(labelUrl),
                             icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-                            label: const Text('Ouvrir label'),
+                            label: Text(L10n.tr(context, 'shipments.open_label')),
                           ),
                       ],
                     ),
@@ -117,7 +168,7 @@ class ShipmentsDashboardPage extends StatelessWidget {
             children: statuses
                 .map(
                   (s) => ListTile(
-                    title: Text(s),
+                    title: Text(_statusLabel(context, s)),
                     trailing: s == current ? const Icon(Icons.check) : null,
                     onTap: () async {
                       await service.updateShipmentStatus(orderId: orderId, status: s);
@@ -139,3 +190,4 @@ class ShipmentsDashboardPage extends StatelessWidget {
     }
   }
 }
+

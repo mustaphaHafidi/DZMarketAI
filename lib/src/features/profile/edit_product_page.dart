@@ -1,9 +1,10 @@
-import 'dart:typed_data';
+﻿import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:dzmarket/src/models/product.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
+import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/product_service.dart';
 import 'package:dzmarket/src/services/storage_service.dart';
 
@@ -33,6 +34,22 @@ class _EditProductPageState extends State<EditProductPage> {
   final List<String> _existingImages = [];
   final List<PlatformFile> _newImages = [];
   bool _saving = false;
+  static const _conditions = ['new', 'like new', 'good', 'fair'];
+
+  String _conditionLabel(BuildContext context, String value) {
+    switch (value) {
+      case 'new':
+        return L10n.tr(context, 'condition.new');
+      case 'like new':
+        return L10n.tr(context, 'condition.like_new');
+      case 'good':
+        return L10n.tr(context, 'condition.good');
+      case 'fair':
+        return L10n.tr(context, 'condition.fair');
+      default:
+        return value;
+    }
+  }
 
   @override
   void initState() {
@@ -95,14 +112,14 @@ class _EditProductPageState extends State<EditProductPage> {
       final price = InputSanitizer.parseAmount(_priceCtrl.text, min: 0);
       final stock = int.tryParse(_stockCtrl.text.trim()) ?? 0;
       if (stock < 0) {
-        throw FormatException('Stock invalide.');
+        throw FormatException(L10n.tr(context, 'listing.edit.error_invalid_stock'));
       }
       final costPrice = _costCtrl.text.trim().isEmpty
           ? null
           : InputSanitizer.parseAmount(_costCtrl.text, min: 0);
       final title = InputSanitizer.sanitizeText(_titleCtrl.text, maxLength: 80);
       if (title.isEmpty) {
-        throw FormatException('Title required.');
+        throw FormatException(L10n.tr(context, 'listing.edit.error_title_required'));
       }
       final description = InputSanitizer.sanitizeOptionalText(
         _descCtrl.text,
@@ -125,7 +142,7 @@ class _EditProductPageState extends State<EditProductPage> {
       final bytes = _newImages.map((f) => f.bytes).whereType<Uint8List>().toList();
       final names = _newImages.map((f) => f.name).toList();
       if (bytes.length != _newImages.length) {
-        throw StateError('Impossible de lire certains fichiers.');
+        throw StateError(L10n.tr(context, 'listing.edit.error_file_read'));
       }
       final uploaded = bytes.isEmpty
           ? <String>[]
@@ -151,7 +168,7 @@ class _EditProductPageState extends State<EditProductPage> {
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Annonce mise à jour')),
+        SnackBar(content: Text(L10n.tr(context, 'listing.edit.saved'))),
       );
       Navigator.pop(context);
     } on FormatException catch (e) {
@@ -168,7 +185,7 @@ class _EditProductPageState extends State<EditProductPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Modifier l\'annonce'),
+        title: Text(L10n.tr(context, 'listing.edit.title')),
         actions: [
           TextButton(
             onPressed: _saving ? null : _save,
@@ -178,7 +195,7 @@ class _EditProductPageState extends State<EditProductPage> {
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('Enregistrer'),
+                : Text(L10n.tr(context, 'common.save')),
           ),
         ],
       ),
@@ -268,85 +285,89 @@ class _EditProductPageState extends State<EditProductPage> {
             const SizedBox(height: 16),
             TextField(
               controller: _titleCtrl,
-              decoration: const InputDecoration(labelText: 'Titre'),
+              decoration: InputDecoration(labelText: L10n.tr(context, 'listing.add.title_label')),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _priceCtrl,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Prix (DA)'),
+              decoration: InputDecoration(labelText: L10n.tr(context, 'listing.add.price_label')),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _stockCtrl,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Stock disponible'),
+              decoration: InputDecoration(labelText: L10n.tr(context, 'listing.add.stock_label')),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _costCtrl,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Prix d\'achat (optionnel)'),
+              decoration: InputDecoration(labelText: L10n.tr(context, 'listing.add.cost_label')),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _descCtrl,
-              decoration: const InputDecoration(labelText: 'Description'),
+              decoration: InputDecoration(labelText: L10n.tr(context, 'listing.add.description_label')),
               maxLines: 3,
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _categoryCtrl,
-              decoration: const InputDecoration(labelText: 'Categorie'),
+              decoration: InputDecoration(labelText: L10n.tr(context, 'listing.add.category_label')),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _brandCtrl,
-              decoration: const InputDecoration(labelText: 'Marque (optionnel)'),
+              decoration: InputDecoration(labelText: L10n.tr(context, 'listing.add.brand_label')),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _sizeCtrl,
-              decoration: const InputDecoration(labelText: 'Taille (optionnel)'),
+              decoration: InputDecoration(labelText: L10n.tr(context, 'listing.add.size_label')),
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               initialValue: _condition,
-              items: const [
-                DropdownMenuItem(value: 'new', child: Text('new')),
-                DropdownMenuItem(value: 'like new', child: Text('like new')),
-                DropdownMenuItem(value: 'good', child: Text('good')),
-                DropdownMenuItem(value: 'fair', child: Text('fair')),
-              ],
+              items: _conditions
+                  .map(
+                    (c) => DropdownMenuItem(
+                      value: c,
+                      child: Text(_conditionLabel(context, c)),
+                    ),
+                  )
+                  .toList(),
               onChanged: (value) => setState(() => _condition = value ?? 'new'),
-              decoration: const InputDecoration(labelText: 'Etat'),
+              decoration: InputDecoration(
+                labelText: L10n.tr(context, 'listing.add.condition_label'),
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _wilayaCtrl,
-              decoration: const InputDecoration(labelText: 'Wilaya'),
+              decoration: InputDecoration(labelText: L10n.tr(context, 'listing.add.wilaya_label')),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _dairaCtrl,
-              decoration: const InputDecoration(labelText: 'Daira'),
+              decoration: InputDecoration(labelText: L10n.tr(context, 'listing.add.commune_label')),
             ),
             const SizedBox(height: 12),
             SwitchListTile(
               value: _deliveryCod,
               onChanged: (value) => setState(() => _deliveryCod = value),
-              title: const Text('Paiement a la livraison (COD)'),
+              title: Text(L10n.tr(context, 'listing.add.delivery_cod')),
             ),
             SwitchListTile(
               value: _deliveryPickup,
               onChanged: (value) => setState(() => _deliveryPickup = value),
-              title: const Text('Remise en main propre'),
+              title: Text(L10n.tr(context, 'listing.add.delivery_pickup')),
             ),
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: _saving ? null : _save,
               icon: const Icon(Icons.save),
-              label: const Text('Enregistrer'),
+              label: Text(L10n.tr(context, 'common.save')),
             ),
           ],
         ),
@@ -354,3 +375,8 @@ class _EditProductPageState extends State<EditProductPage> {
     );
   }
 }
+
+
+
+
+

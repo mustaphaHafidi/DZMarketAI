@@ -1,10 +1,11 @@
-import 'package:cached_network_image/cached_network_image.dart';
+﻿import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cached_network_image_platform_interface/cached_network_image_platform_interface.dart';
 import 'package:dzmarket/src/features/listings/product_detail_page.dart';
 import 'package:dzmarket/src/services/seller_analytics_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/product_service.dart';
+import 'package:dzmarket/src/services/i18n.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -108,7 +109,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Export CSV'),
+        title: Text(L10n.tr(context, 'seller_dashboard.export_title')),
         content: SizedBox(
           width: double.maxFinite,
           child: SingleChildScrollView(
@@ -118,13 +119,13 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Fermer'),
+            child: Text(L10n.tr(context, 'common.close')),
           ),
         ],
       ),
     );
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('CSV copie dans le presse-papiers')),
+      SnackBar(content: Text(L10n.tr(context, 'seller_dashboard.exported'))),
     );
   }
 
@@ -156,11 +157,11 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
   Widget build(BuildContext context) {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) {
-      return const Scaffold(body: Center(child: Text('Connectez-vous')));
+      return Scaffold(body: Center(child: Text(L10n.tr(context, 'profile.login_required'))));
     }
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tableau de bord vendeur'),
+        title: Text(L10n.tr(context, 'seller_dashboard.title')),
         actions: [
           IconButton(
             onPressed: () async {
@@ -170,7 +171,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
               await _exportCsv(filtered);
             },
             icon: const Icon(Icons.download_outlined),
-            tooltip: 'Exporter CSV',
+            tooltip: L10n.tr(context, 'seller_dashboard.export_tooltip'),
           ),
         ],
       ),
@@ -181,14 +182,18 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return const Center(child: Text('Erreur de chargement'));
+            return Center(child: Text(L10n.tr(context, 'common.load_error')));
           }
           final bundle = snapshot.data;
           if (bundle == null) {
-            return const Center(child: Text('Aucune vente'));
+            return Center(child: Text(L10n.tr(context, 'seller_dashboard.empty')));
           }
           final data = bundle.current;
-          final currency = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA');
+          final localeCode = Localizations.localeOf(context).languageCode;
+          final currency = NumberFormat.currency(
+            locale: localeCode == 'ar' ? 'ar_DZ' : 'fr_DZ',
+            symbol: 'DA',
+          );
           final filteredOrders = _applyFilters(data.orders);
           return RefreshIndicator(
             onRefresh: () async => _reload(),
@@ -211,7 +216,9 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
                   maxSaleCtrl: _maxSaleCtrl,
                 ),
                 const SizedBox(height: 12),
-                _SectionTitle(title: 'Vue d\'ensemble'),
+                _SectionTitle(
+                  title: L10n.tr(context, 'seller_dashboard.section_overview'),
+                ),
                 const SizedBox(height: 8),
                 _SummaryCards(stats: data.periods, currency: currency),
                 const SizedBox(height: 8),
@@ -221,19 +228,27 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
                   currency: currency,
                 ),
                 const SizedBox(height: 16),
-                _SectionTitle(title: 'Evolution des ventes'),
+                _SectionTitle(
+                  title: L10n.tr(context, 'seller_dashboard.section_sales_trend'),
+                ),
                 const SizedBox(height: 8),
                 _RevenueProfitChart(daily: data.daily, currency: currency),
                 const SizedBox(height: 16),
-                _SectionTitle(title: 'Top produits'),
+                _SectionTitle(
+                  title: L10n.tr(context, 'seller_dashboard.section_top_products'),
+                ),
                 const SizedBox(height: 8),
                 _TopProductsList(items: data.topProducts, currency: currency),
                 const SizedBox(height: 16),
-                _SectionTitle(title: 'Alertes stock'),
+                _SectionTitle(
+                  title: L10n.tr(context, 'seller_dashboard.section_stock_alerts'),
+                ),
                 const SizedBox(height: 8),
                 _LowStockList(items: data.lowStock),
                 const SizedBox(height: 16),
-                _SectionTitle(title: 'Dernieres commandes'),
+                _SectionTitle(
+                  title: L10n.tr(context, 'seller_dashboard.section_recent_orders'),
+                ),
                 const SizedBox(height: 8),
                 _OrdersList(items: filteredOrders, currency: currency),
               ],
@@ -304,26 +319,26 @@ class _RangeFilters extends StatelessWidget {
       children: [
         FilterChip(
           selected: preset == _RangePreset.today,
-          label: const Text('24h'),
+          label: Text(L10n.tr(context, 'seller_dashboard.range_24h')),
           onSelected: (_) => onPresetChange(_RangePreset.today),
         ),
         FilterChip(
           selected: preset == _RangePreset.week,
-          label: const Text('7 jours'),
+          label: Text(L10n.tr(context, 'seller_dashboard.range_7d')),
           onSelected: (_) => onPresetChange(_RangePreset.week),
         ),
         FilterChip(
           selected: preset == _RangePreset.month,
-          label: const Text('30 jours'),
+          label: Text(L10n.tr(context, 'seller_dashboard.range_30d')),
           onSelected: (_) => onPresetChange(_RangePreset.month),
         ),
         FilterChip(
           selected: preset == _RangePreset.quarter,
-          label: const Text('90 jours'),
+          label: Text(L10n.tr(context, 'seller_dashboard.range_90d')),
           onSelected: (_) => onPresetChange(_RangePreset.quarter),
         ),
         ActionChip(
-          label: const Text('Personnalise'),
+          label: Text(L10n.tr(context, 'seller_dashboard.range_custom')),
           onPressed: onCustomRange,
         ),
       ],
@@ -387,11 +402,19 @@ class _SummaryCards extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Profit: ${currency.format(item.profit)}',
+                        L10n.tr(
+                          context,
+                          'seller_dashboard.summary_profit',
+                          params: {'profit': currency.format(item.profit)},
+                        ),
                         style: Theme.of(context).textTheme.labelSmall,
                       ),
                       Text(
-                        'Cmd: ${item.orders}',
+                        L10n.tr(
+                          context,
+                          'seller_dashboard.orders_short',
+                          params: {'count': item.orders.toString()},
+                        ),
                         style: Theme.of(context).textTheme.labelSmall,
                       ),
                     ],
@@ -417,9 +440,9 @@ class _RevenueProfitChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (daily.isEmpty) {
-      return const SizedBox(
+      return SizedBox(
         height: 140,
-        child: Center(child: Text('Aucune donnee')),
+        child: Center(child: Text(L10n.tr(context, 'seller_dashboard.no_data'))),
       );
     }
     final maxValue = daily
@@ -437,7 +460,11 @@ class _RevenueProfitChart extends StatelessWidget {
         child: Align(
           alignment: Alignment.topLeft,
           child: Text(
-            'Max: ${currency.format(maxValue)}',
+            L10n.tr(
+              context,
+              'seller_dashboard.max_label',
+              params: {'value': currency.format(maxValue)},
+            ),
             style: Theme.of(context).textTheme.labelSmall,
           ),
         ),
@@ -506,7 +533,7 @@ class _TopProductsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
-      return const Text('Aucun produit vendu');
+      return Text(L10n.tr(context, 'seller_dashboard.no_products_sold'));
     }
     final top = items.take(5).toList();
     return Column(
@@ -515,7 +542,13 @@ class _TopProductsList extends StatelessWidget {
           ListTile(
             leading: _ProductThumb(url: item.imageUrl),
             title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-            subtitle: Text('Cmd: ${item.orders}'),
+            subtitle: Text(
+              L10n.tr(
+                context,
+                'seller_dashboard.orders_short',
+                params: {'count': item.orders.toString()},
+              ),
+            ),
             trailing: Text(currency.format(item.profit)),
             onTap: () {
               Navigator.of(context).push(
@@ -538,7 +571,7 @@ class _LowStockList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
-      return const Text('Aucune alerte stock');
+      return Text(L10n.tr(context, 'seller_dashboard.low_stock_empty'));
     }
     return Column(
       children: [
@@ -549,11 +582,14 @@ class _LowStockList extends StatelessWidget {
               fallback: Icons.warning_amber_outlined,
             ),
             title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-            subtitle:
-                Text('Stock: ${item.stockQuantity}  •  Vendu: ${item.soldCount}'),
+            subtitle: Text(
+              '${L10n.tr(context, 'listing.detail.stock', params: {'value': item.stockQuantity.toString()})}'
+              ' • '
+              '${L10n.tr(context, 'listing.detail.sold', params: {'value': item.soldCount.toString()})}',
+            ),
             trailing: IconButton(
               icon: const Icon(Icons.add_circle_outline),
-              tooltip: 'Reapprovisionner',
+              tooltip: L10n.tr(context, 'seller_dashboard.restock'),
               onPressed: () => _restock(context, item),
             ),
             onTap: () {
@@ -570,30 +606,32 @@ class _LowStockList extends StatelessWidget {
 
   Future<void> _restock(BuildContext context, ProductStockAlert item) async {
     final controller = TextEditingController(text: '${item.stockQuantity}');
-    final value = await showDialog<int>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Reapprovisionner'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'Nouveau stock'),
+      final value = await showDialog<int>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(L10n.tr(context, 'seller_dashboard.restock')),
+          content: TextField(
+            controller: controller,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: L10n.tr(context, 'seller_dashboard.new_stock_label'),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(L10n.tr(context, 'common.cancel')),
+            ),
+            TextButton(
+              onPressed: () {
+                final parsed = int.tryParse(controller.text.trim());
+                if (parsed == null || parsed < 0) return;
+                Navigator.pop(context, parsed);
+              },
+              child: Text(L10n.tr(context, 'common.save')),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler'),
-          ),
-          TextButton(
-            onPressed: () {
-              final parsed = int.tryParse(controller.text.trim());
-              if (parsed == null || parsed < 0) return;
-              Navigator.pop(context, parsed);
-            },
-            child: const Text('Enregistrer'),
-          ),
-        ],
-      ),
     );
     if (value == null) return;
     await ProductService().updateProduct(
@@ -612,7 +650,7 @@ class _OrdersList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
-      return const Text('Aucune commande livree');
+      return Text(L10n.tr(context, 'seller_dashboard.orders_empty'));
     }
     final recent = items.take(10).toList();
     return Column(
@@ -625,7 +663,14 @@ class _OrdersList extends StatelessWidget {
             ),
             title: Text(item.productTitle, maxLines: 1, overflow: TextOverflow.ellipsis),
             subtitle: Text(
-              '${DateFormat('dd/MM').format(item.createdAt)} • Profit: ${currency.format(item.profit)}',
+              L10n.tr(
+                context,
+                'seller_dashboard.order_profit',
+                params: {
+                  'date': DateFormat('dd/MM').format(item.createdAt),
+                  'profit': currency.format(item.profit),
+                },
+              ),
             ),
             trailing: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -633,7 +678,13 @@ class _OrdersList extends StatelessWidget {
               children: [
                 Text(currency.format(item.salePrice)),
                 Text(
-                  'Frais: ${currency.format(item.feeAmount + item.deliveryCost)}',
+                  L10n.tr(
+                    context,
+                    'seller_dashboard.order_fees',
+                    params: {
+                      'fees': currency.format(item.feeAmount + item.deliveryCost),
+                    },
+                  ),
                   style: Theme.of(context).textTheme.labelSmall,
                 ),
               ],
@@ -692,9 +743,9 @@ class _FiltersRow extends StatelessWidget {
     return Column(
       children: [
         TextField(
-          decoration: const InputDecoration(
-            prefixIcon: Icon(Icons.search),
-            hintText: 'Rechercher un produit',
+          decoration: InputDecoration(
+            prefixIcon: const Icon(Icons.search),
+            hintText: L10n.tr(context, 'seller_dashboard.search_hint'),
           ),
           onChanged: onQueryChanged,
         ),
@@ -705,8 +756,8 @@ class _FiltersRow extends StatelessWidget {
               child: TextField(
                 controller: minSaleCtrl,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Vente min (DA)',
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'seller_dashboard.min_sale'),
                 ),
               ),
             ),
@@ -715,8 +766,8 @@ class _FiltersRow extends StatelessWidget {
               child: TextField(
                 controller: maxSaleCtrl,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Vente max (DA)',
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'seller_dashboard.max_sale'),
                 ),
               ),
             ),
@@ -725,8 +776,8 @@ class _FiltersRow extends StatelessWidget {
               child: TextField(
                 controller: minProfitCtrl,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Profit min (DA)',
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'seller_dashboard.min_profit'),
                 ),
               ),
             ),
@@ -766,21 +817,21 @@ class _ComparisonRow extends StatelessWidget {
       children: [
         Expanded(
           child: _DeltaCard(
-            label: 'Chiffre d\'affaires',
+            label: L10n.tr(context, 'seller_dashboard.revenue'),
             value: currency.format(current.revenue),
             delta: _percent(current.revenue, previous.revenue),
           ),
         ),
         Expanded(
           child: _DeltaCard(
-            label: 'Profit',
+            label: L10n.tr(context, 'seller_dashboard.profit'),
             value: currency.format(current.profit),
             delta: _percent(current.profit, previous.profit),
           ),
         ),
         Expanded(
           child: _DeltaCard(
-            label: 'Commandes',
+            label: L10n.tr(context, 'seller_dashboard.orders'),
             value: current.orders.toString(),
             delta: _percent(current.orders.toDouble(), previous.orders.toDouble()),
           ),
@@ -811,7 +862,7 @@ class _DeltaCard extends StatelessWidget {
     final deltaValue = delta;
     final isUp = deltaValue != null && deltaValue >= 0;
     final deltaText = deltaValue == null
-        ? '—'
+        ? L10n.tr(context, 'common.not_available')
         : '${deltaValue.toStringAsFixed(1)}%';
     return Card(
       elevation: 1,
@@ -871,3 +922,4 @@ class _DashboardBundle {
   final SellerTotals previous;
   final DateTimeRange range;
 }
+

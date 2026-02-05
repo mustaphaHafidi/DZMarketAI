@@ -1,6 +1,8 @@
 import 'package:dzmarket/src/config/supabase_options.dart';
 import 'package:dzmarket/src/models/product.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
+import 'package:dzmarket/src/services/i18n.dart';
+import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:dzmarket/src/services/rate_limiter.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 
@@ -92,7 +94,7 @@ class ProductService {
 
     final query = supabase
         .from(SupabaseTables.products)
-        .select('*, categories(name_fr, name_ar)');
+        .select('*, categories(name_fr, name_ar, slug)');
     var filtered = query;
     filtered = filtered.eq('is_archived', false);
     filtered = filtered.gt('stock_quantity', 0);
@@ -165,10 +167,20 @@ class ProductService {
   }) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) {
-      throw StateError('User must be signed in to add products.');
+      throw StateError(
+        L10n.trLocale(
+          LocaleService.instance.locale.value?.languageCode ?? 'fr',
+          'profile.login_required',
+        ),
+      );
     }
+    final locale = LocaleService.instance.locale.value?.languageCode ?? 'fr';
     final safeTitle = InputSanitizer.sanitizeText(title, maxLength: 80);
-    if (safeTitle.isEmpty) throw FormatException('Title required.');
+    if (safeTitle.isEmpty) {
+      throw FormatException(
+        L10n.trLocale(locale, 'listing.add.error_add_title'),
+      );
+    }
     final safeDescription =
         InputSanitizer.sanitizeOptionalText(description, maxLength: 1200, allowNewlines: true);
     final safeImageUrl = InputSanitizer.sanitizeUrl(imageUrl);
@@ -186,9 +198,15 @@ class ProductService {
         InputSanitizer.sanitizeOptionalText(locationDaira, maxLength: 60);
     final safeCostPrice = costPrice;
     if (safeCostPrice != null && safeCostPrice < 0) {
-      throw FormatException('Prix d\'achat invalide.');
+      throw FormatException(
+        L10n.trLocale(locale, 'listing.add.error_invalid_cost'),
+      );
     }
-    if (stockQuantity < 0) throw FormatException('Stock invalide.');
+    if (stockQuantity < 0) {
+      throw FormatException(
+        L10n.trLocale(locale, 'listing.add.error_invalid_stock'),
+      );
+    }
     final safeDelivery = deliveryOptions
         .map((opt) => InputSanitizer.sanitizeText(opt, maxLength: 20))
         .where((opt) => opt.isNotEmpty)
@@ -240,7 +258,15 @@ class ProductService {
     bool? isArchived,
   }) async {
     final userId = supabase.auth.currentUser?.id;
-    if (userId == null) throw StateError('User must be signed in to update products.');
+    if (userId == null) {
+      throw StateError(
+        L10n.trLocale(
+          LocaleService.instance.locale.value?.languageCode ?? 'fr',
+          'profile.login_required',
+        ),
+      );
+    }
+    final locale = LocaleService.instance.locale.value?.languageCode ?? 'fr';
     final safeId = InputSanitizer.sanitizeId(id, maxLength: 64);
     final payload = <String, dynamic>{};
     final safeTitle = InputSanitizer.sanitizeOptionalText(title, maxLength: 80);
@@ -259,10 +285,14 @@ class ProductService {
     final safeDaira =
         InputSanitizer.sanitizeOptionalText(locationDaira, maxLength: 60);
     if (stockQuantity != null && stockQuantity < 0) {
-      throw FormatException('Stock invalide.');
+      throw FormatException(
+        L10n.trLocale(locale, 'listing.add.error_invalid_stock'),
+      );
     }
     if (costPrice != null && costPrice < 0) {
-      throw FormatException('Prix d\'achat invalide.');
+      throw FormatException(
+        L10n.trLocale(locale, 'listing.add.error_invalid_cost'),
+      );
     }
     if (safeTitle != null) payload['title'] = safeTitle;
     if (price != null) payload['price'] = price;

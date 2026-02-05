@@ -1,4 +1,4 @@
-import 'package:dzmarket/src/services/i18n.dart';
+﻿import 'package:dzmarket/src/services/i18n.dart';
 import 'package:flutter/widgets.dart';
 
 enum OfferStatus { pending, accepted, rejected, expired, cancelled }
@@ -72,15 +72,16 @@ class Offer {
   String statusLabel(BuildContext context) {
     switch (status) {
       case OfferStatus.accepted:
-        return L10n.t(context, 'Acceptee', '\u0645\u0642\u0628\u0648\u0644\u0629', key: 'offers.status_accepted');
+        return L10n.tr(context, 'offers.status_accepted');
       case OfferStatus.rejected:
-        return L10n.t(context, 'Refusee', '\u0645\u0631\u0641\u0648\u0636\u0629', key: 'offers.status_rejected');
+        return L10n.tr(context, 'offers.status_rejected');
       case OfferStatus.expired:
-        return L10n.t(context, 'Expiree', '\u0645\u0646\u062a\u0647\u064a\u0629', key: 'offers.status_expired');
+        return L10n.tr(context, 'offers.status_expired');
       case OfferStatus.cancelled:
-        return L10n.t(context, 'Annulee', '\u0645\u0644\u063a\u0627\u0629', key: 'offers.status_cancelled');
+        return L10n.tr(context, 'offers.status_cancelled');
       case OfferStatus.pending:
-        return L10n.t(context, 'En attente', '\u0642\u064a\u062f \u0627\u0644\u0627\u0646\u062a\u0638\u0627\u0631', key: 'offers.status_pending');
+        return L10n.tr(context, 'offers.status_pending');
     }
   }
 }
+

@@ -76,6 +76,7 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
   }
 
   Future<void> _loadCouriers() async {
+    final placeholder = L10n.tr(context, 'fulfillment.courier_placeholder');
     final list = await _shipping.fetchCouriers();
     final updated = List<Map<String, dynamic>>.from(list);
     if (_selectedCourierId != null &&
@@ -84,7 +85,7 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
         0,
         {
           'id': _selectedCourierId,
-          'name': _selectedCourierName ?? L10n.tr(context, 'fulfillment.courier_placeholder'),
+          'name': _selectedCourierName ?? placeholder,
         },
       );
     }
@@ -221,7 +222,12 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
         DropdownButtonFormField<String>(
           value: _option,
           items: _optionChoices
-              .map((o) => DropdownMenuItem(value: o, child: Text(o)))
+              .map(
+                (o) => DropdownMenuItem(
+                  value: o,
+                  child: Text(ShippingService.optionLabel(context, o)),
+                ),
+              )
               .toList(),
           onChanged: _optionLocked ? null : (v) => setState(() => _option = v),
         ),

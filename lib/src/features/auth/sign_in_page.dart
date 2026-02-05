@@ -1,4 +1,4 @@
-import 'package:dzmarket/src/services/auth_service.dart';
+﻿import 'package:dzmarket/src/services/auth_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:flutter/material.dart';
@@ -77,10 +77,7 @@ class _SignInPageState extends State<SignInPage> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    L10n.t(
-                        context,
-                        'Connecte-toi pour acheter et vendre',
-                        'سجّل الدخول للشراء والبيع'),
+                    L10n.tr(context, 'auth.sign_in.subtitle'),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 24),
@@ -97,18 +94,18 @@ class _SignInPageState extends State<SignInPage> {
                           TextField(
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
-                            decoration: const InputDecoration(
-                              labelText: 'Email',
-                              prefixIcon: Icon(Icons.email_outlined),
+                            decoration: InputDecoration(
+                              labelText: L10n.tr(context, 'auth.email'),
+                              prefixIcon: const Icon(Icons.email_outlined),
                             ),
                           ),
                           const SizedBox(height: 12),
                           TextField(
                             controller: _passwordController,
                             obscureText: true,
-                            decoration: const InputDecoration(
-                              labelText: 'Mot de passe',
-                              prefixIcon: Icon(Icons.lock_outline),
+                            decoration: InputDecoration(
+                              labelText: L10n.tr(context, 'auth.password'),
+                              prefixIcon: const Icon(Icons.lock_outline),
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -135,12 +132,13 @@ class _SignInPageState extends State<SignInPage> {
                                     child:
                                         CircularProgressIndicator(strokeWidth: 2),
                                   )
-                                : const Text('Se connecter'),
+                                : Text(L10n.tr(context, 'auth.sign_in.cta')),
                           ),
-                  TextButton(
-                    onPressed: _loading ? null : () => context.go('/sign-up'),
-                    child: const Text('Pas de compte ? Crée-le'),
-                  ),
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: _loading ? null : () => context.go('/sign-up'),
+                            child: Text(L10n.tr(context, 'auth.sign_in.no_account')),
+                          ),
                 ],
               ),
             ),
@@ -154,3 +152,5 @@ class _SignInPageState extends State<SignInPage> {
     );
   }
 }
+
+

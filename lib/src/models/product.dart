@@ -10,6 +10,7 @@ class Product {
     this.imageUrl,
     this.imageUrls = const [],
     this.category,
+    this.categorySlug,
     this.categoryNameFr,
     this.categoryNameAr,
     this.condition,
@@ -35,6 +36,7 @@ class Product {
   final String? imageUrl;
   final List<String> imageUrls;
   final String? category;
+  final String? categorySlug;
   final String? categoryNameFr;
   final String? categoryNameAr;
   final String? condition;
@@ -63,6 +65,8 @@ class Product {
             .where((e) => e.isNotEmpty)
             .toList(),
         category: json['category'] as String?,
+        categorySlug: (json['categories']?['slug'] ?? json['category_slug'])
+            ?.toString(),
         categoryNameFr: (json['categories']?['name_fr'] ??
                 json['category_name_fr'])
             ?.toString(),

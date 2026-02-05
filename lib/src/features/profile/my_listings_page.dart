@@ -1,9 +1,10 @@
-import 'package:cached_network_image/cached_network_image.dart';
+﻿import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cached_network_image_platform_interface/cached_network_image_platform_interface.dart';
 import 'package:dzmarket/src/features/profile/edit_product_page.dart';
 import 'package:dzmarket/src/features/listings/product_detail_page.dart';
 import 'package:dzmarket/src/models/product.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
+import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/product_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:flutter/material.dart';
@@ -16,12 +17,18 @@ class MyListingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final userId = supabase.auth.currentUser?.id;
-    final currency = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA');
+    final localeCode = Localizations.localeOf(context).languageCode;
+    final currency = NumberFormat.currency(
+      locale: localeCode == 'ar' ? 'ar_DZ' : 'fr_DZ',
+      symbol: 'DA',
+    );
     if (userId == null) {
-      return const Scaffold(body: Center(child: Text('Connectez-vous')));
+      return Scaffold(
+        body: Center(child: Text(L10n.tr(context, 'profile.login_required'))),
+      );
     }
     return Scaffold(
-      appBar: AppBar(title: const Text('Mes annonces')),
+      appBar: AppBar(title: Text(L10n.tr(context, 'profile.my_listings'))),
       body: StreamBuilder<List<Product>>(
         stream: ProductService().streamProductsForOwner(userId),
         builder: (context, snapshot) {
@@ -30,7 +37,7 @@ class MyListingsPage extends StatelessWidget {
           }
           final products = snapshot.data ?? const [];
           if (products.isEmpty) {
-            return const Center(child: Text('Aucune annonce'));
+            return Center(child: Text(L10n.tr(context, 'listing.empty')));
           }
           return ListView.separated(
             itemCount: products.length,
@@ -39,6 +46,16 @@ class MyListingsPage extends StatelessWidget {
               final p = products[index];
               final raw = p.imageUrls.isNotEmpty ? p.imageUrls.first : p.imageUrl;
               final img = InputSanitizer.safeUrl(raw);
+              final stockLabel = L10n.tr(
+                context,
+                'listing.detail.stock',
+                params: {'value': p.stockQuantity.toString()},
+              );
+              final soldLabel = L10n.tr(
+                context,
+                'listing.detail.sold',
+                params: {'value': p.soldCount.toString()},
+              );
               return ListTile(
                 leading: img != null
                     ? CircleAvatar(
@@ -51,7 +68,7 @@ class MyListingsPage extends StatelessWidget {
                     : const CircleAvatar(child: Icon(Icons.image)),
                 title: Text(p.title),
                 subtitle: Text(
-                  '${currency.format(p.price)}  •  Stock: ${p.stockQuantity}  •  Vendu: ${p.soldCount}',
+                  '${currency.format(p.price)} • $stockLabel • $soldLabel',
                 ),
                 trailing: PopupMenuButton<String>(
                   onSelected: (value) async {
@@ -65,7 +82,11 @@ class MyListingsPage extends StatelessWidget {
                         await ProductService().deleteProduct(p.id.toString());
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Annonce supprimée')),
+                            SnackBar(
+                              content: Text(
+                                L10n.tr(context, 'listing.delete_success'),
+                              ),
+                            ),
                           );
                         }
                       }
@@ -84,16 +105,28 @@ class MyListingsPage extends StatelessWidget {
                     }
                   },
                   itemBuilder: (context) => [
-                    const PopupMenuItem(value: 'open', child: Text('Ouvrir')),
-                    const PopupMenuItem(value: 'edit', child: Text('Modifier')),
+                    PopupMenuItem(
+                      value: 'open',
+                      child: Text(L10n.tr(context, 'common.open')),
+                    ),
+                    PopupMenuItem(
+                      value: 'edit',
+                      child: Text(L10n.tr(context, 'common.edit')),
+                    ),
                     if (!p.isArchived)
-                      const PopupMenuItem(value: 'archive', child: Text('Archiver')),
-                    if (p.isArchived)
-                      const PopupMenuItem(
-                        value: 'unarchive',
-                        child: Text('Rendre active'),
+                      PopupMenuItem(
+                        value: 'archive',
+                        child: Text(L10n.tr(context, 'common.archive')),
                       ),
-                    const PopupMenuItem(value: 'delete', child: Text('Supprimer')),
+                    if (p.isArchived)
+                      PopupMenuItem(
+                        value: 'unarchive',
+                        child: Text(L10n.tr(context, 'common.unarchive')),
+                      ),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Text(L10n.tr(context, 'common.delete')),
+                    ),
                   ],
                 ),
                 onTap: () => Navigator.of(context).push(
@@ -113,14 +146,27 @@ class MyListingsPage extends StatelessWidget {
     return await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Supprimer'),
-            content: Text('Supprimer "$title" ?'),
+            title: Text(L10n.tr(context, 'listing.delete_title')),
+            content: Text(
+              L10n.tr(
+                context,
+                'listing.delete_confirm',
+                params: {'title': title},
+              ),
+            ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
-              TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Supprimer')),
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(L10n.tr(context, 'common.cancel')),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(L10n.tr(context, 'common.delete')),
+              ),
             ],
           ),
         ) ??
         false;
   }
 }
+

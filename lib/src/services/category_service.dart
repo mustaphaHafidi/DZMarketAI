@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class CategoryService {
   static const Duration _cacheTtl = Duration(hours: 12);
-  static const _cacheKey = 'cache.categories.v3';
+  static const _cacheKey = 'cache.categories.v4';
   static List<Map<String, String>>? _cache;
 
   Future<List<Map<String, String>>> fetchCategories() async {
@@ -22,7 +22,7 @@ class CategoryService {
         'categories.select',
         () => supabase
             .from(SupabaseTables.categories)
-            .select('id, name_fr, name_ar, icon, parent_id, sort_order, is_active')
+          .select('id, slug, name_fr, name_ar, icon, parent_id, sort_order, is_active')
             .eq('is_active', true)
             .order('sort_order')
             .order('name_fr'),
@@ -31,6 +31,7 @@ class CategoryService {
           .map(
             (r) => {
               'id': r['id']?.toString() ?? '',
+              'slug': r['slug']?.toString() ?? '',
               'name_fr': r['name_fr']?.toString() ?? '',
               'name_ar': r['name_ar']?.toString() ?? '',
               'icon': r['icon']?.toString() ?? '',

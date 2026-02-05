@@ -41,6 +41,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   String? _buyerWilaya;
   String? _sellerWilaya;
   Map<String, dynamic>? _buyerProfile;
+  Map<String, dynamic>? _sellerProfile;
   bool _isOwner = false;
 
   @override
@@ -51,29 +52,24 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   Future<void> _reportListing(BuildContext context, Product product) async {
     final reasonController = TextEditingController();
     const reasonOptions = [
-      'Faux article',
-      'Arnaque',
-      'Contenu interdit',
-      'Mauvaise categorie',
-      'Doublon',
+      'report.reason.fake',
+      'report.reason.scam',
+      'report.reason.prohibited',
+      'report.reason.wrong_category',
+      'report.reason.duplicate',
     ];
-    String? selectedReason;
+    String? selectedReasonKey;
     bool showError = false;
     await showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          title: Text(
-            L10n.t(context, 'Signaler l\'annonce', 'Signaler l\'annonce',
-                key: 'report.title'),
-          ),
+          title: Text(L10n.tr(context, 'report.title')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                L10n.t(context, 'Raison', 'Raison', key: 'report.reason'),
-              ),
+              Text(L10n.tr(context, 'report.reason')),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -81,11 +77,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 children: [
                   for (final option in reasonOptions)
                     ChoiceChip(
-                      label: Text(option),
-                      selected: selectedReason == option,
+                      label: Text(L10n.tr(context, option)),
+                      selected: selectedReasonKey == option,
                       onSelected: (selected) {
                         setState(() {
-                          selectedReason = selected ? option : null;
+                          selectedReasonKey = selected ? option : null;
                           showError = false;
                         });
                       },
@@ -96,7 +92,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
-                    'Choisissez une raison.',
+                    L10n.tr(context, 'report.reason_required'),
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.error,
                     ),
@@ -106,14 +102,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               TextField(
                 controller: reasonController,
                 decoration: InputDecoration(
-                  labelText: L10n.t(context, 'Details', 'Details',
-                      key: 'report.details'),
-                  hintText: L10n.t(
-                    context,
-                    'Ajoutez des details (optionnel)',
-                    'Ajoutez des details (optionnel)',
-                    key: 'report.hint',
-                  ),
+                  labelText: L10n.tr(context, 'report.details'),
+                  hintText: L10n.tr(context, 'report.details_hint'),
                 ),
                 minLines: 2,
                 maxLines: 4,
@@ -123,12 +113,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: Text(L10n.t(context, 'Annuler', 'Annuler',
-                  key: 'common.cancel')),
+              child: Text(L10n.tr(context, 'common.cancel')),
             ),
             TextButton(
               onPressed: () async {
-                if (selectedReason == null) {
+                if (selectedReasonKey == null) {
                   setState(() => showError = true);
                   return;
                 }
@@ -136,9 +125,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   reasonController.text,
                   maxLength: 300,
                 );
+                final reasonLabel = L10n.tr(context, selectedReasonKey!);
                 final reason = details.isEmpty
-                    ? selectedReason!
-                    : '[${selectedReason!}] $details';
+                    ? reasonLabel
+                    : '[$reasonLabel] $details';
                 final userId = supabase.auth.currentUser?.id;
                 if (userId == null) return;
                 await RateLimiter.instance.run(
@@ -154,19 +144,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        L10n.t(
-                          context,
-                          'Signalement envoye. Merci.',
-                          'Signalement envoye. Merci.',
-                          key: 'report.sent',
-                        ),
+                        L10n.tr(context, 'report.sent'),
                       ),
                     ),
                   );
                 }
               },
-              child: Text(L10n.t(context, 'Envoyer', 'Envoyer',
-                  key: 'common.send')),
+              child: Text(L10n.tr(context, 'common.send')),
             ),
           ],
         ),
@@ -224,7 +208,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       'products.detail.select',
       () => supabase
           .from('products')
-          .select('*, categories(name_fr, name_ar)')
+          .select('*, categories(name_fr, name_ar, slug)')
           .eq('id', safeProductId)
           .maybeSingle(),
     );
@@ -246,7 +230,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         'profiles.wilaya.seller',
         () => supabase
             .from('profiles')
-            .select('wilaya')
+            .select('wilaya, full_name, avatar_url, email')
             .eq('id', data['owner_id'])
             .maybeSingle(),
       );
@@ -257,6 +241,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       _buyerWilaya = buyerProfile?['wilaya']?.toString();
       _sellerWilaya = seller?['wilaya'] as String?;
       _buyerProfile = buyerProfile;
+      _sellerProfile = seller;
       _loaded = true;
       _isOwner = userId != null && data != null && data['owner_id'] == userId;
     });
@@ -274,6 +259,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       );
       return;
     }
+    final newContactText = L10n.tr(context, 'chat.new_contact');
     final repo = ChatRepository();
     final conv = await repo.ensureConversation(
       productId: _product!.id,
@@ -282,7 +268,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     );
     // Try to send a hello message; ignore duplicate/race errors.
     try {
-      await repo.sendMessage(conv.id, 'Nouveau contact');
+      await repo.sendMessage(conv.id, newContactText);
     } catch (_) {
       // If send failed (e.g., blocked), ignore for now; navigation still works.
     }
@@ -295,6 +281,27 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         ),
       ),
     );
+  }
+
+  String _resolveCategoryLabel(BuildContext context) {
+    final fr = _product?.categoryNameFr ?? _product?.category ?? '';
+    final ar = _product?.categoryNameAr ?? _product?.category ?? '';
+    final slug = _product?.categorySlug ?? '';
+    final locale = Localizations.localeOf(context).languageCode;
+    final fallback = locale == 'ar'
+        ? (_hasArabicLetters(ar) ? ar : (fr.isNotEmpty ? fr : ar))
+        : (fr.isNotEmpty ? fr : ar);
+    if (slug.isEmpty) return fallback;
+    final translated = L10n.tr(context, 'category.$slug', fallback: fallback);
+    return _looksMojibake(translated) ? fallback : translated;
+  }
+
+  bool _hasArabicLetters(String value) {
+    return RegExp(r'[\u0600-\u06FF]').hasMatch(value);
+  }
+
+  bool _looksMojibake(String value) {
+    return value.contains('Ã') || value.contains('Â') || value.contains('�');
   }
 
   Future<String?> _chooseDeliveryMode() async {
@@ -318,7 +325,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Choisir le mode de remise',
+              L10n.tr(context, 'checkout.choose_delivery_mode'),
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 12),
@@ -326,24 +333,23 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               value: 'pickup',
               groupValue: method,
               onChanged: allowPickup ? (v) => method = v ?? method : null,
-              title: const Text('Remise en main propre'),
+              title: Text(L10n.tr(context, 'checkout.delivery_pickup_title')),
               subtitle:
-                  const Text('Rencontrez l\'acheteur pour finaliser la vente.'),
+                  Text(L10n.tr(context, 'checkout.delivery_pickup_desc')),
               enabled: allowPickup,
             ),
             RadioListTile<String>(
               value: 'cod',
               groupValue: method,
               onChanged: allowCod ? (v) => method = v ?? 'cod' : null,
-              title: const Text('Livraison avec paiement a la livraison (COD)'),
-              subtitle:
-                  const Text('Transporteurs partenaires (Yalidine, Chronorex, etc.)'),
+              title: Text(L10n.tr(context, 'checkout.delivery_cod_title')),
+              subtitle: Text(L10n.tr(context, 'checkout.delivery_cod_desc')),
               enabled: allowCod,
             ),
             const SizedBox(height: 8),
             FilledButton(
               onPressed: () => Navigator.pop(context, method),
-              child: const Text('Continuer'),
+              child: Text(L10n.tr(context, 'common.continue')),
             ),
           ],
         ),
@@ -365,6 +371,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
     final deliveryChoice = await _chooseDeliveryMode();
     if (deliveryChoice == null) return;
+    if (!mounted) return;
     if (deliveryChoice == 'pickup') {
       final agreed =
           _acceptedOffer?.agreedAmount ?? _acceptedOffer?.amount ?? _product?.price;
@@ -374,7 +381,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         paymentMethod: 'cod',
         deliveryMode: 'pickup',
         shippingCost: 0,
-        etaLabel: 'Remise en main propre',
+        etaLabel: L10n.tr(context, 'checkout.eta_pickup'),
       );
       if (!confirmed) return;
       final orderId = await OrderService().createOrder(
@@ -408,6 +415,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       productTitle: _product?.title ?? 'Article',
     );
     if (selection == null) return;
+    if (!mounted) return;
     final courierId = selection['courierId'] as String?;
     final courierName = selection['courierName'] as String?;
     final isYalidine = courierId?.toLowerCase().contains('yalidine') == true ||
@@ -424,9 +432,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             sellerWilaya: _sellerWilaya,
           );
     final etaLabel = isYalidine
-        ? 'Calcule par Yalidine'
+        ? L10n.tr(context, 'checkout.eta_yalidine')
         : isEcotrack
-            ? 'Calcule par Ecotrack'
+            ? L10n.tr(context, 'checkout.eta_ecotrack')
             : shippingService.estimateEtaLabel(
                 courierName: courierName,
                 courierId: courierId,
@@ -520,34 +528,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     );
   }
 
-  Future<void> _showYalidineSummary(Map<String, dynamic> summary) async {
-    final fee = summary['delivery_fee'];
-    final tax = summary['taxe_percentage'];
-    final price = summary['price'];
-    final declaredValue = summary['declared_value'];
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Recapitulatif Yalidine'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (price != null) Text('Montant COD: $price DA'),
-            if (declaredValue != null) Text('Valeur declaree: $declaredValue DA'),
-            if (fee != null) Text('Frais livraison: $fee DA'),
-            if (tax != null) Text('Taxe COD: $tax %'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<Map<String, dynamic>?> _pickCourierAndAddress(
     String sellerId, {
     required double price,
@@ -559,16 +539,19 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (enabled.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Aucun transporteur active par le vendeur')),
+          SnackBar(
+            content: Text(L10n.tr(context, 'checkout.no_courier_enabled')),
+          ),
         );
       }
       return null;
     }
     final courier = await _chooseCourier(enabled);
     if (courier == null) return null;
-    final courierId = courier['courier_id']?.toString() ?? '';
-    final courierName = courier['courier_name']?.toString() ?? 'Transporteur';
     if (!mounted) return null;
+    final courierId = courier['courier_id']?.toString() ?? '';
+    final courierName = courier['courier_name']?.toString() ??
+        L10n.tr(context, 'checkout.courier_placeholder');
     return showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
@@ -606,12 +589,15 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         child: ListView(
           shrinkWrap: true,
           children: [
-            const ListTile(
-              title: Text('Choisir le transporteur'),
+            ListTile(
+              title: Text(L10n.tr(context, 'checkout.choose_courier')),
             ),
             ...enabled.map(
               (c) => ListTile(
-                title: Text(c['courier_name']?.toString() ?? 'Transporteur'),
+                title: Text(
+                  c['courier_name']?.toString() ??
+                      L10n.tr(context, 'checkout.courier_placeholder'),
+                ),
                 onTap: () => Navigator.pop(context, c),
               ),
             ),
@@ -644,40 +630,30 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      L10n.t(context, 'Récapitulatif', '????',
-                          key: 'checkout.summary'),
+                      L10n.tr(context, 'checkout.summary'),
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 12),
                     _SummaryRow(
-                      label:
-                          L10n.t(context, 'Prix', '?????', key: 'checkout.price'),
+                      label: L10n.tr(context, 'checkout.price'),
                       value: '${price.toStringAsFixed(0)} DA',
                     ),
                     if (shippingCost != null)
                       _SummaryRow(
-                        label: 'Frais livraison',
+                        label: L10n.tr(context, 'checkout.shipping_fee'),
                         value: '${shippingCost.toStringAsFixed(0)} DA',
                       ),
                     _SummaryRow(
-                      label: L10n.t(context, 'Livraison', '???????',
-                          key: 'checkout.shipping'),
+                      label: L10n.tr(context, 'checkout.shipping'),
                       value: shippingOption,
                     ),
                     _SummaryRow(
-                      label: L10n.t(context, 'Mode', 'Mode',
-                          key: 'checkout.mode'),
+                      label: L10n.tr(context, 'checkout.mode'),
                       value: deliveryMode ??
-                          L10n.t(
-                            context,
-                            'standard',
-                            'standard',
-                            key: 'checkout.delivery_standard',
-                          ),
+                          L10n.tr(context, 'checkout.delivery_standard'),
                     ),
                     _SummaryRow(
-                      label: L10n.t(context, 'Paiement', 'Paiement',
-                          key: 'checkout.payment'),
+                      label: L10n.tr(context, 'checkout.payment'),
                       value: PaymentLabels.methodLabel(
                         context,
                         paymentMethod,
@@ -686,12 +662,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     ),
                     if (etaLabel != null)
                       _SummaryRow(
-                        label: 'ETA',
+                        label: L10n.tr(context, 'checkout.eta'),
                         value: etaLabel,
                       ),
                     if (shippingCost != null)
                       _SummaryRow(
-                        label: 'Total',
+                        label: L10n.tr(context, 'checkout.total'),
                         value:
                             '${(price + shippingCost).toStringAsFixed(0)} DA',
                       ),
@@ -701,8 +677,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         Expanded(
                           child: OutlinedButton(
                             onPressed: () => Navigator.pop(context, false),
-                            child: Text(L10n.t(context, 'Annuler', '?????',
-                                key: 'common.cancel')),
+                            child: Text(L10n.tr(context, 'common.cancel')),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -710,8 +685,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           child: FilledButton(
                             onPressed: () => Navigator.pop(context, true),
                             child: Text(
-                              L10n.t(context, 'Valider et payer', '????? ??????',
-                                  key: 'checkout.confirm'),
+                              L10n.tr(context, 'checkout.confirm'),
                             ),
                           ),
                         ),
@@ -732,8 +706,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(L10n.t(context, 'Faire une offre', '??? ????',
-            key: 'offer.make')),
+        title: Text(L10n.tr(context, 'offers.make_offer')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -741,17 +714,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               controller: amountController,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
-                labelText: L10n.t(context, 'Montant (DA)', '?????? (??)',
-                    key: 'offer.amount'),
+                labelText: L10n.tr(context, 'offers.amount_label'),
               ),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: messageController,
               decoration: InputDecoration(
-                labelText: L10n.t(context, 'Message (optionnel)',
-                    '????? (???????)',
-                    key: 'offer.message'),
+                labelText: L10n.tr(context, 'offers.message_optional'),
               ),
             ),
           ],
@@ -759,8 +729,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-                L10n.t(context, 'Annuler', '?????', key: 'common.cancel')),
+            child: Text(L10n.tr(context, 'common.cancel')),
           ),
           TextButton(
             onPressed: () async {
@@ -785,8 +754,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 );
               }
             },
-            child: Text(L10n.t(context, 'Envoyer', '?????',
-                key: 'common.send')),
+            child: Text(L10n.tr(context, 'common.send')),
           ),
         ],
       ),
@@ -804,8 +772,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       return Scaffold(
         body: Center(
           child: Text(
-            L10n.t(context, 'Annonce introuvable', '??????? ??? ?????',
-                key: 'listing.not_found'),
+            L10n.tr(context, 'listing.not_found'),
           ),
         ),
       );
@@ -822,23 +789,16 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     final outOfStock =
         (_product?.stockQuantity ?? 0) <= 0 || _product?.isArchived == true;
     final buyLabel = _acceptedOffer != null
-        ? L10n.t(
+        ? L10n.tr(
             context,
-            'Acheter ${agreedPrice.toStringAsFixed(0)} DA',
-            'Acheter ${agreedPrice.toStringAsFixed(0)} DA',
-            key: 'cta.buy_agreed',
+            'cta.buy_agreed',
+            params: {'price': agreedPrice.toStringAsFixed(0)},
           )
         : isOwner
-            ? L10n.t(context, 'Votre annonce', 'Votre annonce',
-                key: 'cta.own_listing')
+            ? L10n.tr(context, 'cta.own_listing')
             : outOfStock
-                ? L10n.t(
-                    context,
-                    'Rupture de stock',
-                    'Rupture de stock',
-                    key: 'cta.out_of_stock',
-                  )
-                : L10n.t(context, 'Acheter', 'Acheter', key: 'cta.buy_now');
+                ? L10n.tr(context, 'cta.out_of_stock')
+                : L10n.tr(context, 'cta.buy_now');
 
     return Scaffold(
       body: CustomScrollView(
@@ -886,12 +846,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   PopupMenuItem(
                     value: 'report',
                     child: Text(
-                      L10n.t(
-                        context,
-                        'Signaler l\'annonce',
-                        '??????? ?? ???????',
-                        key: 'report.menu',
-                      ),
+                      L10n.tr(context, 'report.menu'),
                     ),
                   ),
                 ],
@@ -921,8 +876,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           padding: const EdgeInsets.only(left: 8),
                           child: Chip(
                             label: Text(
-                              L10n.t(context, 'Prix négocié', '??? ?????? ????',
-                                  key: 'offer.agreed'),
+                              L10n.tr(context, 'offer.agreed'),
                             ),
                             visualDensity: VisualDensity.compact,
                           ),
@@ -939,33 +893,30 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       if (_product!.brand?.isNotEmpty ?? false)
                         Chip(
                           label: Text(
-                            L10n.t(
+                            L10n.tr(
                               context,
-                              'Marque: ${_product!.brand}',
-                              '???????: ${_product!.brand}',
-                              key: 'listing.brand',
+                              'listing.brand',
+                              params: {'value': _product!.brand ?? ''},
                             ),
                           ),
                         ),
                       if (_product!.size?.isNotEmpty ?? false)
                         Chip(
                           label: Text(
-                            L10n.t(
+                            L10n.tr(
                               context,
-                              'Taille: ${_product!.size}',
-                              '??????: ${_product!.size}',
-                              key: 'listing.size',
+                              'listing.size',
+                              params: {'value': _product!.size ?? ''},
                             ),
                           ),
                         ),
                       if (_product!.color?.isNotEmpty ?? false)
                         Chip(
                           label: Text(
-                            L10n.t(
+                            L10n.tr(
                               context,
-                              'Couleur: ${_product!.color}',
-                              '?????: ${_product!.color}',
-                              key: 'listing.color',
+                              'listing.color',
+                              params: {'value': _product!.color ?? ''},
                             ),
                           ),
                         ),
@@ -973,26 +924,57 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           (_product!.category?.isNotEmpty ?? false))
                         Chip(
                           label: Text(
-                            L10n.t(
+                            L10n.tr(
                               context,
-                              'Categorie: ${_product!.categoryNameFr ?? _product!.category}',
-                              '?????: ${_product!.categoryNameAr ?? _product!.category}',
-                              key: 'listing.category',
+                              'listing.category',
+                              params: {
+                                'value': _resolveCategoryLabel(context),
+                              },
                             ),
                           ),
                         ),
                       if (_product!.locationWilaya?.isNotEmpty ?? false)
                         Chip(
-                          label: Text('Wilaya: ${_product!.locationWilaya}'),
+                          label: Text(
+                            L10n.tr(
+                              context,
+                              'listing.detail.wilaya',
+                              params: {'value': _product!.locationWilaya!},
+                            ),
+                          ),
                         ),
                       if (_product!.locationDaira?.isNotEmpty ?? false)
                         Chip(
-                          label: Text('Daira: ${_product!.locationDaira}'),
+                          label: Text(
+                            L10n.tr(
+                              context,
+                              'listing.detail.daira',
+                              params: {'value': _product!.locationDaira!},
+                            ),
+                          ),
                         ),
                       if (_product!.deliveryOptions.isNotEmpty)
                         Chip(
                           label: Text(
-                            'Livraison: ${_product!.deliveryOptions.map((o) => o == 'cod' ? 'COD' : 'Pickup').join(", ")}',
+                            L10n.tr(
+                              context,
+                              'listing.detail.delivery',
+                              params: {
+                                'value': _product!.deliveryOptions
+                                    .map(
+                                      (o) => o == 'cod'
+                                          ? L10n.tr(
+                                              context,
+                                              'listing.detail.delivery_cod',
+                                            )
+                                          : L10n.tr(
+                                              context,
+                                              'listing.detail.delivery_pickup',
+                                            ),
+                                    )
+                                    .join(', ')
+                              },
+                            ),
                           ),
                         ),
                     ],
@@ -1008,25 +990,42 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   Row(
                     children: [
                       Chip(
-                        label: Text('Stock: ${_product!.stockQuantity}'),
+                        label: Text(
+                          L10n.tr(
+                            context,
+                            'listing.detail.stock',
+                            params: {
+                              'value': _product!.stockQuantity.toString(),
+                            },
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 8),
                       if (_product!.soldCount > 0)
                         Chip(
-                          label: Text('Vendu: ${_product!.soldCount}'),
+                          label: Text(
+                            L10n.tr(
+                              context,
+                              'listing.detail.sold',
+                              params: {
+                                'value': _product!.soldCount.toString(),
+                              },
+                            ),
+                          ),
                         ),
                     ],
                   ),
                   const SizedBox(height: 8),
                   _SellerRowFixed(
                     ownerId: _product!.ownerId,
+                    sellerName: _sellerProfile?['full_name']?.toString(),
+                    sellerEmail: _sellerProfile?['email']?.toString(),
                     onContact: _contactSeller,
                   ),
                   const SizedBox(height: 16),
                   Text(
                     _product!.description ??
-                        L10n.t(context, 'Pas de description.', '?? ???? ???.',
-                            key: 'listing.no_description'),
+                        L10n.tr(context, 'listing.no_description'),
                   ),
                   const SizedBox(height: 24),
                   _OffersSection(
@@ -1073,8 +1072,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 onPressed: _makeOffer,
                 icon: const Icon(Icons.handshake_outlined),
                 label:
-                    Text(L10n.t(context, 'Faire une offre', '??? ????',
-                        key: 'cta.offer')),
+                    Text(L10n.tr(context, 'offers.make_offer')),
               ),
             ],
           ),
@@ -1259,10 +1257,10 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
         courierId: widget.courierId,
       );
       if (_wilayas.isEmpty) {
-        _loadError = 'Aucune wilaya disponible.';
+        _loadError = L10n.tr(context, 'location.error_no_wilayas');
       }
     } catch (_) {
-      _loadError = 'Erreur chargement wilayas.';
+      _loadError = L10n.tr(context, 'location.error_wilayas_load');
     } finally {
       if (mounted) {
         setState(() {
@@ -1325,10 +1323,10 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
           ? _communes.where(_communeHasStopdesk).toList(growable: false)
           : const [];
       if (_communes.isEmpty) {
-        _loadError = 'Aucune commune disponible.';
+        _loadError = L10n.tr(context, 'location.error_no_communes');
       }
     } catch (_) {
-      _loadError = 'Erreur chargement communes.';
+      _loadError = L10n.tr(context, 'location.error_communes_load');
     } finally {
       if (mounted) {
         setState(() {
@@ -1491,12 +1489,14 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
             children: [
               if (_loadingWilayas || _loadingCommunes)
                 const LinearProgressIndicator(minHeight: 3),
-              Text('Type de livraison',
-                  style: Theme.of(context).textTheme.titleSmall),
+              Text(
+                L10n.tr(context, 'checkout.delivery_type'),
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
               RadioListTile<String>(
                 value: 'home',
                 groupValue: _deliveryType,
-                title: const Text('Livraison a domicile'),
+                title: Text(L10n.tr(context, 'checkout.delivery_home')),
                 onChanged: (v) {
                   setState(() => _deliveryType = v ?? 'home');
                   _updateEstimatedFee();
@@ -1505,18 +1505,22 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
               RadioListTile<String>(
                 value: 'stopdesk',
                 groupValue: _deliveryType,
-                title: const Text('Livraison en point relais (stop desk)'),
+                title: Text(L10n.tr(context, 'checkout.delivery_stopdesk')),
                 onChanged: (v) {
                   setState(() => _deliveryType = v ?? 'stopdesk');
                   _updateEstimatedFee();
                 },
               ),
               const SizedBox(height: 8),
-              Text('Expediteur',
-                  style: Theme.of(context).textTheme.titleSmall),
+              Text(
+                L10n.tr(context, 'checkout.sender'),
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
               DropdownButtonFormField<String>(
                 value: _senderWilayaId,
-                decoration: const InputDecoration(labelText: 'Wilaya de depart'),
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'checkout.sender_wilaya_label'),
+                ),
                 items: _wilayas
                     .map(
                       (w) => DropdownMenuItem(
@@ -1535,21 +1539,27 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                     _senderWilayaName = _wilayaName(match);
                   });
                 },
-                validator: (_) => _senderWilayaId == null ? 'Wilaya requise' : null,
+                validator: (_) => _senderWilayaId == null ? L10n.tr(context, 'checkout.error_wilaya_required') : null,
               ),
               const SizedBox(height: 12),
-              Text('Destinataire',
-                  style: Theme.of(context).textTheme.titleSmall),
+              Text(
+                L10n.tr(context, 'checkout.receiver'),
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
               TextFormField(
                 controller: _familyNameCtrl,
-                decoration: const InputDecoration(labelText: 'Nom'),
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'checkout.first_name'),
+                ),
                 onChanged: (_) => setState(() {}),
-                validator: (v) => v == null || v.trim().isEmpty ? 'Nom requis' : null,
+                validator: (v) => v == null || v.trim().isEmpty ? L10n.tr(context, 'checkout.error_name_required') : null,
               ),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _firstNameCtrl,
-                decoration: const InputDecoration(labelText: 'Prenom'),
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'checkout.last_name'),
+                ),
                 onChanged: (_) => setState(() {}),
                 validator: (v) =>
                     v == null || v.trim().isEmpty ? 'Prenom requis' : null,
@@ -1557,8 +1567,8 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
               const SizedBox(height: 8),
               TextFormField(
                 controller: _phoneCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Telephone 1',
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'checkout.phone1'),
                   helperText: 'Ex: 0661452684',
                 ),
                 keyboardType: TextInputType.phone,
@@ -1578,7 +1588,9 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
               TextFormField(
                 controller: _phone2Ctrl,
                 decoration:
-                    const InputDecoration(labelText: 'Telephone 2 (optionnel)'),
+                    InputDecoration(
+                      labelText: L10n.tr(context, 'checkout.phone2_optional'),
+                    ),
                 keyboardType: TextInputType.phone,
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
@@ -1588,7 +1600,9 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 value: _receiverWilayaId,
-                decoration: const InputDecoration(labelText: 'Wilaya'),
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'checkout.receiver_wilaya'),
+                ),
                 items: _wilayas
                     .map(
                       (w) => DropdownMenuItem(
@@ -1613,12 +1627,14 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                     await _loadCommunes(v);
                   }
                 },
-                validator: (_) => _receiverWilayaId == null ? 'Wilaya requise' : null,
+                validator: (_) => _receiverWilayaId == null ? L10n.tr(context, 'checkout.error_wilaya_required') : null,
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 value: _receiverCommuneName,
-                decoration: const InputDecoration(labelText: 'Commune / Daira'),
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'checkout.receiver_commune'),
+                ),
                 items: _communes
                     .map(
                       (c) => DropdownMenuItem(
@@ -1629,14 +1645,16 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                     .toList(),
                 onChanged: (v) => setState(() => _receiverCommuneName = v),
                 validator: (_) =>
-                    _receiverCommuneName == null ? 'Commune requise' : null,
+                    _receiverCommuneName == null ? L10n.tr(context, 'checkout.error_commune_required') : null,
               ),
               if (_deliveryType == 'stopdesk' && _supportsStopdeskList) ...[
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   value: _stopdeskCommuneName,
                   decoration:
-                      const InputDecoration(labelText: 'Agence / Bureau'),
+                      InputDecoration(
+                        labelText: L10n.tr(context, 'checkout.stopdesk_agency'),
+                      ),
                   items: _stopdeskCommunes
                       .map(
                         (c) => DropdownMenuItem(
@@ -1656,23 +1674,27 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                     });
                   },
                   validator: (_) => _stopdeskCommuneName == null
-                      ? 'Agence requise'
+                      ? L10n.tr(context, 'checkout.error_agency_required')
                       : null,
                 ),
               ],
               const SizedBox(height: 8),
               TextFormField(
                 controller: _addressCtrl,
-                decoration: const InputDecoration(labelText: 'Adresse complete'),
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'checkout.address_full'),
+                ),
                 onChanged: (_) => setState(() {}),
                 validator: (v) => v == null || v.trim().isEmpty
-                    ? 'Adresse requise'
+                    ? L10n.tr(context, 'checkout.error_address_required')
                     : null,
               ),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _zipCtrl,
-                decoration: const InputDecoration(labelText: 'Code postal (optionnel)'),
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'checkout.zip_optional'),
+                ),
                 keyboardType: TextInputType.number,
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
@@ -1680,25 +1702,34 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                 ],
               ),
               const SizedBox(height: 12),
-              Text('Details du colis',
-                  style: Theme.of(context).textTheme.titleSmall),
+              Text(
+                L10n.tr(context, 'checkout.package_details'),
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
               TextFormField(
                 controller: _productListCtrl,
-                decoration: const InputDecoration(labelText: 'Produits'),
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'checkout.product_list'),
+                ),
                 onChanged: (_) => setState(() {}),
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'Produits requis' : null,
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? L10n.tr(context, 'checkout.error_product_list_required')
+                    : null,
               ),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _orderNumberCtrl,
-                decoration: const InputDecoration(labelText: 'Numero de commande'),
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'checkout.order_number'),
+                ),
                 enabled: false,
               ),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _priceCtrl,
-                decoration: const InputDecoration(labelText: 'Prix du colis (COD)'),
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'checkout.cod_price'),
+                ),
                 keyboardType: TextInputType.number,
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
@@ -1708,39 +1739,48 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                   _declaredValueCtrl.text = v;
                   setState(() {});
                 },
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'Prix requis' : null,
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? L10n.tr(context, 'checkout.error_price_required')
+                    : null,
               ),
               const SizedBox(height: 8),
               CheckboxListTile(
                 value: false,
                 onChanged: null,
-                title: const Text('Livraison gratuite'),
+                title: Text(L10n.tr(context, 'checkout.free_shipping')),
               ),
               CheckboxListTile(
                 value: _exchangeAfterDelivery,
                 onChanged: (v) => setState(() => _exchangeAfterDelivery = v ?? false),
-                title: const Text('Echange apres livraison'),
+                title: Text(L10n.tr(context, 'checkout.exchange_after_delivery')),
               ),
               const SizedBox(height: 12),
-              Text('Assurance',
-                  style: Theme.of(context).textTheme.titleSmall),
+              Text(
+                L10n.tr(context, 'checkout.insurance'),
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
               SwitchListTile(
                 value: true,
                 onChanged: null,
-                title: const Text('Assurance active'),
+                title: Text(L10n.tr(context, 'checkout.insurance_active')),
               ),
               TextFormField(
                 controller: _declaredValueCtrl,
-                decoration: const InputDecoration(labelText: 'Valeur declaree'),
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'checkout.declared_value'),
+                ),
                 enabled: false,
               ),
               const SizedBox(height: 12),
-              Text('Dimensions & poids',
-                  style: Theme.of(context).textTheme.titleSmall),
+              Text(
+                L10n.tr(context, 'checkout.dimensions_weight'),
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
               TextFormField(
                 controller: _weightCtrl,
-                decoration: const InputDecoration(labelText: 'Poids (kg)'),
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'checkout.weight_kg'),
+                ),
                 keyboardType: TextInputType.number,
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
@@ -1749,7 +1789,14 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                 onChanged: (_) => setState(() {}),
                 validator: (v) {
                   if (!_isWeightValid(v ?? '')) {
-                    return 'Poids entre $_minWeightKg et $_maxWeightKg';
+                    return L10n.tr(
+                      context,
+                      'checkout.error_weight_range',
+                      params: {
+                        'min': _minWeightKg.toString(),
+                        'max': _maxWeightKg.toString(),
+                      },
+                    );
                   }
                   return null;
                 },
@@ -1757,63 +1804,87 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
               const SizedBox(height: 8),
               TextFormField(
                 controller: _heightCtrl,
-                decoration: const InputDecoration(labelText: 'Hauteur (cm)'),
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'checkout.height_cm'),
+                ),
                 keyboardType: TextInputType.number,
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(3),
                 ],
                 onChanged: (_) => setState(() {}),
-                validator: (v) =>
-                    _isDimensionValid(v ?? '') ? null : 'Hauteur invalide',
+                validator: (v) => _isDimensionValid(v ?? '')
+                    ? null
+                    : L10n.tr(context, 'checkout.error_height_invalid'),
               ),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _widthCtrl,
-                decoration: const InputDecoration(labelText: 'Largeur (cm)'),
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'checkout.width_cm'),
+                ),
                 keyboardType: TextInputType.number,
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(3),
                 ],
                 onChanged: (_) => setState(() {}),
-                validator: (v) =>
-                    _isDimensionValid(v ?? '') ? null : 'Largeur invalide',
+                validator: (v) => _isDimensionValid(v ?? '')
+                    ? null
+                    : L10n.tr(context, 'checkout.error_width_invalid'),
               ),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _lengthCtrl,
-                decoration: const InputDecoration(labelText: 'Longueur (cm)'),
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'checkout.length_cm'),
+                ),
                 keyboardType: TextInputType.number,
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(3),
                 ],
                 onChanged: (_) => setState(() {}),
-                validator: (v) =>
-                    _isDimensionValid(v ?? '') ? null : 'Longueur invalide',
+                validator: (v) => _isDimensionValid(v ?? '')
+                    ? null
+                    : L10n.tr(context, 'checkout.error_length_invalid'),
               ),
               const SizedBox(height: 8),
               Text(
-                'Depassement 5 kg: ${int.tryParse(_weightCtrl.text.trim()) != null && int.parse(_weightCtrl.text.trim()) > 5 ? 'Oui' : 'Non'}',
+                L10n.tr(
+                  context,
+                  'checkout.overweight_label',
+                  params: {
+                    'value': (int.tryParse(_weightCtrl.text.trim()) != null &&
+                            int.parse(_weightCtrl.text.trim()) > 5)
+                        ? L10n.tr(context, 'common.yes')
+                        : L10n.tr(context, 'common.no'),
+                  },
+                ),
               ),
               const SizedBox(height: 12),
-              Text('Resume du prix',
-                  style: Theme.of(context).textTheme.titleSmall),
+              Text(
+                L10n.tr(context, 'checkout.price_summary'),
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
               if (_isEcotrack)
                 Text(
                   _estimatedFee == null
-                      ? 'Frais estimes indisponibles.'
-                      : 'Frais livraison estimes: ${_estimatedFee!.toStringAsFixed(0)} DA',
+                      ? L10n.tr(context, 'checkout.fees_unavailable')
+                      : L10n.tr(
+                          context,
+                          'checkout.fees_estimated',
+                          params: {
+                            'amount': _estimatedFee!.toStringAsFixed(0),
+                          },
+                        ),
                 )
               else
-                const Text(
-                  'Les frais seront calcules par Yalidine apres validation.',
-                ),
+                Text(L10n.tr(context, 'checkout.fees_by_yalidine')),
               CheckboxListTile(
                 value: _acceptTerms,
                 onChanged: (v) => setState(() => _acceptTerms = v ?? false),
-                title: const Text('J\'accepte les conditions generales'),
+                title: Text(L10n.tr(context, 'checkout.accept_terms')),
               ),
               if (_loadError != null)
                 Padding(
@@ -1826,10 +1897,10 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerRight,
-                child: ElevatedButton(
-                  onPressed: _canSubmit ? _submit : null,
-                  child: const Text('Confirmer'),
-                ),
+                  child: ElevatedButton(
+                    onPressed: _canSubmit ? _submit : null,
+                    child: Text(L10n.tr(context, 'common.confirm')),
+                  ),
               ),
             ],
           ),
@@ -1944,7 +2015,7 @@ class _OffersSection extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(L10n.t(context, 'Offres', '????', key: 'offers.title'),
+            Text(L10n.tr(context, 'offers.title'),
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             ...offers.map((o) {
@@ -1972,11 +2043,12 @@ class _OffersSection extends StatelessWidget {
                         Padding(
                           padding: const EdgeInsets.only(top: 4),
                           child: Text(
-                            L10n.t(
+                            L10n.tr(
                               context,
-                              'Contre-offre: DA ${o.counterAmount!.toStringAsFixed(0)}',
-                              '??? ????: ${o.counterAmount!.toStringAsFixed(0)} ??',
-                              key: 'offer.counter',
+                              'offer.counter',
+                              params: {
+                                'amount': o.counterAmount!.toStringAsFixed(0),
+                              },
                             ),
                           ),
                         ),
@@ -1984,11 +2056,12 @@ class _OffersSection extends StatelessWidget {
                         Padding(
                           padding: const EdgeInsets.only(top: 4),
                           child: Text(
-                            L10n.t(
+                            L10n.tr(
                               context,
-                              'Prix accepté: DA ${o.agreedAmount!.toStringAsFixed(0)}',
-                              '????? ???????: ${o.agreedAmount!.toStringAsFixed(0)} ??',
-                              key: 'offer.accepted_amount',
+                              'offer.accepted_amount',
+                              params: {
+                                'amount': o.agreedAmount!.toStringAsFixed(0),
+                              },
                             ),
                           ),
                         ),
@@ -2003,13 +2076,11 @@ class _OffersSection extends StatelessWidget {
                           children: [
                             TextButton(
                               onPressed: () => onAccept(o, o.amount),
-                              child: Text(L10n.t(context, 'Accepter', '????',
-                                  key: 'offer.accept')),
+                              child: Text(L10n.tr(context, 'offer.accept')),
                             ),
                             TextButton(
                               onPressed: () => onReject(o),
-                              child: Text(L10n.t(context, 'Refuser', '???',
-                                  key: 'offer.reject')),
+                              child: Text(L10n.tr(context, 'offer.reject')),
                             ),
                             TextButton(
                               onPressed: () async {
@@ -2020,26 +2091,23 @@ class _OffersSection extends StatelessWidget {
                                 final val = await showDialog<double>(
                                   context: context,
                                   builder: (context) => AlertDialog(
-                                    title: Text(L10n.t(
-                                      context,
-                                      'Faire une contre-offre',
-                                      '??? ???? ?????',
-                                      key: 'offer.counter_title',
-                                    )),
+                                    title: Text(
+                                      L10n.tr(context, 'offer.counter_title'),
+                                    ),
                                     content: TextField(
                                       controller: ctrl,
                                       keyboardType: TextInputType.number,
                                       decoration: InputDecoration(
-                                        labelText: L10n.t(context, 'Montant (DA)',
-                                            '?????? (??)',
-                                            key: 'offer.amount'),
+                                        labelText:
+                                            L10n.tr(context, 'offers.amount_label'),
                                       ),
                                     ),
                                     actions: [
                                       TextButton(
                                         onPressed: () => Navigator.pop(context),
-                                        child: Text(L10n.t(context, 'Annuler',
-                                            '?????', key: 'common.cancel')),
+                                        child: Text(
+                                          L10n.tr(context, 'common.cancel'),
+                                        ),
                                       ),
                                       TextButton(
                                         onPressed: () {
@@ -2057,8 +2125,8 @@ class _OffersSection extends StatelessWidget {
                                             );
                                           }
                                         },
-                                        child: Text(L10n.t(context, 'Envoyer',
-                                            '?????', key: 'common.send')),
+                                        child:
+                                            Text(L10n.tr(context, 'common.send')),
                                       ),
                                     ],
                                   ),
@@ -2067,8 +2135,8 @@ class _OffersSection extends StatelessWidget {
                                   onCounter(o, val);
                                 }
                               },
-                              child: Text(L10n.t(context, 'Contre-offre', '??? ????',
-                                  key: 'offer.counter_action')),
+                              child:
+                                  Text(L10n.tr(context, 'offer.counter_action')),
                             ),
                           ],
                         ),
@@ -2086,9 +2154,16 @@ class _OffersSection extends StatelessWidget {
 }
 
 class _SellerRowFixed extends StatelessWidget {
-  const _SellerRowFixed({required this.ownerId, this.onContact});
+  const _SellerRowFixed({
+    required this.ownerId,
+    this.sellerName,
+    this.sellerEmail,
+    this.onContact,
+  });
 
   final String ownerId;
+  final String? sellerName;
+  final String? sellerEmail;
   final VoidCallback? onContact;
 
   @override
@@ -2098,6 +2173,12 @@ class _SellerRowFixed extends StatelessWidget {
       future: reviewService.fetchAverageRating(ownerId),
       builder: (context, snapshot) {
         final rating = snapshot.data;
+        final fallbackName = L10n.tr(context, 'seller.fallback');
+        final displayName = (sellerName?.trim().isNotEmpty ?? false)
+            ? sellerName!.trim()
+            : (sellerEmail?.trim().isNotEmpty ?? false)
+                ? sellerEmail!.trim()
+                : fallbackName;
         return Row(
           children: [
             const CircleAvatar(child: Icon(Icons.person)),
@@ -2108,7 +2189,7 @@ class _SellerRowFixed extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    L10n.t(context, 'Vendeur', '??????', key: 'seller.label'),
+                    L10n.tr(context, 'seller.label'),
                     style: Theme.of(context).textTheme.labelMedium,
                   ),
                   Row(
@@ -2116,7 +2197,7 @@ class _SellerRowFixed extends StatelessWidget {
                     children: [
                       Flexible(
                         child: Text(
-                          ownerId,
+                          displayName,
                           style: Theme.of(context).textTheme.bodyMedium,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -2134,8 +2215,7 @@ class _SellerRowFixed extends StatelessWidget {
             TextButton.icon(
               onPressed: onContact,
               icon: const Icon(Icons.chat_bubble_outline),
-              label: Text(
-                  L10n.t(context, 'Contacter', '????', key: 'cta.contact')),
+              label: Text(L10n.tr(context, 'cta.contact')),
             ),
           ],
         );
@@ -2169,6 +2249,8 @@ class _SummaryRow extends StatelessWidget {
     );
   }
 }
+
+
 
 
 

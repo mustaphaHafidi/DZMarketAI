@@ -46,7 +46,7 @@ class _ListingsPageState extends State<ListingsPage> {
   String? _activeQueryKey;
 
   List<Map<String, String>> _categories = const [
-    {'id': 'any', 'name_fr': 'Toutes categories', 'name_ar': 'كل الفئات'},
+    {'id': 'any'},
   ];
   final _conditions = ['any', 'new', 'like new', 'good', 'fair'];
   final RefreshController _refreshController = RefreshController();
@@ -64,7 +64,7 @@ class _ListingsPageState extends State<ListingsPage> {
     if (!mounted) return;
     setState(() {
       _categories = [
-        {'id': 'any', 'name_fr': 'Toutes categories', 'name_ar': 'كل الفئات'},
+        {'id': 'any'},
         ...data,
       ];
     });
@@ -85,7 +85,11 @@ class _ListingsPageState extends State<ListingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final currency = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA');
+    final localeCode = Localizations.localeOf(context).languageCode;
+    final currency = NumberFormat.currency(
+      locale: localeCode == 'ar' ? 'ar_DZ' : 'fr_DZ',
+      symbol: 'DA',
+    );
     final userId = supabase.auth.currentUser?.id;
     final isWide = MediaQuery.of(context).size.width > 900;
     final crossAxisCount = isWide ? 3 : 2;
@@ -111,7 +115,7 @@ class _ListingsPageState extends State<ListingsPage> {
           IconButton(
             icon: const Icon(Icons.tune),
             onPressed: () => _showFilters(context),
-            tooltip: L10n.t(context, 'Filtres', 'مرشحات'),
+            tooltip: L10n.tr(context, 'listing.filters.title'),
           ),
         ],
       ),
@@ -148,7 +152,7 @@ class _ListingsPageState extends State<ListingsPage> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openAddListing(context),
-        label: Text(L10n.t(context, 'Vendre', 'بيع')),
+        label: Text(L10n.tr(context, 'listing.sell')),
         icon: const Icon(Icons.add),
       ),
     );
@@ -235,13 +239,21 @@ class _ListingsPageState extends State<ListingsPage> {
     } on TimeoutException {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Rafraîchissement trop long.')),
+          SnackBar(content: Text(L10n.tr(context, 'common.refresh_timeout'))),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e')),
+          SnackBar(
+            content: Text(
+              L10n.tr(
+                context,
+                'common.error_with',
+                params: {'error': e.toString()},
+              ),
+            ),
+          ),
         );
       }
     }
@@ -314,11 +326,7 @@ class _ListingsPageState extends State<ListingsPage> {
     if (filtered.isEmpty) {
       return Center(
         child: Text(
-          L10n.t(
-            context,
-            'Aucune annonce ne correspond.',
-            'لا يوجد تطابق.',
-          ),
+          L10n.tr(context, 'listing.empty'),
         ),
       );
     }
@@ -368,24 +376,40 @@ class _ListingsPageState extends State<ListingsPage> {
   String _conditionLabel(BuildContext context, String value) {
     switch (value) {
       case 'any':
-        return L10n.t(context, 'Toutes conditions', 'كل الحالات');
+        return L10n.tr(context, 'condition.any');
       case 'new':
-        return L10n.t(context, 'Neuf', 'جديد', key: 'condition.new');
+        return L10n.tr(context, 'condition.new');
       case 'like new':
-        return L10n.t(context, 'Comme neuf', 'كالجديد', key: 'condition.like_new');
+        return L10n.tr(context, 'condition.like_new');
       case 'good':
-        return L10n.t(context, 'Bon', 'جيد', key: 'condition.good');
+        return L10n.tr(context, 'condition.good');
       case 'fair':
-        return L10n.t(context, 'Correct', 'مقبول', key: 'condition.fair');
+        return L10n.tr(context, 'condition.fair');
       default:
         return value;
     }
   }
 
   String _categoryLabel(BuildContext context, Map<String, String> category) {
+    if (category.isEmpty) return '-';
+    final slug = category['slug'] ?? '';
     final fr = category['name_fr'] ?? category['name'] ?? '';
     final ar = category['name_ar'] ?? fr;
-    return L10n.t(context, fr, ar);
+    final locale = Localizations.localeOf(context).languageCode;
+    final fallback = locale == 'ar'
+        ? (_hasArabicLetters(ar) ? ar : (fr.isNotEmpty ? fr : ar))
+        : (fr.isNotEmpty ? fr : ar);
+    if (slug.isEmpty) return fallback;
+    final translated = L10n.tr(context, 'category.$slug', fallback: fallback);
+    return _looksMojibake(translated) ? fallback : translated;
+  }
+
+  bool _hasArabicLetters(String value) {
+    return RegExp(r'[\u0600-\u06FF]').hasMatch(value);
+  }
+
+  bool _looksMojibake(String value) {
+    return value.contains('Ã') || value.contains('Â') || value.contains('�');
   }
 
   void _applySavedSearch(SavedSearch saved) {
@@ -425,21 +449,21 @@ class _ListingsPageState extends State<ListingsPage> {
     final saved = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(L10n.t(context, 'Enregistrer cette recherche', 'حفظ هذا البحث')),
+        title: Text(L10n.tr(context, 'saved_search.title')),
         content: TextField(
           controller: nameController,
           decoration: InputDecoration(
-            labelText: L10n.t(context, 'Nom', 'الاسم', key: 'saved_search.name'),
+            labelText: L10n.tr(context, 'saved_search.name'),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text(L10n.t(context, 'Annuler', 'إلغاء')),
+            child: Text(L10n.tr(context, 'common.cancel')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, nameController.text.trim()),
-            child: Text(L10n.t(context, 'Enregistrer', 'حفظ')),
+            child: Text(L10n.tr(context, 'common.save')),
           ),
         ],
       ),
@@ -453,7 +477,7 @@ class _ListingsPageState extends State<ListingsPage> {
     );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(L10n.t(context, 'Recherche enregistrée', 'تم حفظ البحث'))),
+      SnackBar(content: Text(L10n.tr(context, 'saved_search.saved'))),
     );
   }
 
@@ -463,7 +487,7 @@ class _ListingsPageState extends State<ListingsPage> {
       isScrollControlled: true,
       builder: (context) {
         return SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: EdgeInsets.only(
               bottom: MediaQuery.of(context).viewInsets.bottom + 16,
               left: 16,
@@ -477,7 +501,7 @@ class _ListingsPageState extends State<ListingsPage> {
                 Row(
                   children: [
                     Text(
-                      L10n.t(context, 'Filtres', 'مرشحات'),
+                      L10n.tr(context, 'listing.filters.title'),
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -486,7 +510,7 @@ class _ListingsPageState extends State<ListingsPage> {
                     const Spacer(),
                     TextButton(
                       onPressed: _clearFilters,
-                      child: Text(L10n.t(context, 'Réinitialiser', 'إعادة تعيين')),
+                      child: Text(L10n.tr(context, 'common.reset')),
                     ),
                   ],
                 ),
@@ -513,10 +537,9 @@ class _ListingsPageState extends State<ListingsPage> {
                         (c) => ChoiceChip(
                           label: Text(
                             c['id'] == 'any'
-                                ? L10n.t(
+                                ? L10n.tr(
                                     context,
-                                    'Toutes catégories',
-                                    'كل الفئات',
+                                    'listing.filters.all_categories',
                                   )
                                 : _categoryLabel(context, c),
                           ),
@@ -535,7 +558,7 @@ class _ListingsPageState extends State<ListingsPage> {
                         controller: _priceMin,
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
-                          labelText: L10n.t(context, 'Min DA', 'الحد الأدنى دج'),
+                          labelText: L10n.tr(context, 'listing.filters.min_price'),
                         ),
                         onChanged: (_) => setState(() {}),
                       ),
@@ -546,7 +569,7 @@ class _ListingsPageState extends State<ListingsPage> {
                         controller: _priceMax,
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
-                          labelText: L10n.t(context, 'Max DA', 'الحد الأقصى دج'),
+                          labelText: L10n.tr(context, 'listing.filters.max_price'),
                         ),
                         onChanged: (_) => setState(() {}),
                       ),
@@ -557,7 +580,7 @@ class _ListingsPageState extends State<ListingsPage> {
                 TextField(
                   controller: _brand,
                   decoration: InputDecoration(
-                    labelText: L10n.t(context, 'Marque', 'العلامة'),
+                    labelText: L10n.tr(context, 'listing.filters.brand'),
                   ),
                   onChanged: (_) => setState(() {}),
                 ),
@@ -565,7 +588,7 @@ class _ListingsPageState extends State<ListingsPage> {
                 TextField(
                   controller: _size,
                   decoration: InputDecoration(
-                    labelText: L10n.t(context, 'Taille', 'المقاس'),
+                    labelText: L10n.tr(context, 'listing.filters.size'),
                   ),
                   onChanged: (_) => setState(() {}),
                 ),
@@ -573,7 +596,7 @@ class _ListingsPageState extends State<ListingsPage> {
                 TextField(
                   controller: _color,
                   decoration: InputDecoration(
-                    labelText: L10n.t(context, 'Couleur', 'اللون'),
+                    labelText: L10n.tr(context, 'listing.filters.color'),
                   ),
                   onChanged: (_) => setState(() {}),
                 ),
@@ -581,25 +604,25 @@ class _ListingsPageState extends State<ListingsPage> {
                 DropdownButtonFormField<String>(
                   value: _sort,
                   decoration: InputDecoration(
-                    labelText: L10n.t(context, 'Tri', 'الترتيب'),
+                    labelText: L10n.tr(context, 'listing.filters.sort'),
                   ),
                   items: [
                     DropdownMenuItem(
                       value: 'newest',
                       child: Text(
-                        L10n.t(context, 'Plus récentes', 'الأحدث'),
+                        L10n.tr(context, 'listing.sort.newest'),
                       ),
                     ),
                     DropdownMenuItem(
                       value: 'price_low',
                       child: Text(
-                        L10n.t(context, 'Prix croissant', 'السعر تصاعدي'),
+                        L10n.tr(context, 'listing.sort.price_low'),
                       ),
                     ),
                     DropdownMenuItem(
                       value: 'price_high',
                       child: Text(
-                        L10n.t(context, 'Prix décroissant', 'السعر تنازلي'),
+                        L10n.tr(context, 'listing.sort.price_high'),
                       ),
                     ),
                   ],
@@ -617,11 +640,7 @@ class _ListingsPageState extends State<ListingsPage> {
                       _refresh();
                     },
                     child: Text(
-                      L10n.t(
-                        context,
-                        'Afficher les résultats',
-                        'عرض النتائج',
-                      ),
+                      L10n.tr(context, 'listing.filters.show_results'),
                     ),
                   ),
                 ),
@@ -677,12 +696,12 @@ class _SavedSearchesRow extends StatelessWidget {
           TextButton.icon(
             onPressed: clearFilters,
             icon: const Icon(Icons.clear_all),
-            label: Text(L10n.t(context, 'Réinitialiser', 'إعادة تعيين')),
+            label: Text(L10n.tr(context, 'common.reset')),
           ),
           TextButton.icon(
             onPressed: saveSearch,
             icon: const Icon(Icons.bookmark_add_outlined),
-            label: Text(L10n.t(context, 'Enregistrer', 'حفظ')),
+            label: Text(L10n.tr(context, 'common.save')),
           ),
           Expanded(
             child: StreamBuilder<List<SavedSearch>>(
@@ -879,11 +898,7 @@ class _SearchBar extends StatelessWidget {
               controller: controller,
               decoration: InputDecoration(
                 border: InputBorder.none,
-                hintText: L10n.t(
-                  context,
-                  'Rechercher des articles...',
-                  'ابحث عن منتجات...',
-                ),
+                hintText: L10n.tr(context, 'listing.search_hint'),
               ),
               onChanged: onChanged,
             ),
@@ -919,7 +934,7 @@ class _FavoritesBadge extends StatelessWidget {
               icon: Icon(
                 enabled ? Icons.favorite : Icons.favorite_border,
               ),
-              tooltip: L10n.t(context, 'Favoris', 'المفضلة'),
+              tooltip: L10n.tr(context, 'listing.favorites'),
             ),
             if (count > 0)
               Positioned(
@@ -991,5 +1006,14 @@ class _GridLoader extends StatelessWidget {
     );
   }
 }
+
+
+
+
+
+
+
+
+
 
 

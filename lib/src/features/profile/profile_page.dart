@@ -9,6 +9,7 @@ import 'package:dzmarket/src/features/profile/seller_dashboard_page.dart';
 import 'package:dzmarket/src/models/profile.dart';
 import 'package:dzmarket/src/services/auth_service.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
+import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:dzmarket/src/services/location_service.dart';
 import 'package:dzmarket/src/services/storage_service.dart';
@@ -65,10 +66,12 @@ class _ProfilePageState extends State<ProfilePage> {
       _error = null;
     });
     try {
+      final localeCode =
+          LocaleService.instance.locale.value?.languageCode ?? 'fr';
       final user = supabase.auth.currentUser;
       if (user == null) {
         setState(() {
-          _error = 'Connectez-vous pour voir votre profil.';
+          _error = L10n.trLocale(localeCode, 'profile.login_required');
           _loading = false;
         });
         return;
@@ -78,7 +81,7 @@ class _ProfilePageState extends State<ProfilePage> {
       if (!mounted) return;
       if (p == null) {
         setState(() {
-          _error = 'Profil introuvable';
+          _error = L10n.trLocale(localeCode, 'profile.not_found');
           _loading = false;
         });
         return;
@@ -152,7 +155,9 @@ class _ProfilePageState extends State<ProfilePage> {
       await LocaleService.instance.setLocale(_lang);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profil mis ? jour')),
+        SnackBar(
+          content: Text(L10n.tr(context, 'profile.updated')),
+        ),
       );
       await _loadProfile();
     } catch (e) {
@@ -238,7 +243,7 @@ class _ProfilePageState extends State<ProfilePage> {
     }
     if (_error != null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Profil')),
+        appBar: AppBar(title: Text(L10n.tr(context, 'profile.title'))),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -247,7 +252,7 @@ class _ProfilePageState extends State<ProfilePage> {
               const SizedBox(height: 8),
               ElevatedButton(
                 onPressed: _loadProfile,
-                child: const Text('Recharger'),
+                child: Text(L10n.tr(context, 'common.reload')),
               ),
             ],
           ),
@@ -259,7 +264,7 @@ class _ProfilePageState extends State<ProfilePage> {
     final isSeller = _isSeller;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Profil')),
+      appBar: AppBar(title: Text(L10n.tr(context, 'profile.title'))),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _loadProfile,
@@ -303,7 +308,9 @@ class _ProfilePageState extends State<ProfilePage> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            isSeller ? 'Mode vendeur' : 'Mode acheteur',
+                            isSeller
+                                ? L10n.tr(context, 'profile.mode_seller')
+                                : L10n.tr(context, 'profile.mode_buyer'),
                             style: Theme.of(context).textTheme.labelMedium,
                           ),
                         ],
@@ -312,7 +319,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     IconButton(
                       onPressed: _saving ? null : _useMyLocation,
                       icon: const Icon(Icons.my_location_outlined),
-                      tooltip: 'Utiliser ma position',
+                      tooltip: L10n.tr(context, 'profile.use_location'),
                     ),
                   ],
                 ),
@@ -327,9 +334,9 @@ class _ProfilePageState extends State<ProfilePage> {
                       children: [
                         TextField(
                           controller: _nameCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Nom complet',
-                            prefixIcon: Icon(Icons.badge_outlined),
+                          decoration: InputDecoration(
+                            labelText: L10n.tr(context, 'profile.full_name'),
+                            prefixIcon: const Icon(Icons.badge_outlined),
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -338,13 +345,13 @@ class _ProfilePageState extends State<ProfilePage> {
                             OutlinedButton.icon(
                               onPressed: _saving ? null : _pickAvatar,
                               icon: const Icon(Icons.photo_camera_outlined),
-                              label: const Text('Importer une photo'),
+                              label: Text(L10n.tr(context, 'profile.photo_upload')),
                             ),
                             const SizedBox(width: 12),
                             if (safeAvatar != null)
                               TextButton(
                                 onPressed: _saving ? null : _removeAvatar,
-                                child: const Text('Supprimer'),
+                                child: Text(L10n.tr(context, 'common.delete')),
                               ),
                           ],
                         ),
@@ -352,18 +359,18 @@ class _ProfilePageState extends State<ProfilePage> {
                         TextField(
                           controller: _bioCtrl,
                           maxLines: 2,
-                          decoration: const InputDecoration(
-                            labelText: 'Bio',
-                            prefixIcon: Icon(Icons.notes_outlined),
+                          decoration: InputDecoration(
+                            labelText: L10n.tr(context, 'profile.bio'),
+                            prefixIcon: const Icon(Icons.notes_outlined),
                           ),
                         ),
                         const SizedBox(height: 12),
                         TextField(
                           controller: _phoneCtrl,
                           keyboardType: TextInputType.phone,
-                          decoration: const InputDecoration(
-                            labelText: 'T?l?phone',
-                            prefixIcon: Icon(Icons.phone_outlined),
+                          decoration: InputDecoration(
+                            labelText: L10n.tr(context, 'profile.phone'),
+                            prefixIcon: const Icon(Icons.phone_outlined),
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -372,9 +379,9 @@ class _ProfilePageState extends State<ProfilePage> {
                             Expanded(
                               child: TextField(
                                 controller: _wilayaCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: 'Wilaya',
-                                  prefixIcon: Icon(Icons.map_outlined),
+                                decoration: InputDecoration(
+                                  labelText: L10n.tr(context, 'profile.wilaya'),
+                                  prefixIcon: const Icon(Icons.map_outlined),
                                 ),
                               ),
                             ),
@@ -382,9 +389,9 @@ class _ProfilePageState extends State<ProfilePage> {
                             Expanded(
                               child: TextField(
                                 controller: _dairaCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: 'Da?ra',
-                                  prefixIcon: Icon(Icons.place_outlined),
+                                decoration: InputDecoration(
+                                  labelText: L10n.tr(context, 'profile.daira'),
+                                  prefixIcon: const Icon(Icons.place_outlined),
                                 ),
                               ),
                             ),
@@ -393,28 +400,40 @@ class _ProfilePageState extends State<ProfilePage> {
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String>(
                           value: _lang,
-                          decoration: const InputDecoration(
-                            labelText: 'Langue',
-                            prefixIcon: Icon(Icons.language_outlined),
+                          decoration: InputDecoration(
+                            labelText: L10n.tr(context, 'profile.language'),
+                            prefixIcon: const Icon(Icons.language_outlined),
                           ),
-                          items: const [
-                            DropdownMenuItem(value: 'fr', child: Text('Fran?ais')),
-                            DropdownMenuItem(value: 'ar', child: Text('Arabe (Alg?rie)')),
+                          items: [
+                            DropdownMenuItem(
+                              value: 'fr',
+                              child: Text(L10n.tr(context, 'profile.lang_fr')),
+                            ),
+                            DropdownMenuItem(
+                              value: 'ar',
+                              child: Text(L10n.tr(context, 'profile.lang_ar')),
+                            ),
                           ],
-                          onChanged: (v) => setState(() => _lang = v ?? 'fr'),
+                          onChanged: (v) async {
+                            final code = v ?? 'fr';
+                            setState(() => _lang = code);
+                            await LocaleService.instance.setLocale(code);
+                          },
                         ),
                         const SizedBox(height: 12),
                         SwitchListTile(
                           value: _isPublic,
                           onChanged: (v) => setState(() => _isPublic = v),
-                          title: const Text('Profil public'),
-                          subtitle: const Text('Visible par les acheteurs'),
+                          title: Text(L10n.tr(context, 'profile.public')),
+                          subtitle:
+                              Text(L10n.tr(context, 'profile.public_hint')),
                         ),
                         SwitchListTile(
                           value: _isSeller,
                           onChanged: (v) => setState(() => _isSeller = v),
-                          title: const Text('Mode vendeur'),
-                          subtitle: const Text('Affiche les outils vendeur'),
+                          title: Text(L10n.tr(context, 'profile.seller_mode')),
+                          subtitle:
+                              Text(L10n.tr(context, 'profile.seller_mode_hint')),
                         ),
                         const SizedBox(height: 12),
                         ElevatedButton.icon(
@@ -427,7 +446,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                   }
                                 },
                           icon: const Icon(Icons.logout),
-                          label: const Text('Déconnexion'),
+                          label: Text(L10n.tr(context, 'auth.sign_out')),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Theme.of(context).colorScheme.error,
                             foregroundColor: Theme.of(context).colorScheme.onError,
@@ -443,7 +462,11 @@ class _ProfilePageState extends State<ProfilePage> {
                                   child: CircularProgressIndicator(strokeWidth: 2),
                                 )
                               : const Icon(Icons.save_outlined),
-                          label: Text(_saving ? 'Enregistrement...' : 'Enregistrer'),
+                          label: Text(
+                            _saving
+                                ? L10n.tr(context, 'common.saving')
+                                : L10n.tr(context, 'common.save'),
+                          ),
                           style: ElevatedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
@@ -463,15 +486,16 @@ class _ProfilePageState extends State<ProfilePage> {
                     children: [
                       ListTile(
                         leading: const Icon(Icons.person_outline),
-                        title: const Text('Voir mon profil public'),
-                        subtitle: const Text('Aper?u de ce que voient les autres'),
+                        title: Text(L10n.tr(context, 'profile.view_public')),
+                        subtitle:
+                            Text(L10n.tr(context, 'profile.view_public_hint')),
                         onTap: () {},
                       ),
                       if (isSeller) const Divider(height: 1),
                       if (isSeller)
                         ListTile(
                           leading: const Icon(Icons.sell_outlined),
-                          title: const Text('Mes ventes'),
+                          title: Text(L10n.tr(context, 'seller_orders.title')),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () => Navigator.of(context).push(
                             MaterialPageRoute(builder: (_) => const SellerOrdersPage()),
@@ -481,7 +505,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       if (isSeller)
                         ListTile(
                           leading: const Icon(Icons.analytics_outlined),
-                          title: const Text('Tableau de bord'),
+                          title: Text(L10n.tr(context, 'profile.dashboard')),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () => Navigator.of(context).push(
                             MaterialPageRoute(
@@ -493,7 +517,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       if (isSeller)
                         ListTile(
                           leading: const Icon(Icons.inventory_2_outlined),
-                          title: const Text('Mes annonces'),
+                          title: Text(L10n.tr(context, 'profile.my_listings')),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () => Navigator.of(context).push(
                             MaterialPageRoute(builder: (_) => const MyListingsPage()),
@@ -503,7 +527,8 @@ class _ProfilePageState extends State<ProfilePage> {
                       if (isSeller)
                         ListTile(
                           leading: const Icon(Icons.local_shipping_outlined),
-                          title: const Text('Tableau de livraisons'),
+                          title:
+                              Text(L10n.tr(context, 'profile.shipments_board')),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () => Navigator.of(context).push(
                             MaterialPageRoute(builder: (_) => const ShipmentsDashboardPage()),
@@ -513,7 +538,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       if (isSeller)
                         ListTile(
                           leading: const Icon(Icons.settings_applications_outlined),
-                          title: const Text('Param?tres transporteurs'),
+                          title: Text(L10n.tr(context, 'profile.courier_settings')),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () => Navigator.of(context).push(
                             MaterialPageRoute(builder: (_) => const CourierSettingsPage()),
@@ -524,7 +549,14 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Geo: ${_lat?.toStringAsFixed(4) ?? "--"}, ${_lng?.toStringAsFixed(4) ?? "--"}',
+                  L10n.tr(
+                    context,
+                    'profile.geo',
+                    params: {
+                      'lat': _lat?.toStringAsFixed(4) ?? '--',
+                      'lng': _lng?.toStringAsFixed(4) ?? '--',
+                    },
+                  ),
                   style: Theme.of(context).textTheme.labelSmall,
                 ),
               ],

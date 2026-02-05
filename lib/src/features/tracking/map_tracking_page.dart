@@ -1,4 +1,4 @@
-import 'package:dzmarket/src/models/driver_position.dart';
+﻿import 'package:dzmarket/src/models/driver_position.dart';
 import 'package:dzmarket/src/models/shipment.dart';
 import 'package:dzmarket/src/services/driver_service.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
@@ -42,20 +42,16 @@ class _MapTrackingPageState extends State<MapTrackingPage> {
               if (positions.isEmpty) {
                 return Scaffold(
                   appBar: AppBar(
-                    title: Text(L10n.t(
-                      context,
-                      'Suivi ${widget.orderId}',
-                      'تتبع ${widget.orderId}',
-                      key: 'track.title',
-                    )),
+                    title: Text(
+                      L10n.tr(
+                        context,
+                        'track.title',
+                        params: {'id': widget.orderId},
+                      ),
+                    ),
                   ),
                   body: Center(
-                    child: Text(L10n.t(
-                      context,
-                      'En attente des mises à jour du livreur...',
-                      'ننتظر تحديثات السائق...',
-                      key: 'track.waiting',
-                    )),
+                    child: Text(L10n.tr(context, 'track.waiting')),
                   ),
                 );
               }
@@ -66,7 +62,7 @@ class _MapTrackingPageState extends State<MapTrackingPage> {
                 position: LatLng(latest.lat, latest.lng),
                 rotation: latest.heading ?? 0,
                 infoWindow: InfoWindow(
-                  title: 'Driver',
+                  title: L10n.tr(context, 'track.driver'),
                   snippet: latest.updatedAt?.toIso8601String(),
                 ),
               );
@@ -74,7 +70,7 @@ class _MapTrackingPageState extends State<MapTrackingPage> {
               final carrierLine = [
                 if (shipment?.carrier?.isNotEmpty ?? false) shipment!.carrier!,
                 if (shipment?.option?.isNotEmpty ?? false) shipment!.option!,
-              ].join(' · ');
+              ].join(' Â· ');
 
               final carrierEvents = shipment?.events ?? const <ShipmentEvent>[];
 
@@ -138,7 +134,7 @@ class _MapTrackingPageState extends State<MapTrackingPage> {
                               ),
                               const SizedBox(height: 12),
                               Text(
-                                'Order ${widget.orderId}',
+                                L10n.tr(context, 'track.order_label', params: {'id': widget.orderId}),
                                 style: Theme.of(context).textTheme.titleMedium,
                               ),
                               if (carrierLine.isNotEmpty) ...[
@@ -156,22 +152,22 @@ class _MapTrackingPageState extends State<MapTrackingPage> {
                               ],
                               const SizedBox(height: 8),
                               Text(
-                                '${L10n.t(context, "Dernière mise à jour", "آخر تحديث", key: "track.last_update")}: ${latest.updatedAt?.toLocal()}',
+                                '${L10n.tr(context, 'track.last_update')}: ${latest.updatedAt?.toLocal()}',
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                '${L10n.t(context, "Position du livreur", "موقع السائق", key: "track.position")}: '
+                                '${L10n.tr(context, 'track.position')}: '
                                 '${latest.lat.toStringAsFixed(4)}, ${latest.lng.toStringAsFixed(4)}',
                               ),
                               const SizedBox(height: 16),
                               Text(
-                                L10n.t(context, 'Suivi transporteur', 'تتبع الناقل', key: 'track.carrier_timeline'),
+                                L10n.tr(context, 'track.carrier_timeline'),
                                 style: Theme.of(context).textTheme.titleSmall,
                               ),
                               const SizedBox(height: 8),
                               if (carrierEvents.isEmpty)
                                 Text(
-                                  'No carrier scans yet.',
+                                  L10n.tr(context, 'track.no_carrier_scans'),
                                   style: TextStyle(
                                     color: Theme.of(context)
                                         .colorScheme
@@ -190,12 +186,12 @@ class _MapTrackingPageState extends State<MapTrackingPage> {
                                         e.description!,
                                       if (e.at != null)
                                         timeFormat.format(e.at!.toLocal()),
-                                    ].join(' · ')),
+                                    ].join(' Â· ')),
                                   ),
                                 ),
                               const SizedBox(height: 12),
                               Text(
-                                L10n.t(context, 'Parcours livreur', 'مسار السائق', key: 'track.driver_timeline'),
+                                L10n.tr(context, 'track.driver_timeline'),
                                 style: Theme.of(context).textTheme.titleSmall,
                               ),
                               const SizedBox(height: 8),
@@ -218,13 +214,13 @@ class _MapTrackingPageState extends State<MapTrackingPage> {
                                   ElevatedButton.icon(
                                     onPressed: () {},
                                     icon: const Icon(Icons.chat_bubble_outline),
-                                    label: Text(L10n.t(context, 'Discuter', 'محادثة', key: 'cta.chat')),
+                                    label: Text(L10n.tr(context, 'cta.chat')),
                                   ),
                                   const SizedBox(width: 8),
                                   OutlinedButton.icon(
                                     onPressed: () {},
                                     icon: const Icon(Icons.refresh),
-                                    label: Text(L10n.t(context, 'Rafraîchir', 'تحديث', key: 'cta.refresh')),
+                                    label: Text(L10n.tr(context, 'cta.refresh')),
                                   ),
                                 ],
                               ),
@@ -243,3 +239,7 @@ class _MapTrackingPageState extends State<MapTrackingPage> {
     );
   }
 }
+
+
+
+

@@ -56,18 +56,18 @@ class _HomeShellState extends State<HomeShell> {
         destinations: [
           NavigationDestination(
             icon: const Icon(Icons.storefront_outlined),
-            label: L10n.t(context, 'Parcourir', 'Parcourir'),
+            label: L10n.tr(context, 'nav.browse'),
           ),
           NavigationDestination(
             icon: _ChatBadge(
               userId: userId,
               chatRepository: _chatRepository,
             ),
-            label: L10n.t(context, 'Chat', 'Chat'),
+            label: L10n.tr(context, 'nav.chat'),
           ),
           NavigationDestination(
             icon: const Icon(Icons.person_outline),
-            label: L10n.t(context, 'Profil', 'Profil'),
+            label: L10n.tr(context, 'nav.profile'),
           ),
         ],
       ),

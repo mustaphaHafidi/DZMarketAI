@@ -76,9 +76,9 @@ class AuthService {
               .maybeSingle(),
         );
         if (retry == null) return null;
-        return Profile.fromJson(retry);
+        return _applyProfileLocale(Profile.fromJson(retry));
       }
-      return Profile.fromJson(response);
+      return _applyProfileLocale(Profile.fromJson(response));
     } on PostgrestException catch (e) {
       // If the session expired or schema cache failed, sign out to force a clean state.
       if (e.code == 'PGRST301' || e.message.contains('JWT') || e.message.contains('Expired')) {
@@ -99,12 +99,12 @@ class AuthService {
             .maybeSingle(),
       );
       if (response == null) return null;
-      return Profile.fromJson({
+      return _applyProfileLocale(Profile.fromJson({
         ...response,
         'lang': LocaleService.instance.locale.value?.languageCode ?? 'fr',
         'role': response['role'] ?? 'buyer',
         'is_seller': response['is_seller'] ?? false,
-      });
+      }));
     }
   }
 
@@ -206,7 +206,7 @@ class AuthService {
       'email': user.email ?? '',
       'full_name': user.userMetadata?['full_name'] as String?,
       'is_public': true,
-      'lang': 'fr',
+      'lang': LocaleService.instance.locale.value?.languageCode ?? 'fr',
       'role': 'buyer',
       'is_seller': false,
       'daira': null,
@@ -243,7 +243,17 @@ class AuthService {
       'role': 'buyer',
       'is_public': true,
       'is_seller': false,
+      'lang': LocaleService.instance.locale.value?.languageCode ?? 'fr',
       }),
     );
+  }
+
+  Future<Profile?> _applyProfileLocale(Profile? profile) async {
+    if (profile == null) return null;
+    final lang = profile.lang;
+    if (lang != null && lang.isNotEmpty) {
+      await LocaleService.instance.setLocale(lang);
+    }
+    return profile;
   }
 }

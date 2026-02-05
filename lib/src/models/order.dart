@@ -1,4 +1,4 @@
-import 'package:dzmarket/src/services/i18n.dart';
+﻿import 'package:dzmarket/src/services/i18n.dart';
 import 'package:flutter/widgets.dart';
 
 enum OrderStatus { pending, paid, shipped, delivered, cancelled }
@@ -125,15 +125,16 @@ class Order {
   String statusLabel(BuildContext context) {
     switch (status) {
       case OrderStatus.paid:
-        return L10n.t(context, 'Paye', '\u0645\u062f\u0641\u0648\u0639', key: 'orders.status_paid');
+        return L10n.tr(context, 'orders.status_paid');
       case OrderStatus.shipped:
-        return L10n.t(context, 'Expedie', '\u062a\u0645 \u0627\u0644\u0634\u062d\u0646', key: 'orders.status_shipped');
+        return L10n.tr(context, 'orders.status_shipped');
       case OrderStatus.delivered:
-        return L10n.t(context, 'Livre', '\u062a\u0645 \u0627\u0644\u062a\u0633\u0644\u064a\u0645', key: 'orders.status_delivered');
+        return L10n.tr(context, 'orders.status_delivered');
       case OrderStatus.cancelled:
-        return L10n.t(context, 'Annule', '\u0623\u0644\u063a\u064a', key: 'orders.status_cancelled');
+        return L10n.tr(context, 'orders.status_cancelled');
       case OrderStatus.pending:
-        return L10n.t(context, 'En attente', '\u0642\u064a\u062f \u0627\u0644\u0627\u0646\u062a\u0638\u0627\u0631', key: 'orders.status_pending');
+        return L10n.tr(context, 'orders.status_pending');
     }
   }
 }
+

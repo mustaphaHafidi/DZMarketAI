@@ -1,5 +1,6 @@
 import 'package:dzmarket/src/models/shipment.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
+import 'package:dzmarket/src/services/i18n.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -23,7 +24,7 @@ class ShipmentInfo extends StatelessWidget {
         final s = snapshot.data;
         if (s == null) {
           return Text(
-            'Livraison: en attente',
+            L10n.tr(context, 'shipments.pending'),
             style: TextStyle(color: Theme.of(context).colorScheme.outline),
           );
         }
@@ -47,13 +48,19 @@ class ShipmentInfo extends StatelessWidget {
             if ((s.trackingNumber ?? '').isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text('Tracking: ${s.trackingNumber}'),
+                child: Text(
+                  L10n.tr(
+                    context,
+                    'shipments.tracking_label',
+                    params: {'tracking': s.trackingNumber ?? ''},
+                  ),
+                ),
               ),
             if ((s.labelUrl ?? '').isNotEmpty)
               TextButton.icon(
                 onPressed: () => launchUrl(Uri.parse(s.labelUrl!)),
                 icon: const Icon(Icons.link),
-                label: const Text('Voir le bordereau'),
+                label: Text(L10n.tr(context, 'shipments.open_label')),
               ),
           ],
         );

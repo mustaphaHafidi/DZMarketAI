@@ -1,4 +1,5 @@
-import 'package:dzmarket/src/services/auth_service.dart';
+﻿import 'package:dzmarket/src/services/auth_service.dart';
+import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/rate_limiter.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
@@ -91,10 +92,7 @@ class _SignUpPageState extends State<SignUpPage> {
                         ),
                   ),
                   const SizedBox(height: 12),
-                  const Text(
-                    'Crée ton compte pour acheter et vendre',
-                    textAlign: TextAlign.center,
-                  ),
+                  Text(L10n.tr(context, 'auth.sign_up.subtitle'), textAlign: TextAlign.center,),
                   const SizedBox(height: 24),
                   Card(
                     elevation: 4,
@@ -108,27 +106,27 @@ class _SignUpPageState extends State<SignUpPage> {
                         children: [
                           TextField(
                             controller: _nameController,
-                            decoration: const InputDecoration(
-                              labelText: 'Nom complet',
-                              prefixIcon: Icon(Icons.person_outline),
+                            decoration: InputDecoration(
+                              labelText: L10n.tr(context, 'auth.full_name'),
+                              prefixIcon: const Icon(Icons.person_outline),
                             ),
                           ),
                           const SizedBox(height: 12),
                           TextField(
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
-                            decoration: const InputDecoration(
-                              labelText: 'Email',
-                              prefixIcon: Icon(Icons.email_outlined),
+                            decoration: InputDecoration(
+                              labelText: L10n.tr(context, 'auth.email'),
+                              prefixIcon: const Icon(Icons.email_outlined),
                             ),
                           ),
                           const SizedBox(height: 12),
                           TextField(
                             controller: _passwordController,
                             obscureText: true,
-                            decoration: const InputDecoration(
-                              labelText: 'Mot de passe',
-                              prefixIcon: Icon(Icons.lock_outline),
+                            decoration: InputDecoration(
+                              labelText: L10n.tr(context, 'auth.password'),
+                              prefixIcon: const Icon(Icons.lock_outline),
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -154,13 +152,13 @@ class _SignUpPageState extends State<SignUpPage> {
                                     width: 18,
                                     child: CircularProgressIndicator(strokeWidth: 2),
                                   )
-                                : const Text('Créer un compte'),
+                                : Text(L10n.tr(context, 'auth.sign_up.cta')),
                           ),
                           TextButton(
                             onPressed: _loading
                                 ? null
                                 : () => context.go('/sign-in'),
-                            child: const Text('Déjà inscrit ? Se connecter'),
+                            child: Text(L10n.tr(context, 'auth.sign_up.have_account')),
                           ),
                         ],
                       ),
@@ -175,3 +173,6 @@ class _SignUpPageState extends State<SignUpPage> {
     );
   }
 }
+
+
+

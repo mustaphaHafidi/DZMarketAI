@@ -31,17 +31,21 @@ class _OrdersPageState extends State<OrdersPage> {
     if (userId == null) {
       return Scaffold(
         body: Center(
-          child: Text(L10n.t(context, 'Connectez-vous.', 'يرجى تسجيل الدخول.', key: 'auth.signin_prompt')),
+          child: Text(L10n.tr(context, 'auth.signin_prompt')),
         ),
       );
     }
 
-    final currency = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA');
+    final localeCode = Localizations.localeOf(context).languageCode;
+    final currency = NumberFormat.currency(
+      locale: localeCode == 'ar' ? 'ar_DZ' : 'fr_DZ',
+      symbol: 'DA',
+    );
     final service = OrderService();
     final paymentService = PaymentService();
 
     return Scaffold(
-      appBar: AppBar(title: Text(L10n.t(context, 'Commandes', 'الطلبات'))),
+      appBar: AppBar(title: Text(L10n.tr(context, 'orders.title'))),
       body: StreamBuilder<List<Order>>(
         stream: service.streamOrdersForUser(userId),
         builder: (context, snapshot) {
@@ -52,7 +56,7 @@ class _OrdersPageState extends State<OrdersPage> {
           final filtered = orders.where((o) => o.buyerId == userId).toList();
           if (filtered.isEmpty) {
             return Center(
-              child: Text(L10n.t(context, 'Aucun achat pour le moment.', 'لا توجد مشتريات حاليا.')),
+              child: Text(L10n.tr(context, 'orders.empty')),
             );
           }
           return RefreshIndicator(
@@ -100,14 +104,7 @@ class _OrdersPageState extends State<OrdersPage> {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                L10n.t(
-                  context,
-                  'Montant invalide',
-                  'المبلغ غير صالح',
-                  key: 'payment.invalid_amount',
-                ),
-              ),
+              content: Text(L10n.tr(context, 'payment.invalid_amount')),
             ),
           );
         }
@@ -125,14 +122,7 @@ class _OrdersPageState extends State<OrdersPage> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              L10n.t(
-                context,
-                'Paiement enregistre (mock)',
-                'تم تسجيل الدفع (تجريبي)',
-                key: 'payment.recorded_mock',
-              ),
-            ),
+            content: Text(L10n.tr(context, 'payment.recorded_mock')),
           ),
         );
       }
@@ -140,14 +130,7 @@ class _OrdersPageState extends State<OrdersPage> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              L10n.t(
-                context,
-                'Erreur de paiement. Reessayez.',
-                'خطا في الدفع. حاول مرة اخرى.',
-                key: 'payment.error',
-              ),
-            ),
+            content: Text(L10n.tr(context, 'payment.error')),
           ),
         );
       }
@@ -179,11 +162,10 @@ class _OrderCard extends StatelessWidget {
     final shippingService = ShippingService();
     final priceText = order.productPrice != null
         ? currency.format(order.productPrice)
-        : L10n.t(
+        : L10n.tr(
             context,
-            'Commande ${order.id}',
-            'طلب ${order.id}',
-            key: 'orders.order_fallback',
+            'orders.order_fallback',
+            params: {'id': order.id},
           );
     final paymentLabel = order.paymentMethod ?? 'cod';
     return Card(
@@ -197,11 +179,10 @@ class _OrderCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     order.productTitle ??
-                        L10n.t(
+                        L10n.tr(
                           context,
-                          'Produit ${order.productId}',
-                          'منتج ${order.productId}',
-                          key: 'orders.product_fallback',
+                          'orders.product_fallback',
+                          params: {'id': order.productId},
                         ),
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
@@ -259,38 +240,18 @@ class _OrderCard extends StatelessWidget {
                         : const Icon(Icons.credit_card),
                     label: Text(
                       isPaying
-                          ? L10n.t(
-                              context,
-                              'Paiement...',
-                              'جاري الدفع...',
-                              key: 'orders.pay_processing',
-                            )
-                          : L10n.t(
-                              context,
-                              'Payer',
-                              'ادفع',
-                              key: 'orders.pay',
-                            ),
+                          ? L10n.tr(context, 'orders.pay_processing')
+                          : L10n.tr(context, 'orders.pay'),
                     ),
                   ),
                 const Spacer(),
                 IconButton(
-                  tooltip: L10n.t(
-                    context,
-                    'Chat',
-                    'محادثة',
-                    key: 'orders.chat',
-                  ),
+                  tooltip: L10n.tr(context, 'orders.chat'),
                   onPressed: () => context.push('/order/${order.id}/chat'),
                   icon: const Icon(Icons.chat_bubble_outline),
                 ),
                 IconButton(
-                  tooltip: L10n.t(
-                    context,
-                    'Suivi',
-                    'تتبع',
-                    key: 'orders.track',
-                  ),
+                  tooltip: L10n.tr(context, 'orders.track'),
                   onPressed: () => context.push('/order/${order.id}/track'),
                   icon: const Icon(Icons.map_outlined),
                 ),
@@ -301,12 +262,7 @@ class _OrderCard extends StatelessWidget {
                       final already = snapshot.data ?? false;
                       if (already) return const SizedBox.shrink();
                       return IconButton(
-                        tooltip: L10n.t(
-                          context,
-                          'Noter le vendeur',
-                          'قيّم البائع',
-                          key: 'orders.rate_seller',
-                        ),
+                        tooltip: L10n.tr(context, 'orders.rate_seller'),
                         onPressed: () async {
                           await _showReviewDialog(context, order, reviewService);
                         },
@@ -336,12 +292,7 @@ Future<void> _showReviewDialog(
     builder: (context) {
       return AlertDialog(
         title: Text(
-          L10n.t(
-            context,
-            'Noter ce vendeur',
-            'قيّم هذا البائع',
-            key: 'orders.review_title',
-          ),
+          L10n.tr(context, 'orders.review_title'),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -360,11 +311,10 @@ Future<void> _showReviewDialog(
                       label: value.toStringAsFixed(1),
                     ),
                     Text(
-                      L10n.t(
+                      L10n.tr(
                         context,
-                        'Note: ${value.toStringAsFixed(1)}',
-                        'التقييم: ${value.toStringAsFixed(1)}',
-                        key: 'orders.review_rating',
+                        'orders.review_rating',
+                        params: {'rating': value.toStringAsFixed(1)},
                       ),
                     ),
                   ],
@@ -374,12 +324,7 @@ Future<void> _showReviewDialog(
             TextField(
               controller: comment,
               decoration: InputDecoration(
-                labelText: L10n.t(
-                  context,
-                  'Commentaire (optionnel)',
-                  'تعليق (اختياري)',
-                  key: 'orders.review_comment',
-                ),
+                labelText: L10n.tr(context, 'orders.review_comment'),
               ),
               maxLines: 3,
             ),
@@ -389,12 +334,7 @@ Future<void> _showReviewDialog(
           TextButton(
             onPressed: () => navigator.pop(),
             child: Text(
-              L10n.t(
-                context,
-                'Annuler',
-                'إلغاء',
-                key: 'orders.review_cancel',
-              ),
+              L10n.tr(context, 'orders.review_cancel'),
             ),
           ),
           TextButton(
@@ -431,24 +371,14 @@ Future<void> _showReviewDialog(
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      L10n.t(
-                        context,
-                        'Merci pour votre avis !',
-                        'شكرا على تقييمك!',
-                        key: 'orders.review_thanks',
-                      ),
+                      L10n.tr(context, 'orders.review_thanks'),
                     ),
                   ),
                 );
               }
             },
             child: Text(
-              L10n.t(
-                context,
-                'Envoyer',
-                'إرسال',
-                key: 'orders.review_submit',
-              ),
+              L10n.tr(context, 'orders.review_submit'),
             ),
           ),
         ],

@@ -26,6 +26,9 @@ class TranslationService {
         final locale = row['locale'] as String? ?? '';
         final text = row['text'] as String? ?? '';
         if (key.isEmpty || locale.isEmpty || text.isEmpty) continue;
+        if (locale == 'ar' && _looksCorruptArabic(text)) {
+          continue;
+        }
         _cache.putIfAbsent(locale, () => {})[key] = text;
       }
     } catch (_) {
@@ -55,5 +58,12 @@ class TranslationService {
 
   String? translate(String locale, String key) {
     return _cache[locale]?[key];
+  }
+
+  bool _looksCorruptArabic(String text) {
+    if (text.isEmpty) return true;
+    final hasArabic = RegExp(r'[\u0600-\u06FF]').hasMatch(text);
+    if (hasArabic) return false;
+    return true;
   }
 }

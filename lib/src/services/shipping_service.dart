@@ -11,6 +11,7 @@ import 'package:dzmarket/src/services/rate_limiter.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/services/storage_service.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 import 'package:dzmarket/src/services/chat_repository.dart';
 import 'package:dzmarket/src/services/i18n.dart';
@@ -41,6 +42,14 @@ class ShippingService {
     'Point relais / bureau poste',
     'Coursier local (même ville)',
   ];
+  static const _optionKeyMap = <String, String>{
+    'Livraison domicile (24-72h)': 'shipping.option.home',
+    'Point relais / bureau poste': 'shipping.option.pickup',
+    'Coursier local (même ville)': 'shipping.option.local',
+    'shipping.option.home': 'shipping.option.home',
+    'shipping.option.pickup': 'shipping.option.pickup',
+    'shipping.option.local': 'shipping.option.local',
+  };
 
   static const couriers = <Map<String, String>>[
     {
@@ -108,11 +117,51 @@ class ShippingService {
   Future<List<Map<String, String>>> fetchCouriers() async => couriers;
 
   static Map<String, String> deliveryMode(String option) {
-    if (option.contains('Coursier')) return {'mode': 'local_driver'};
-    if (option.contains('relais') || option.contains('poste')) {
+    final key = _optionKeyMap[option] ?? option;
+    if (key == 'shipping.option.local') return {'mode': 'local_driver'};
+    if (key == 'shipping.option.pickup') {
       return {'mode': 'pickup_postal'};
     }
     return {'mode': 'home'};
+  }
+
+  static String optionLabel(BuildContext context, String option) {
+    final key = _optionKeyMap[option];
+    if (key == null) return option;
+    return L10n.tr(context, key, fallback: option);
+  }
+
+  String _localeCode() {
+    return LocaleService.instance.locale.value?.languageCode ?? 'fr';
+  }
+
+  String _statusLabel(String locale, String status) {
+    switch (status) {
+      case 'pending':
+        return L10n.trLocale(locale, 'orders.status_pending');
+      case 'paid':
+        return L10n.trLocale(locale, 'orders.status_paid');
+      case 'shipped':
+        return L10n.trLocale(locale, 'orders.status_shipped');
+      case 'delivered':
+        return L10n.trLocale(locale, 'orders.status_delivered');
+      case 'cancelled':
+        return L10n.trLocale(locale, 'orders.status_cancelled');
+      default:
+        return status;
+    }
+  }
+
+  String _labelEventTitle(String locale) {
+    return L10n.trLocale(locale, 'shipments.event_label_generated_title');
+  }
+
+  String _labelEventDesc(String locale, String carrier) {
+    return L10n.trLocale(
+      locale,
+      'shipments.event_label_generated_desc',
+      params: {'carrier': carrier},
+    );
   }
 
   Stream<Shipment?> streamShipment(String orderId) {
@@ -327,10 +376,8 @@ class ShippingService {
     if (orderRes == null) {
       throw StateError('Commande introuvable');
     }
-    final Map<String, dynamic>? orderRow = orderRes;
-    if (orderRow == null) {
-      throw StateError('Commande introuvable');
-    }
+    final Map<String, dynamic> orderRow =
+        Map<String, dynamic>.from(orderRes as Map);
     final buyerId = orderRow['buyer_id']?.toString() ?? '';
     final sellerId = orderRow['seller_id']?.toString() ?? '';
     final productId = orderRow['product_id']?.toString();
@@ -342,8 +389,7 @@ class ShippingService {
 
     // If buyer selection is already stored, reuse it to avoid name mismatches.
     if (storedSelection is Map) {
-      final selection =
-          Map<String, dynamic>.from(storedSelection as Map<dynamic, dynamic>);
+      final selection = Map<String, dynamic>.from(storedSelection);
       selection['order_id'] = safeOrderId;
       selection['from_wilaya_name'] ??= selection['senderWilaya'];
       selection['to_wilaya_name'] ??= selection['receiverWilaya'];
@@ -667,6 +713,7 @@ class ShippingService {
       bucket: SupabaseOptions.labelBucket,
     );
 
+    final locale = _localeCode();
     await RateLimiter.instance.run(
       'shipments.upsert',
       () => supabase.from(SupabaseTables.shipments).upsert({
@@ -680,8 +727,8 @@ class ShippingService {
         'shipping_cost': null,
         'events': [
           {
-            'title': 'Label generated',
-            'description': 'Ready for carrier pickup',
+            'title': _labelEventTitle(locale),
+            'description': _labelEventDesc(locale, 'Yalidine Express'),
             'at': DateTime.now().toIso8601String(),
           },
         ],
@@ -698,7 +745,7 @@ class ShippingService {
 
     await MessageService().sendMessage(
       roomId: 'order:$safeOrderId',
-      content: 'Bordereau disponible',
+      content: L10n.trLocale(locale, 'shipments.label_ready'),
       type: MessageType.label,
       payload: {
         'label_url': signedUrl,
@@ -742,6 +789,7 @@ class ShippingService {
       bucket: SupabaseOptions.labelBucket,
     );
 
+    final locale = _localeCode();
     await RateLimiter.instance.run(
       'shipments.upsert',
       () => supabase.from(SupabaseTables.shipments).upsert({
@@ -755,8 +803,8 @@ class ShippingService {
         'shipping_cost': null,
         'events': [
           {
-            'title': 'Label generated',
-            'description': 'Ready for carrier pickup',
+            'title': _labelEventTitle(locale),
+            'description': _labelEventDesc(locale, 'Yalidine Express'),
             'at': DateTime.now().toIso8601String(),
           },
         ],
@@ -773,7 +821,7 @@ class ShippingService {
 
     await MessageService().sendMessage(
       roomId: 'order:${model.orderId}',
-      content: 'Bordereau disponible',
+      content: L10n.trLocale(locale, 'shipments.label_ready'),
       type: MessageType.label,
       payload: {
         'label_url': signedUrl,
@@ -868,6 +916,7 @@ class ShippingService {
       throw StateError('Label URL missing from server response');
     }
 
+    final locale = _localeCode();
     await RateLimiter.instance.run(
       'shipments.upsert',
       () => supabase.from(SupabaseTables.shipments).upsert({
@@ -879,13 +928,13 @@ class ShippingService {
       'option': safeOption,
       'delivery_mode': safeDelivery,
       'shipping_cost': shippingCost,
-      'events': [
-        {
-          'title': 'Label généré',
-          'description': 'Prêt pour prise en charge par $safeCarrier',
-          'at': DateTime.now().toIso8601String(),
-        },
-      ],
+        'events': [
+          {
+            'title': _labelEventTitle(locale),
+            'description': _labelEventDesc(locale, safeCarrier),
+            'at': DateTime.now().toIso8601String(),
+          },
+        ],
       }),
     );
   }
@@ -893,6 +942,8 @@ class ShippingService {
   Future<void> appendDeliveryStatus(String orderId, String status) async {
     final safeOrderId = InputSanitizer.sanitizeId(orderId, maxLength: 64);
     final safeStatus = InputSanitizer.sanitizeText(status, maxLength: 30);
+    final locale = _localeCode();
+    final statusLabel = _statusLabel(locale, safeStatus);
     await RateLimiter.instance.run(
       'shipments.status.update',
       () => supabase
@@ -912,13 +963,21 @@ class ShippingService {
     final roomId = 'order:$safeOrderId';
     await msg.sendMessage(
       roomId: roomId,
-      content: 'Statut livraison: $safeStatus',
+      content: L10n.trLocale(
+        locale,
+        'shipments.status_message',
+        params: {'status': statusLabel},
+      ),
       type: MessageType.text,
       payload: {'type': 'delivery_status', 'status': safeStatus},
     );
     NotificationService.instance.notifyLocal(
-      'Livraison mise à jour',
-      'Statut: $safeStatus',
+      L10n.trLocale(locale, 'shipments.status_notification_title'),
+      L10n.trLocale(
+        locale,
+        'shipments.status_notification_body',
+        params: {'status': statusLabel},
+      ),
     );
   }
 
@@ -1648,6 +1707,7 @@ class ShippingService {
       tracking: tracking,
     );
 
+    final locale = _localeCode();
     await RateLimiter.instance.run(
       'shipments.upsert.ecotrack',
       () => supabase.from(SupabaseTables.shipments).upsert({
@@ -1661,8 +1721,8 @@ class ShippingService {
         'shipping_cost': selection['estimatedFee'],
         'events': [
           {
-            'title': 'Label generated',
-            'description': 'Ready for carrier pickup',
+            'title': _labelEventTitle(locale),
+            'description': _labelEventDesc(locale, 'Ecotrack'),
             'at': DateTime.now().toIso8601String(),
           },
         ],
@@ -1679,7 +1739,7 @@ class ShippingService {
 
     await MessageService().sendMessage(
       roomId: 'order:$safeOrderId',
-      content: 'Bordereau disponible',
+      content: L10n.trLocale(locale, 'shipments.label_ready'),
       type: MessageType.label,
       payload: {
         'label_url': labelUrl,

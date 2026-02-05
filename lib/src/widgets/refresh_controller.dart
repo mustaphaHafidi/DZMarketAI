@@ -17,8 +17,10 @@ class RefreshController {
     try {
       await action().timeout(timeout);
     } on TimeoutException catch (_) {
+      if (!context.mounted) return;
       _showSnack(context, 'Temps dépassé, vérifie la connexion.');
     } catch (e) {
+      if (!context.mounted) return;
       _showSnack(context, e.toString());
     } finally {
       _refreshing = false;
@@ -32,3 +34,4 @@ class RefreshController {
     );
   }
 }
+

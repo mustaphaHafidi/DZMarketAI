@@ -46,6 +46,21 @@ class _AddListingPageState extends State<AddListingPage> {
 
   final _conditions = const ['new', 'like new', 'good', 'fair'];
 
+  String _conditionLabel(BuildContext context, String value) {
+    switch (value) {
+      case 'new':
+        return L10n.tr(context, 'condition.new');
+      case 'like new':
+        return L10n.tr(context, 'condition.like_new');
+      case 'good':
+        return L10n.tr(context, 'condition.good');
+      case 'fair':
+        return L10n.tr(context, 'condition.fair');
+      default:
+        return value;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -84,7 +99,7 @@ class _AddListingPageState extends State<AddListingPage> {
       _categories = items;
       _loadingCategories = false;
       if (items.isEmpty) {
-        _categoryLoadError = 'Aucune categorie disponible.';
+        _categoryLoadError = L10n.tr(context, 'listing.add.error_no_categories');
       }
     });
   }
@@ -100,7 +115,7 @@ class _AddListingPageState extends State<AddListingPage> {
       _wilayas = items;
       _loadingLocations = false;
       if (items.isEmpty) {
-        _locationLoadError = 'Impossible de charger les wilayas.';
+        _locationLoadError = L10n.tr(context, 'listing.add.error_no_wilayas');
       }
     });
   }
@@ -126,7 +141,7 @@ class _AddListingPageState extends State<AddListingPage> {
       _communes = items;
       _loadingLocations = false;
       if (items.isEmpty) {
-        _locationLoadError = 'Aucune commune disponible.';
+        _locationLoadError = L10n.tr(context, 'listing.add.error_no_communes');
       }
     });
   }
@@ -153,23 +168,23 @@ class _AddListingPageState extends State<AddListingPage> {
     switch (step) {
       case 0:
         if (_pickedFiles.isEmpty) {
-          _setError('Ajoutez au moins une photo.');
+          _setError(L10n.tr(context, 'listing.add.error_min_photo'));
           return false;
         }
         return true;
       case 1:
         if ((_categoryId ?? '').isEmpty) {
-          _setError('Choisissez une categorie.');
+          _setError(L10n.tr(context, 'listing.add.error_choose_category'));
           return false;
         }
         return true;
       case 2:
         if (_titleCtrl.text.trim().isEmpty) {
-          _setError('Ajoutez un titre.');
+          _setError(L10n.tr(context, 'listing.add.error_add_title'));
           return false;
         }
         if (_descCtrl.text.trim().isEmpty) {
-          _setError('Ajoutez une description.');
+          _setError(L10n.tr(context, 'listing.add.error_add_description'));
           return false;
         }
         return true;
@@ -178,7 +193,7 @@ class _AddListingPageState extends State<AddListingPage> {
           InputSanitizer.parseAmount(_priceCtrl.text, min: 1);
           final stock = int.tryParse(_stockCtrl.text.trim()) ?? 0;
           if (stock <= 0) {
-            _setError('Indiquez un stock valide.');
+            _setError(L10n.tr(context, 'listing.add.error_invalid_stock'));
             return false;
           }
           if (_costCtrl.text.trim().isNotEmpty) {
@@ -191,13 +206,13 @@ class _AddListingPageState extends State<AddListingPage> {
         return true;
       case 4:
         if (_selectedWilayaCode == null || _selectedCommune == null) {
-          _setError('Indiquez la wilaya et la daira.');
+          _setError(L10n.tr(context, 'listing.add.error_invalid_location'));
           return false;
         }
         return true;
       case 5:
         if (!_deliveryCod && !_deliveryPickup) {
-          _setError('Choisissez au moins une option de livraison.');
+          _setError(L10n.tr(context, 'listing.add.error_choose_delivery'));
           return false;
         }
         return true;
@@ -249,15 +264,23 @@ class _AddListingPageState extends State<AddListingPage> {
       );
       final price = InputSanitizer.parseAmount(_priceCtrl.text, min: 1);
       final stock = int.tryParse(_stockCtrl.text.trim()) ?? 0;
-      if (stock <= 0) throw FormatException('Stock invalide.');
+      if (stock <= 0) {
+        throw FormatException(L10n.tr(context, 'listing.add.error_invalid_stock'));
+      }
       final costPrice = _costCtrl.text.trim().isEmpty
           ? null
           : InputSanitizer.parseAmount(_costCtrl.text, min: 0);
       final brand = InputSanitizer.sanitizeOptionalText(_brandCtrl.text, maxLength: 40);
       final size = InputSanitizer.sanitizeOptionalText(_sizeCtrl.text, maxLength: 40);
-      final wilaya = InputSanitizer.sanitizeText(_wilayaLabel(), maxLength: 60);
+      final wilaya = InputSanitizer.sanitizeText(
+        _wilayaLabel(context),
+        maxLength: 60,
+      );
       final daira =
-          InputSanitizer.sanitizeText(_selectedCommuneLabel(), maxLength: 60);
+          InputSanitizer.sanitizeText(
+            _selectedCommuneLabel(context),
+            maxLength: 60,
+          );
       final categoryId =
           InputSanitizer.sanitizeText(_categoryId ?? '', maxLength: 20);
       final categoryName = InputSanitizer.sanitizeOptionalText(
@@ -265,13 +288,13 @@ class _AddListingPageState extends State<AddListingPage> {
         maxLength: 80,
       );
       if (title.isEmpty || categoryId.isEmpty) {
-        throw FormatException('Informations manquantes.');
+        throw FormatException(L10n.tr(context, 'listing.add.error_missing_info'));
       }
 
       final bytes = _pickedFiles.map((f) => f.bytes).whereType<Uint8List>().toList();
       final names = _pickedFiles.map((f) => f.name).toList();
       if (bytes.length != _pickedFiles.length) {
-        throw StateError('Impossible de lire certains fichiers.');
+        throw StateError(L10n.tr(context, 'listing.add.error_file_read'));
       }
       final uploaded = await StorageService().uploadImages(
         files: bytes,
@@ -312,11 +335,30 @@ class _AddListingPageState extends State<AddListingPage> {
     }
   }
 
-  List<String> _deliveryOptionsPreview() {
+  List<String> _deliveryOptionsPreview(BuildContext context) {
     final options = <String>[];
-    if (_deliveryCod) options.add('Paiement a la livraison (COD)');
-    if (_deliveryPickup) options.add('Remise en main propre');
+    if (_deliveryCod) {
+      options.add(L10n.tr(context, 'listing.add.delivery_cod'));
+    }
+    if (_deliveryPickup) {
+      options.add(L10n.tr(context, 'listing.add.delivery_pickup'));
+    }
     return options;
+  }
+
+  bool _hasArabicLetters(String value) {
+    return RegExp(r'[\u0600-\u06FF]').hasMatch(value);
+  }
+
+  bool _looksMojibake(String value) {
+    return value.contains('Ã') || value.contains('Â') || value.contains('�');
+  }
+
+  String _pickLocalizedName(BuildContext context, String fr, String ar) {
+    final isAr = Localizations.localeOf(context).languageCode == 'ar';
+    if (!isAr) return fr.isNotEmpty ? fr : ar;
+    if (_hasArabicLetters(ar)) return ar;
+    return fr.isNotEmpty ? fr : ar;
   }
 
   String _categoryLabel(BuildContext context) {
@@ -324,25 +366,50 @@ class _AddListingPageState extends State<AddListingPage> {
     if (id.isEmpty) return '-';
     final match = _categories.where((c) => c['id'] == id).toList();
     if (match.isEmpty) return id;
-    final fr = match.first['name_fr'] ?? id;
-    final ar = match.first['name_ar'] ?? fr;
-    return L10n.t(context, fr, ar);
+    return _categoryItemLabel(context, match.first);
   }
 
-  String _wilayaLabel() {
+  String _categoryItemLabel(BuildContext context, Map<String, String> item) {
+    if (item.isEmpty) return '-';
+    final slug = item['slug'] ?? '';
+    final fr = item['name_fr'] ?? '';
+    final ar = item['name_ar'] ?? fr;
+    final fallback = _pickLocalizedName(context, fr, ar);
+    if (slug.isEmpty) return fallback;
+    final translated = L10n.tr(context, 'category.$slug', fallback: fallback);
+    return _looksMojibake(translated) ? fallback : translated;
+  }
+
+  String _wilayaLabel(BuildContext context) {
     final code = _selectedWilayaCode;
     if (code == null || code.isEmpty) return '-';
     final match = _wilayas.where((w) => w['code'] == code).toList();
     if (match.isEmpty) return code;
-    return match.first['name_fr'] ?? code;
+    final fr = match.first['name_fr'] ?? code;
+    final ar = match.first['name_ar'] ?? fr;
+    return _pickLocalizedName(context, fr, ar);
   }
 
-  String _selectedCommuneLabel() {
+  String _wilayaItemLabel(BuildContext context, Map<String, String> item) {
+    final fr = item['name_fr'] ?? '';
+    final ar = item['name_ar'] ?? fr;
+    return _pickLocalizedName(context, fr, ar);
+  }
+
+  String _selectedCommuneLabel(BuildContext context) {
     final id = _selectedCommune;
     if (id == null || id.isEmpty) return '-';
     final match = _communes.where((c) => c['id'] == id).toList();
     if (match.isEmpty) return id;
-    return match.first['name_fr'] ?? id;
+    final fr = match.first['name_fr'] ?? id;
+    final ar = match.first['name_ar'] ?? fr;
+    return _pickLocalizedName(context, fr, ar);
+  }
+
+  String _communeItemLabel(BuildContext context, Map<String, String> item) {
+    final fr = item['name_fr'] ?? '';
+    final ar = item['name_ar'] ?? fr;
+    return _pickLocalizedName(context, fr, ar);
   }
 
   bool _canContinue() {
@@ -379,7 +446,7 @@ class _AddListingPageState extends State<AddListingPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Nouvelle annonce'),
+        title: Text(L10n.tr(context, 'listing.add.title')),
       ),
       body: Stepper(
         currentStep: _step,
@@ -398,13 +465,13 @@ class _AddListingPageState extends State<AddListingPage> {
                 if (_step > 0)
                   TextButton(
                     onPressed: _back,
-                    child: const Text('Retour'),
+                    child: Text(L10n.tr(context, 'listing.add.back')),
                   ),
                 const Spacer(),
                 if (_step < 6)
                   FilledButton(
                     onPressed: _canContinue() ? _next : null,
-                    child: const Text('Continuer'),
+                    child: Text(L10n.tr(context, 'listing.add.continue')),
                   )
                 else
                   FilledButton(
@@ -415,7 +482,7 @@ class _AddListingPageState extends State<AddListingPage> {
                             height: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Text('Publier'),
+                        : Text(L10n.tr(context, 'listing.add.publish')),
                   ),
               ],
             ),
@@ -423,13 +490,13 @@ class _AddListingPageState extends State<AddListingPage> {
         },
         steps: [
           Step(
-            title: const Text('Photos'),
+            title: Text(L10n.tr(context, 'listing.add.step_photos')),
             isActive: _step >= 0,
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Ajoutez plusieurs photos pour vendre plus vite.',
+                  L10n.tr(context, 'listing.add.photos_hint'),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 12),
@@ -489,7 +556,7 @@ class _AddListingPageState extends State<AddListingPage> {
             ),
           ),
           Step(
-            title: const Text('Categorie'),
+            title: Text(L10n.tr(context, 'listing.add.step_category')),
             isActive: _step >= 1,
             content: _loadingCategories
                 ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
@@ -506,20 +573,20 @@ class _AddListingPageState extends State<AddListingPage> {
                           const SizedBox(height: 8),
                           OutlinedButton(
                             onPressed: _loadCategories,
-                            child: const Text('Reessayer'),
+                            child: Text(L10n.tr(context, 'common.retry')),
                           ),
                         ],
                       )
                     : DropdownButtonFormField<String>(
                         initialValue: _categoryId,
-                        decoration: const InputDecoration(
-                          labelText: 'Categorie',
+                        decoration: InputDecoration(
+                          labelText: L10n.tr(context, 'listing.add.category_label'),
                         ),
                         items: _categories
                             .map(
                               (c) => DropdownMenuItem(
                                 value: c['id'],
-                                child: Text(c['name_fr'] ?? c['name_ar'] ?? ''),
+                                child: Text(_categoryItemLabel(context, c)),
                               ),
                             )
                             .toList(),
@@ -536,19 +603,23 @@ class _AddListingPageState extends State<AddListingPage> {
                       ),
           ),
           Step(
-            title: const Text('Details'),
+            title: Text(L10n.tr(context, 'listing.add.step_details')),
             isActive: _step >= 2,
             content: Column(
               children: [
                 TextField(
                   controller: _titleCtrl,
-                  decoration: const InputDecoration(labelText: 'Titre'),
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'listing.add.title_label'),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _descCtrl,
                   maxLines: 4,
-                  decoration: const InputDecoration(labelText: 'Description'),
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'listing.add.description_label'),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
@@ -557,36 +628,42 @@ class _AddListingPageState extends State<AddListingPage> {
                       .map(
                         (c) => DropdownMenuItem(
                           value: c,
-                          child: Text(c),
+                          child: Text(_conditionLabel(context, c)),
                         ),
                       )
                       .toList(),
                   onChanged: (value) => setState(() => _condition = value ?? 'new'),
-                  decoration: const InputDecoration(labelText: 'Etat'),
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'listing.add.condition_label'),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _brandCtrl,
-                  decoration: const InputDecoration(labelText: 'Marque (optionnel)'),
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'listing.add.brand_label'),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _sizeCtrl,
-                  decoration: const InputDecoration(labelText: 'Taille (optionnel)'),
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'listing.add.size_label'),
+                  ),
                 ),
               ],
             ),
           ),
           Step(
-            title: const Text('Prix'),
+            title: Text(L10n.tr(context, 'listing.add.step_price')),
             isActive: _step >= 3,
             content: Column(
               children: [
                 TextField(
                   controller: _priceCtrl,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Prix de vente (DZD)',
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'listing.add.price_label'),
                     prefixText: 'DA ',
                   ),
                 ),
@@ -594,16 +671,16 @@ class _AddListingPageState extends State<AddListingPage> {
                 TextField(
                   controller: _stockCtrl,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Stock disponible',
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'listing.add.stock_label'),
                   ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _costCtrl,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Prix d\'achat (optionnel)',
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'listing.add.cost_label'),
                     prefixText: 'DA ',
                   ),
                 ),
@@ -611,7 +688,7 @@ class _AddListingPageState extends State<AddListingPage> {
             ),
           ),
           Step(
-            title: const Text('Localisation'),
+            title: Text(L10n.tr(context, 'listing.add.step_location')),
             isActive: _step >= 4,
             content: _loadingLocations
                 ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
@@ -628,7 +705,7 @@ class _AddListingPageState extends State<AddListingPage> {
                           const SizedBox(height: 8),
                           OutlinedButton(
                             onPressed: _loadLocations,
-                            child: const Text('Reessayer'),
+                            child: Text(L10n.tr(context, 'common.retry')),
                           ),
                         ],
                       )
@@ -636,12 +713,17 @@ class _AddListingPageState extends State<AddListingPage> {
                         children: [
                           DropdownButtonFormField<String>(
                             initialValue: _selectedWilayaCode,
-                            decoration: const InputDecoration(labelText: 'Wilaya'),
+                            decoration: InputDecoration(
+                              labelText:
+                                  L10n.tr(context, 'listing.add.wilaya_label'),
+                            ),
                             items: _wilayas
                                 .map(
                                   (w) => DropdownMenuItem(
                                     value: w['code'],
-                                    child: Text('${w['code']} - ${w['name_fr']}'),
+                                    child: Text(
+                                      '${w['code']} - ${_wilayaItemLabel(context, w)}',
+                                    ),
                                   ),
                                 )
                                 .toList(),
@@ -651,12 +733,17 @@ class _AddListingPageState extends State<AddListingPage> {
                           DropdownButtonFormField<String>(
                             initialValue: _selectedCommune,
                             decoration:
-                                const InputDecoration(labelText: 'Daïra / Commune'),
+                                InputDecoration(
+                                  labelText: L10n.tr(
+                                    context,
+                                    'listing.add.commune_label',
+                                  ),
+                                ),
                             items: _communes
                                 .map(
                                   (c) => DropdownMenuItem(
                                     value: c['id'],
-                                    child: Text(c['name_fr'] ?? ''),
+                                    child: Text(_communeItemLabel(context, c)),
                                   ),
                                 )
                                 .toList(),
@@ -667,33 +754,37 @@ class _AddListingPageState extends State<AddListingPage> {
                       ),
           ),
           Step(
-            title: const Text('Livraison'),
+            title: Text(L10n.tr(context, 'listing.add.step_delivery')),
             isActive: _step >= 5,
             content: Column(
               children: [
                 SwitchListTile(
                   value: _deliveryCod,
                   onChanged: (value) => setState(() => _deliveryCod = value),
-                  title: const Text('Paiement a la livraison (COD)'),
-                  subtitle: const Text('Transporteurs partenaires'),
+                  title: Text(L10n.tr(context, 'listing.add.delivery_cod')),
+                  subtitle:
+                      Text(L10n.tr(context, 'listing.add.delivery_cod_hint')),
                 ),
                 SwitchListTile(
                   value: _deliveryPickup,
                   onChanged: (value) => setState(() => _deliveryPickup = value),
-                  title: const Text('Remise en main propre'),
-                  subtitle: const Text('Rencontre locale avec l\'acheteur'),
+                  title: Text(L10n.tr(context, 'listing.add.delivery_pickup')),
+                  subtitle:
+                      Text(L10n.tr(context, 'listing.add.delivery_pickup_hint')),
                 ),
               ],
             ),
           ),
           Step(
-            title: const Text('Apercu'),
+            title: Text(L10n.tr(context, 'listing.add.step_preview')),
             isActive: _step >= 6,
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _titleCtrl.text.trim().isEmpty ? 'Sans titre' : _titleCtrl.text.trim(),
+                  _titleCtrl.text.trim().isEmpty
+                      ? L10n.tr(context, 'listing.add.preview_no_title')
+                      : _titleCtrl.text.trim(),
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 8),
@@ -721,29 +812,36 @@ class _AddListingPageState extends State<AddListingPage> {
                     ),
                   ),
                 const SizedBox(height: 12),
-                _PreviewRow(label: 'Categorie', value: _categoryLabel(context)),
-                _PreviewRow(label: 'Etat', value: _condition),
                 _PreviewRow(
-                  label: 'Prix',
+                  label: L10n.tr(context, 'listing.add.preview_category'),
+                  value: _categoryLabel(context),
+                ),
+                _PreviewRow(
+                  label: L10n.tr(context, 'listing.add.preview_condition'),
+                  value: _conditionLabel(context, _condition),
+                ),
+                _PreviewRow(
+                  label: L10n.tr(context, 'listing.add.preview_price'),
                   value: _priceCtrl.text.trim().isEmpty ? '-' : 'DA ${_priceCtrl.text.trim()}',
                 ),
                 _PreviewRow(
-                  label: 'Stock',
+                  label: L10n.tr(context, 'listing.add.preview_stock'),
                   value: _stockCtrl.text.trim().isEmpty ? '-' : _stockCtrl.text.trim(),
                 ),
                 if (_costCtrl.text.trim().isNotEmpty)
                   _PreviewRow(
-                    label: 'Prix d\'achat',
+                    label: L10n.tr(context, 'listing.add.preview_cost'),
                     value: 'DA ${_costCtrl.text.trim()}',
                   ),
                 _PreviewRow(
-                  label: 'Localisation',
+                  label: L10n.tr(context, 'listing.add.preview_location'),
                   value:
-                      '${_wilayaLabel()} - ${_selectedCommuneLabel()}'.trim(),
+                      '${_wilayaLabel(context)} - ${_selectedCommuneLabel(context)}'
+                          .trim(),
                 ),
                 _PreviewRow(
-                  label: 'Livraison',
-                  value: _deliveryOptionsPreview().join(', '),
+                  label: L10n.tr(context, 'listing.add.preview_delivery'),
+                  value: _deliveryOptionsPreview(context).join(', '),
                 ),
                 const SizedBox(height: 12),
                 if (_descCtrl.text.trim().isNotEmpty)

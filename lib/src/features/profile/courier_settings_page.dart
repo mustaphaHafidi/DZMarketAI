@@ -2,6 +2,7 @@
 import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/services/i18n.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -18,6 +19,7 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
   final _senderCtrl = TextEditingController();
 
   String _selectedCourierName = ShippingService.couriers.first['name']!;
+  final Map<String, Map<String, String?>> _localCache = {};
   bool _saving = false;
   bool _validating = false;
   bool _loading = true;
@@ -39,7 +41,7 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
     super.dispose();
   }
 
-  Future<void> _loadSettings() async {
+  Future<void> _loadSettings({bool keepIfMissing = false}) async {
     setState(() => _loading = true);
     try {
       final row = await ShippingService().loadSellerDeliverySettingsByName(
@@ -50,10 +52,22 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
         _apiKeyCtrl.text = row['api_key']?.toString() ?? '';
         _apiSecretCtrl.text = row['api_secret']?.toString() ?? '';
         _senderCtrl.text = row['sender_id']?.toString() ?? '';
+        _localCache[_selectedCourierName] = {
+          'api_key': _apiKeyCtrl.text,
+          'api_secret': _apiSecretCtrl.text,
+          'sender_id': _senderCtrl.text,
+        };
       } else {
-        _apiKeyCtrl.clear();
-        _apiSecretCtrl.clear();
-        _senderCtrl.clear();
+        final cached = keepIfMissing ? _localCache[_selectedCourierName] : null;
+        if (cached != null) {
+          _apiKeyCtrl.text = cached['api_key'] ?? '';
+          _apiSecretCtrl.text = cached['api_secret'] ?? '';
+          _senderCtrl.text = cached['sender_id'] ?? '';
+        } else {
+          _apiKeyCtrl.clear();
+          _apiSecretCtrl.clear();
+          _senderCtrl.clear();
+        }
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -64,8 +78,8 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
     final user = supabase.auth.currentUser;
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Connectez-vous pour enregistrer vos transporteurs.'),
+        SnackBar(
+          content: Text(L10n.tr(context, 'courier_settings.login_required')),
         ),
       );
       return;
@@ -108,26 +122,35 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
       setState(() {
         _validating = false;
         _error = message == null || message.isEmpty
-            ? 'Token invalide'
-            : 'Token invalide: $message';
-        _status = null;
+            ? L10n.tr(context, 'courier_settings.error_invalid_token')
+            : L10n.tr(
+                context,
+                'courier_settings.error_invalid_token_detail',
+                params: {'error': message},
+              );
+        _status = L10n.tr(context, 'courier_settings.status_saved_unverified');
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             message == null || message.isEmpty
-                ? 'Token invalide. Verifiez et reessayez.'
-                : 'Token invalide ou non autorise: $message',
+                ? L10n.tr(context, 'courier_settings.snack_invalid_token')
+                : L10n.tr(
+                    context,
+                    'courier_settings.snack_invalid_token_detail',
+                    params: {'error': message},
+                  ),
           ),
         ),
       );
-      return;
     }
 
     setState(() {
       _validating = false;
       _saving = true;
-      _status = 'Token valide';
+      if (valid) {
+        _status = L10n.tr(context, 'courier_settings.status_valid');
+      }
     });
     await ShippingService().saveSellerDeliverySettingsByName(
       courierName: _selectedCourierName,
@@ -135,10 +158,17 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
       apiSecret: apiSecret,
       senderId: sender,
     );
+    _localCache[_selectedCourierName] = {
+      'api_key': apiKey,
+      'api_secret': apiSecret,
+      'sender_id': sender,
+    };
     if (!mounted) return;
     setState(() => _saving = false);
+    await _loadSettings(keepIfMissing: true);
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Compte transporteur enregistré.')),
+      SnackBar(content: Text(L10n.tr(context, 'courier_settings.snack_saved'))),
     );
   }
 
@@ -154,7 +184,7 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
       _senderCtrl.clear();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Compte transporteur supprimé.')),
+        SnackBar(content: Text(L10n.tr(context, 'courier_settings.snack_deleted'))),
       );
     } finally {
       if (mounted) setState(() => _deleting = false);
@@ -165,25 +195,34 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
   Widget build(BuildContext context) {
     final isEcotrack = _selectedCourierName.toLowerCase().contains('ecotrack');
     return Scaffold(
-      appBar: AppBar(title: const Text('Comptes transporteurs')),
+      appBar: AppBar(title: Text(L10n.tr(context, 'courier_settings.title'))),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(16),
+          : SingleChildScrollView(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 16,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   DropdownButtonFormField<String>(
                     value: _selectedCourierName,
-                    decoration: const InputDecoration(
-                      labelText: 'Transporteur',
-                      prefixIcon: Icon(Icons.local_shipping_outlined),
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: L10n.tr(context, 'courier_settings.courier_label'),
+                      prefixIcon: const Icon(Icons.local_shipping_outlined),
                     ),
                     items: ShippingService.couriers
                         .map(
                           (c) => DropdownMenuItem(
                             value: c['name'],
-                            child: Text(c['name'] ?? ''),
+                            child: Text(
+                              c['name'] ?? '',
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         )
                         .toList(),
@@ -197,7 +236,9 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
                   TextField(
                     controller: _apiKeyCtrl,
                     decoration: InputDecoration(
-                      labelText: isEcotrack ? 'Token Ecotrack' : 'API key / ID',
+                      labelText: isEcotrack
+                          ? L10n.tr(context, 'courier_settings.token_label')
+                          : L10n.tr(context, 'courier_settings.api_key_label'),
                       prefixIcon: const Icon(Icons.vpn_key_outlined),
                     ),
                   ),
@@ -205,24 +246,24 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _apiSecretCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Token / secret',
-                        prefixIcon: Icon(Icons.lock_outline),
+                      decoration: InputDecoration(
+                        labelText: L10n.tr(context, 'courier_settings.secret_label'),
+                        prefixIcon: const Icon(Icons.lock_outline),
                       ),
                     ),
                   ],
                   const SizedBox(height: 12),
                   TextField(
                     controller: _senderCtrl,
-                    decoration: const InputDecoration(
-                      labelText: "Nom expéditeur",
-                      prefixIcon: Icon(Icons.person_outline),
+                    decoration: InputDecoration(
+                      labelText: L10n.tr(context, 'courier_settings.sender_label'),
+                      prefixIcon: const Icon(Icons.person_outline),
                     ),
                   ),
                   if (kIsWeb) ...[
                     const SizedBox(height: 8),
                     Text(
-                      'Validation API cote serveur.',
+                      L10n.tr(context, 'courier_settings.web_notice'),
                       style: Theme.of(context).textTheme.labelSmall,
                     ),
                   ],
@@ -255,10 +296,10 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
                         : const Icon(Icons.save_outlined),
                     label: Text(
                       _saving
-                          ? 'Enregistrement...'
+                          ? L10n.tr(context, 'courier_settings.saving')
                           : _validating
-                              ? 'Validation...'
-                              : 'Enregistrer',
+                              ? L10n.tr(context, 'courier_settings.validating')
+                              : L10n.tr(context, 'courier_settings.save'),
                     ),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -277,7 +318,11 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.delete_outline),
-                    label: Text(_deleting ? 'Suppression...' : 'Supprimer ce transporteur'),
+                    label: Text(
+                      _deleting
+                          ? L10n.tr(context, 'courier_settings.deleting')
+                          : L10n.tr(context, 'courier_settings.delete'),
+                    ),
                     style: TextButton.styleFrom(
                       foregroundColor: Theme.of(context).colorScheme.error,
                     ),

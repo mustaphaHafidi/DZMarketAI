@@ -41,7 +41,11 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
       );
     }
 
-    final currency = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA');
+    final localeCode = Localizations.localeOf(context).languageCode;
+    final currency = NumberFormat.currency(
+      locale: localeCode == 'ar' ? 'ar_DZ' : 'fr_DZ',
+      symbol: 'DA',
+    );
 
     return Scaffold(
       appBar: AppBar(title: Text(L10n.tr(context, 'seller_orders.title'))),
@@ -183,7 +187,7 @@ class _SellerOrderCard extends StatelessWidget {
                         L10n.tr(
                           context,
                           'seller_orders.product_label',
-                          params: {'id': order.productId ?? ''},
+                          params: {'id': order.productId.toString()},
                         ),
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),

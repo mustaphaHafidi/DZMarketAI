@@ -1,6 +1,8 @@
 import 'package:dzmarket/src/config/supabase_options.dart';
 import 'package:dzmarket/src/models/conversation.dart';
 import 'package:dzmarket/src/services/chat_room_service.dart';
+import 'package:dzmarket/src/services/i18n.dart';
+import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:dzmarket/src/services/rate_limiter.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 
@@ -51,17 +53,25 @@ class ConversationMetaService {
     if (!roomId.startsWith('product:')) return null;
     final parts = roomId.split(':');
     if (parts.length < 4) return null;
+    final locale = LocaleService.instance.locale.value?.languageCode ?? 'fr';
+    final productFallback = L10n.trLocale(
+      locale,
+      'orders.product_fallback',
+      params: {'id': parts[1]},
+    );
+    final sellerFallback = L10n.trLocale(locale, 'seller.fallback');
+    final buyerFallback = L10n.trLocale(locale, 'buyer.fallback');
     return ConversationMeta(
       roomId: roomId,
       productId: parts[1],
       buyerId: parts[2],
       sellerId: parts[3],
-      productTitle: 'Produit',
+      productTitle: productFallback,
       productImage: null,
       price: null,
       status: null,
-      sellerName: 'Vendeur',
-      buyerName: 'Acheteur',
+      sellerName: sellerFallback,
+      buyerName: buyerFallback,
       sellerAvatar: null,
       buyerAvatar: null,
     );
@@ -107,6 +117,9 @@ class ConversationMetaService {
     for (final row in profiles) {
       profileMap[row['id'].toString()] = row;
     }
+    final locale = LocaleService.instance.locale.value?.languageCode ?? 'fr';
+    final sellerFallback = L10n.trLocale(locale, 'seller.fallback');
+    final buyerFallback = L10n.trLocale(locale, 'buyer.fallback');
 
     for (final base in parsed) {
       final product = productMap[base.productId];
@@ -115,17 +128,22 @@ class ConversationMetaService {
       final sellerName =
           (sellerProfile?['full_name'] as String?)?.trim().isNotEmpty == true
               ? sellerProfile!['full_name'] as String
-              : (sellerProfile?['email'] as String? ?? 'Vendeur');
+              : (sellerProfile?['email'] as String? ?? sellerFallback);
       final buyerName =
           (buyerProfile?['full_name'] as String?)?.trim().isNotEmpty == true
               ? buyerProfile!['full_name'] as String
-              : (buyerProfile?['email'] as String? ?? 'Acheteur');
+              : (buyerProfile?['email'] as String? ?? buyerFallback);
       final meta = ConversationMeta(
         roomId: base.roomId,
         productId: base.productId,
         buyerId: base.buyerId,
         sellerId: base.sellerId,
-        productTitle: product?['title']?.toString() ?? 'Produit',
+        productTitle: product?['title']?.toString() ??
+            L10n.trLocale(
+              locale,
+              'orders.product_fallback',
+              params: {'id': base.productId},
+            ),
         productImage: product?['image_url']?.toString(),
         price: (product?['price'] as num?)?.toDouble(),
         sellerName: sellerName,
@@ -180,6 +198,9 @@ class ConversationMetaService {
     for (final row in profiles) {
       profileMap[row['id'].toString()] = row;
     }
+    final locale = LocaleService.instance.locale.value?.languageCode ?? 'fr';
+    final sellerFallback = L10n.trLocale(locale, 'seller.fallback');
+    final buyerFallback = L10n.trLocale(locale, 'buyer.fallback');
 
     for (final room in filtered) {
       final product = productMap[room.productId];
@@ -188,17 +209,22 @@ class ConversationMetaService {
       final sellerName =
           (sellerProfile?['full_name'] as String?)?.trim().isNotEmpty == true
               ? sellerProfile!['full_name'] as String
-              : (sellerProfile?['email'] as String? ?? 'Vendeur');
+              : (sellerProfile?['email'] as String? ?? sellerFallback);
       final buyerName =
           (buyerProfile?['full_name'] as String?)?.trim().isNotEmpty == true
               ? buyerProfile!['full_name'] as String
-              : (buyerProfile?['email'] as String? ?? 'Acheteur');
+              : (buyerProfile?['email'] as String? ?? buyerFallback);
       final meta = ConversationMeta(
         roomId: room.roomId,
         productId: room.productId!,
         buyerId: room.buyerId,
         sellerId: room.sellerId,
-        productTitle: product?['title']?.toString() ?? 'Produit',
+        productTitle: product?['title']?.toString() ??
+            L10n.trLocale(
+              locale,
+              'orders.product_fallback',
+              params: {'id': room.productId ?? ''},
+            ),
         productImage: product?['image_url']?.toString(),
         price: (product?['price'] as num?)?.toDouble(),
         sellerName: sellerName,
@@ -253,6 +279,9 @@ class ConversationMetaService {
     for (final row in profiles) {
       profileMap[row['id'].toString()] = row;
     }
+    final locale = LocaleService.instance.locale.value?.languageCode ?? 'fr';
+    final sellerFallback = L10n.trLocale(locale, 'seller.fallback');
+    final buyerFallback = L10n.trLocale(locale, 'buyer.fallback');
 
     for (final conv in filtered) {
       final product = productMap[conv.productId];
@@ -264,17 +293,22 @@ class ConversationMetaService {
       final sellerName =
           (sellerProfile?['full_name'] as String?)?.trim().isNotEmpty == true
               ? sellerProfile!['full_name'] as String
-              : (sellerProfile?['email'] as String? ?? 'Vendeur');
+              : (sellerProfile?['email'] as String? ?? sellerFallback);
       final buyerName =
           (buyerProfile?['full_name'] as String?)?.trim().isNotEmpty == true
               ? buyerProfile!['full_name'] as String
-              : (buyerProfile?['email'] as String? ?? 'Acheteur');
+              : (buyerProfile?['email'] as String? ?? buyerFallback);
       final meta = ConversationMeta(
         roomId: conv.id,
         productId: conv.productId!,
         buyerId: conv.buyerId ?? '',
         sellerId: conv.sellerId ?? '',
-        productTitle: product?['title']?.toString() ?? 'Produit',
+        productTitle: product?['title']?.toString() ??
+            L10n.trLocale(
+              locale,
+              'orders.product_fallback',
+              params: {'id': conv.productId ?? ''},
+            ),
         productImage: product?['image_url']?.toString(),
         price: (product?['price'] as num?)?.toDouble(),
         sellerName: sellerName,
