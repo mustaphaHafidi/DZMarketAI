@@ -111,13 +111,19 @@ serve(async (req) => {
     return jsonResponse({ ok: false, message: "Server misconfigured" }, 500);
   }
 
-  const supabase = createClient(url, serviceKey, {
+  // Two clients:
+  // - supabaseUser: carries the caller JWT to respect RLS on orders/shipments/messages.
+  // - supabaseAdmin: pure service-role, used only for private seller credentials (no Authorization override).
+  const supabaseUser = createClient(url, serviceKey, {
     auth: { persistSession: false },
     global: { headers: { Authorization: auth } },
   });
+  const supabaseAdmin = createClient(url, serviceKey, {
+    auth: { persistSession: false },
+  });
 
   const isServiceRole = auth === `Bearer ${serviceKey}`;
-  const { data: userData, error: userError } = await supabase.auth.getUser();
+  const { data: userData, error: userError } = await supabaseUser.auth.getUser();
   if (!isServiceRole && (userError || !userData?.user)) {
     return jsonResponse({ ok: false, message: "Unauthorized" }, 401);
   }
@@ -126,19 +132,19 @@ serve(async (req) => {
 
   try {
     const userOk = await consumeRateLimit(
-      supabase,
+      supabaseUser,
       `ship:${userId || "unknown"}`,
       6,
       60,
     );
     const ipOk = await consumeRateLimit(
-      supabase,
+      supabaseUser,
       `ship_ip:${ip || "unknown"}`,
       30,
       60,
     );
     if (!userOk || !ipOk) {
-      await supabase.rpc("log_abuse", {
+      await supabaseUser.rpc("log_abuse", {
         p_user_id: userId,
         p_ip: ip,
         p_type: "rate_limit",
@@ -153,7 +159,7 @@ serve(async (req) => {
     return jsonResponse({ ok: false, message: "Rate limit error" }, 500);
   }
 
-  const { data: order, error: orderError } = await supabase
+  const { data: order, error: orderError } = await supabaseUser
     .from("orders")
     .select(
       "id, seller_id, buyer_id, courier_id, courier_name, delivery_method, shipping_option, shipping_cost, tracking_number, label_url, status",
@@ -171,7 +177,7 @@ serve(async (req) => {
     return jsonResponse({ ok: false, message: "Forbidden" }, 403);
   }
 
-  const { data: existingShipment } = await supabase
+  const { data: existingShipment } = await supabaseUser
     .from("shipments")
     .select("tracking_number, label_url")
     .eq("order_id", orderId)
@@ -201,7 +207,7 @@ serve(async (req) => {
     numberValue(payload.shipping_cost, numberValue(order.shipping_cost, 0));
 
   if (payload.async === true && !isServiceRole) {
-    const { data: jobId } = await supabase.rpc("enqueue_job", {
+    const { data: jobId } = await supabaseUser.rpc("enqueue_job", {
       p_type: "create_shipment",
       p_payload: payload,
       p_run_at: null,
@@ -209,12 +215,12 @@ serve(async (req) => {
     return jsonResponse({ ok: true, queued: true, job_id: jobId });
   }
 
-  const { data: settings, error: settingsError } = await supabase.rpc(
-    "get_seller_delivery_settings_secure",
-    { p_owner: effectiveUserId, p_courier_id: courierId },
-  );
-  const settingsRow =
-    Array.isArray(settings) && settings.length > 0 ? settings[0] : settings;
+  const { data: settingsRow, error: settingsError } = await supabaseAdmin
+    .from("seller_delivery_settings")
+    .select("api_key, api_secret, sender_id, extra")
+    .eq("owner_id", effectiveUserId)
+    .eq("courier_id", courierId)
+    .maybeSingle();
   if (settingsError || !settingsRow?.api_key) {
     return jsonResponse({ ok: false, message: "Missing courier settings" }, 400);
   }
@@ -231,8 +237,13 @@ serve(async (req) => {
     if (!selection) {
       return jsonResponse({ ok: false, message: "Missing shipment selection" }, 400);
     }
-    const senderWilaya = textValue(pick(selection, "senderWilaya"));
-    const receiverWilaya = textValue(pick(selection, "receiverWilaya"));
+    const senderWilaya =
+      textValue(pick(selection, "senderWilaya")) ||
+      textValue(pick(selection, "from_wilaya_name")) ||
+      "Alger";
+    const receiverWilaya =
+      textValue(pick(selection, "receiverWilaya")) ||
+      textValue(pick(selection, "to_wilaya_name"));
     const receiverCommune =
       textValue(pick(selection, "receiverCommune")) ||
       textValue(pick(selection, "stopdeskCommune"));
@@ -249,6 +260,15 @@ serve(async (req) => {
     const width = numberValue(pick(selection, "width"), 0);
     const length = numberValue(pick(selection, "length"), 0);
     const declaredValue = numberValue(pick(selection, "declaredValue"), price);
+    const freeShipping =
+      pick(selection, "freeshipping") === true ||
+      textValue(pick(selection, "freeshipping")).toLowerCase() === "true";
+    const isStopdesk =
+      pick(selection, "deliveryType") === "stopdesk" ||
+      pick(selection, "is_stopdesk") === true;
+    const hasExchange = pick(selection, "hasExchange") === true;
+    const orderRef =
+      textValue(pick(selection, "order_ref")) || `${orderId}`;
 
     if (!senderWilaya || !receiverWilaya || !receiverCommune || !phone || !address) {
       return jsonResponse({ ok: false, message: "Missing receiver data" }, 400);
@@ -256,7 +276,7 @@ serve(async (req) => {
 
     const payloadYalidine = [
       {
-        order_id: orderId,
+        order_id: orderRef,
         from_wilaya_name: senderWilaya,
         firstname: firstName,
         familyname: familyName,
@@ -272,9 +292,10 @@ serve(async (req) => {
         width,
         length,
         weight: Math.round(weight),
-        freeshipping: false,
-        is_stopdesk: pick(selection, "deliveryType") === "stopdesk",
-        has_exchange: pick(selection, "hasExchange") === true,
+        freeshipping: freeShipping,
+        is_stopdesk: isStopdesk,
+        has_exchange: hasExchange,
+        stopdesk_id: isStopdesk ? numberValue(pick(selection, "stopdesk_id"), 0) || null : null,
       },
     ];
     const resp = await fetch("https://api.yalidine.app/v1/parcels/", {
@@ -292,7 +313,11 @@ serve(async (req) => {
     }
     const decoded = await resp.json();
     const data = decoded?.data ?? decoded;
-    const first = Array.isArray(data) ? data[0] : data;
+    const first = Array.isArray(data)
+      ? data[0]
+      : data && typeof data === "object"
+        ? data[Object.keys(data)[0]]
+        : undefined;
     if (first?.success === false) {
       return jsonResponse({ ok: false, message: textValue(first?.message) }, 400);
     }
@@ -301,16 +326,20 @@ serve(async (req) => {
     );
     const labelValue =
       first?.label ?? first?.label_url ?? first?.label_pdf ?? first?.labels;
-    if (!trackingNumber || !labelValue) {
-      return jsonResponse({ ok: false, message: "Label missing" }, 500);
+    if (!trackingNumber) {
+      return jsonResponse({ ok: false, message: "Tracking missing" }, 500);
     }
-    const bytes = await loadLabelBytes(textValue(labelValue));
-    labelUrl = await uploadLabel(
-      supabase,
-      userId,
-      `yalidine-${orderId}.pdf`,
-      bytes,
-    );
+    if (labelValue) {
+      const bytes = await loadLabelBytes(textValue(labelValue));
+      labelUrl = await uploadLabel(
+        supabaseAdmin,
+        userId,
+        `yalidine-${orderId}.pdf`,
+        bytes,
+      );
+    } else {
+      labelUrl = "";
+    }
     summary = {
       delivery_fee: first?.delivery_fee,
       taxe_percentage: first?.taxe_percentage,
@@ -393,15 +422,16 @@ serve(async (req) => {
         }
       }
     }
-    if (!bytes) {
-      return jsonResponse({ ok: false, message: "Label missing" }, 500);
+    if (bytes) {
+      labelUrl = await uploadLabel(
+        supabaseAdmin,
+        userId,
+        `ecotrack-${trackingNumber}.pdf`,
+        bytes,
+      );
+    } else {
+      labelUrl = "";
     }
-    labelUrl = await uploadLabel(
-      supabase,
-      userId,
-      `ecotrack-${trackingNumber}.pdf`,
-      bytes,
-    );
   }
 
   const shipmentPayload: Record<string, unknown> = {
@@ -424,7 +454,7 @@ serve(async (req) => {
       : [],
   };
 
-  await supabase.from("shipments").upsert(shipmentPayload);
+  await supabaseUser.from("shipments").upsert(shipmentPayload);
   const orderUpdate: Record<string, unknown> = {
     courier_id: courierId || order.courier_id,
     courier_name: courierName || order.courier_name,
@@ -436,10 +466,10 @@ serve(async (req) => {
   if (labelUrl) {
     orderUpdate.status = "shipped";
   }
-  await supabase.from("orders").update(orderUpdate).eq("id", orderId);
+  await supabaseUser.from("orders").update(orderUpdate).eq("id", orderId);
 
   if (labelUrl) {
-    await supabase.from("messages").insert({
+    await supabaseUser.from("messages").insert({
       room_id: `order:${orderId}`,
       content: "Bordereau disponible",
       type: "label",
@@ -452,7 +482,7 @@ serve(async (req) => {
     });
   }
 
-  await supabase.rpc("log_audit", {
+  await supabaseUser.rpc("log_audit", {
     p_actor_id: effectiveUserId,
     p_action: "create_shipment",
     p_entity: "orders",

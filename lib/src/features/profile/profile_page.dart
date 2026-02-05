@@ -2,6 +2,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cached_network_image_platform_interface/cached_network_image_platform_interface.dart';
 import 'package:dzmarket/src/features/orders/shipments_dashboard_page.dart';
+import 'package:dzmarket/src/features/orders/seller_orders_page.dart';
 import 'package:dzmarket/src/features/profile/courier_settings_page.dart';
 import 'package:dzmarket/src/features/profile/my_listings_page.dart';
 import 'package:dzmarket/src/features/profile/seller_dashboard_page.dart';
@@ -466,6 +467,16 @@ class _ProfilePageState extends State<ProfilePage> {
                         subtitle: const Text('Aper?u de ce que voient les autres'),
                         onTap: () {},
                       ),
+                      if (isSeller) const Divider(height: 1),
+                      if (isSeller)
+                        ListTile(
+                          leading: const Icon(Icons.sell_outlined),
+                          title: const Text('Mes ventes'),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const SellerOrdersPage()),
+                          ),
+                        ),
                       if (isSeller) const Divider(height: 1),
                       if (isSeller)
                         ListTile(

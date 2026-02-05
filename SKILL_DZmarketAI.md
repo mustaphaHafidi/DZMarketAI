@@ -43,7 +43,8 @@ description: Reference synthetique et prescriptive pour DZMarketAI (Flutter + Su
    - shipments = source of truth tracking/label (FK order_id); orders.label_url conserve pour compat.  
    - Edge Function create_shipment (service_role) centralise appels transporteur.  
    - Ecotrack endpoints : POST /api/v1/create/order, POST /api/v1/create/orders, GET /api/v1/get/order/label?tracking=... ; valider wilaya/commune, idempotence par reference, retries job-runner.  
-   - Erreurs typiques : wilaya/commune invalides, credentials manquants.
+   - Erreurs typiques : wilaya/commune invalides, credentials manquants.  
+   - Gap UI actuel : l'acheteur crée la commande, mais seul le vendeur peut générer le bordereau (RLS). L'écran « Tableau de livraisons » affiche un label déjà généré mais ne déclenche pas la création. Correctif prévu : vue « Mes ventes » (seller) listant les orders avec bouton « Générer bordereau » ouvrant `FulfillmentPage(orderId)` qui appelle `create_shipment`.
 
 8. Bordereaux / Labels  
    - Bucket labels non public : acces seller/service_role, signed URL si besoin.  
@@ -80,16 +81,17 @@ description: Reference synthetique et prescriptive pour DZMarketAI (Flutter + Su
    - Secrets : toujours via env/CI secrets (service_role, enc_key).
 
 14. TODO priorisee (<=20)  
-   Must:  
-   - Finaliser Contacts page (liste personnes deja contacte/favoris, tri activite).  
-   - Implementer report_message/report_user (RPC + UI).  
-   - Ajouter attachments images chat (storage/messages + previews).  
-   - Durcir anti-spam (liens/nums) + blocage UI/notifications.  
-   Should:  
-   - Activer FTS produits (title/description) + filtres wilaya/prix.  
-   - Ajouter pagination stable watchConversations (cursor RPC + merge stream).  
-   - Stabiliser Firebase config par flavor (remplacer placeholders).  
-   - Edge retry/backoff Ecotrack + journal echecs.  
+  Must:  
+  - Finaliser Contacts page (liste personnes deja contacte/favoris, tri activite).  
+  - Implementer report_message/report_user (RPC + UI).  
+  - Ajouter attachments images chat (storage/messages + previews).  
+  - Durcir anti-spam (liens/nums) + blocage UI/notifications.  
+  - Exposer côté vendeur le bouton « Générer bordereau » : liste « Mes ventes » + action vers `FulfillmentPage(orderId)` qui appelle `create_shipment` (respect RLS vendeur).  
+  Should:  
+  - Activer FTS produits (title/description) + filtres wilaya/prix.  
+  - Ajouter pagination stable watchConversations (cursor RPC + merge stream).  
+  - Stabiliser Firebase config par flavor (remplacer placeholders).  
+  - Edge retry/backoff Ecotrack + journal echecs.  
    - Monitoring job_queue (dashboard simple).  
    Could:  
    - Mode offline leger (cache dernieres conversations/messages).  

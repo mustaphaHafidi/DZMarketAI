@@ -1,3 +1,4 @@
+import 'package:dzmarket/src/features/orders/fulfillment_page.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:flutter/material.dart';
@@ -67,6 +68,18 @@ class ShipmentsDashboardPage extends StatelessWidget {
                           icon: const Icon(Icons.sync_outlined, size: 18),
                           label: const Text('Changer statut'),
                         ),
+                        if (labelUrl == null)
+                          TextButton.icon(
+                            onPressed: () async {
+                              await Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => FulfillmentPage(orderId: orderId),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.local_shipping_outlined, size: 18),
+                            label: const Text('Générer bordereau'),
+                          ),
                         if (labelUrl != null)
                           TextButton.icon(
                             onPressed: () => _openLabel(labelUrl),

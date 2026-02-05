@@ -50,12 +50,14 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
       _error = null;
     });
     try {
+      final selection = await _shipping.buildSelectionFromOrder(widget.orderId);
       await _shipping.createLabelForOrder(
         orderId: widget.orderId,
         courierId: _selectedCourierId!,
         courierName: _selectedCourierName!,
         option: _option,
         deliveryMode: _deliveryMode,
+        selection: selection,
       );
       await _orderService.updateStatus(
         orderId: widget.orderId,

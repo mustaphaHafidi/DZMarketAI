@@ -205,6 +205,7 @@ class ShippingService {
     String? option,
     double? shippingCost,
     String? deliveryMode,
+    Map<String, dynamic>? selection,
   }) async {
     final safeOrderId = InputSanitizer.sanitizeId(orderId, maxLength: 64);
     final safeCourierId = InputSanitizer.sanitizeText(courierId, maxLength: 64);
@@ -220,6 +221,7 @@ class ShippingService {
       deliveryMode: safeDelivery,
       shippingOption: safeOption,
       shippingCost: shippingCost,
+      selection: selection,
     );
   }
 
@@ -264,6 +266,131 @@ class ShippingService {
       return data;
     }
     return {'ok': true};
+  }
+
+  /// Génère une selection Yalidine/Ecotrack à partir de la commande + profil vendeur/acheteur + adresse.
+  Future<Map<String, dynamic>> buildSelectionFromOrder(String orderId) async {
+    final safeOrderId = InputSanitizer.sanitizeId(orderId, maxLength: 64);
+    // Charge order + buyer + seller + address + product (RLS: vendeur ou service)
+    final orderRes = await supabase
+        .from(SupabaseTables.orders)
+        .select(
+            'product_id,buyer_id,seller_id,shipping_address_id,agreed_price,sale_price')
+        .eq('id', safeOrderId)
+        .maybeSingle();
+    if (orderRes == null) {
+      throw StateError('Commande introuvable');
+    }
+    final Map<String, dynamic>? orderRow = orderRes;
+    if (orderRow == null) {
+      throw StateError('Commande introuvable');
+    }
+    final buyerId = orderRow['buyer_id']?.toString() ?? '';
+    final sellerId = orderRow['seller_id']?.toString() ?? '';
+    final productId = orderRow['product_id']?.toString();
+    final addressId = orderRow['shipping_address_id']?.toString();
+    final dynamic priceValue =
+        orderRow['agreed_price'] ?? orderRow['sale_price'];
+    double price = priceValue is num ? priceValue.toDouble() : 0.0;
+
+    // Adresse acheteur
+    String toWilaya = '';
+    String toCommune = '';
+    String address = '';
+    String phone = '';
+    if (addressId != null) {
+      final addrRes = await supabase
+          .from('addresses')
+          .select('line1,city,state,postal_code,phone')
+          .eq('id', addressId)
+          .maybeSingle();
+      final Map<String, dynamic>? addr = addrRes;
+      if (addr != null) {
+        address = InputSanitizer.sanitizeOptionalText(addr['line1'], maxLength: 140) ?? '';
+        toWilaya =
+            InputSanitizer.sanitizeOptionalText(addr['state'], maxLength: 80) ?? '';
+        toCommune =
+            InputSanitizer.sanitizeOptionalText(addr['city'], maxLength: 80) ?? '';
+        phone = InputSanitizer.sanitizePhone(addr['phone'] ?? '') ?? '';
+      }
+    }
+
+    // Profil acheteur fallback phone
+    if (buyerId.isNotEmpty && phone.isEmpty) {
+      final buyerRes = await supabase
+          .from('profiles')
+          .select('phone')
+          .eq('id', buyerId)
+          .maybeSingle();
+      final Map<String, dynamic>? buyer = buyerRes;
+      if (buyer != null) {
+        phone = InputSanitizer.sanitizePhone(buyer['phone'] ?? '') ?? '';
+      }
+    }
+
+    // Wilaya expéditeur = vendeur
+    String fromWilaya = 'Alger';
+    if (sellerId.isNotEmpty) {
+      final sellerRes = await supabase
+          .from('profiles')
+          .select('wilaya')
+          .eq('id', sellerId)
+          .maybeSingle();
+      final Map<String, dynamic>? seller = sellerRes;
+      if (seller != null) {
+        fromWilaya =
+            InputSanitizer.sanitizeOptionalText(seller['wilaya'], maxLength: 80) ?? 'Alger';
+      }
+    }
+
+    // Produit
+    String productTitle = 'Produit $productId';
+    if (productId != null) {
+      final productRes = await supabase
+          .from('products')
+          .select('title,price')
+          .eq('id', productId)
+          .maybeSingle();
+      final Map<String, dynamic>? product = productRes;
+      if (product != null) {
+        productTitle =
+            InputSanitizer.sanitizeOptionalText(product['title'], maxLength: 120) ??
+                productTitle;
+        if (price <= 0 && product['price'] is num) {
+          price = (product['price'] as num).toDouble();
+        }
+      }
+    }
+
+    final safeAddress = address.isNotEmpty ? address : 'Adresse à confirmer';
+    final safeWilaya = toWilaya.isNotEmpty ? toWilaya : 'M\'Sila';
+    final safeCommune = toCommune.isNotEmpty ? toCommune : 'M\'Sila';
+    return {
+      'order_id': safeOrderId,
+      'from_wilaya_name': fromWilaya,
+      'senderWilaya': fromWilaya,
+      'firstname': 'Client',
+      'familyname': 'DZMarket',
+      'contact_phone': phone,
+      'phone': phone,
+      'phone_main': phone,
+      'address': safeAddress,
+      'to_commune_name': safeCommune,
+      'to_wilaya_name': safeWilaya,
+      'receiverCommune': safeCommune,
+      'receiverWilaya': safeWilaya,
+      'productList': productTitle,
+      'price': price,
+      'do_insurance': false,
+      'declared_value': price,
+      'length': 30,
+      'width': 30,
+      'height': 30,
+      'weight': 2,
+      'freeshipping': false,
+      'is_stopdesk': false,
+      'has_exchange': false,
+    };
   }
 
   double estimateCost({
