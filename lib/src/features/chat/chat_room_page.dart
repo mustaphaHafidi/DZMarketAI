@@ -104,10 +104,19 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
 
   Widget _buildSystemMessage(ChatMessage msg) {
     final payload = msg.payload ?? const {};
+    final i18nKey = payload['i18n_key']?.toString();
     final status = payload['status']?.toString();
     final tracking = payload['tracking_number']?.toString();
     final labelUrl = payload['label_url']?.toString();
+    final statusKey = payload['status_i18n']?.toString() ??
+        (status == null ? null : 'order.status.$status');
     final hasLabel = labelUrl != null && labelUrl.isNotEmpty;
+    final messageText = i18nKey != null && i18nKey.isNotEmpty
+        ? L10n.tr(context, i18nKey, fallback: msg.text)
+        : msg.text;
+    final statusText = statusKey != null
+        ? L10n.tr(context, statusKey, fallback: status ?? '')
+        : status;
     return Center(
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
@@ -122,21 +131,25 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              msg.text,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            if (status != null && status.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text('Statut: $status'),
+              Text(
+                messageText,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium,
               ),
-            if (tracking != null && tracking.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text('Tracking: $tracking'),
-              ),
+              if (statusText != null && statusText.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    '${L10n.tr(context, 'chat.room.system_status')}: $statusText',
+                  ),
+                ),
+              if (tracking != null && tracking.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    '${L10n.tr(context, 'chat.room.system_tracking')}: $tracking',
+                  ),
+                ),
             if (hasLabel)
               TextButton.icon(
                 onPressed: () async {
@@ -146,13 +159,13 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                   }
                 },
                 icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-                label: const Text('Ouvrir bordereau'),
-              )
-            else
-              const Padding(
-                padding: EdgeInsets.only(top: 4),
-                child: Text('Bordereau: en preparation'),
-              ),
+                  label: Text(L10n.tr(context, 'chat.room.label_open')),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(L10n.tr(context, 'chat.room.label_pending')),
+                ),
           ],
         ),
       ),
@@ -164,10 +177,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     final formatter = DateFormat.Hm();
     final currentUser = supabase.auth.currentUser?.id;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(L10n.t(context, 'Conversation', 'Conversation')),
-      ),
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(L10n.tr(context, 'chat.room.title')),
+        ),
       body: Column(
         children: [
           FutureBuilder<_ProductHeaderData?>(
@@ -178,10 +191,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
               }
               final data = snapshot.data;
               if (data == null) return const SizedBox.shrink();
-              final status =
-                  (data.status ?? 'active').toLowerCase() == 'sold'
-                      ? L10n.t(context, 'Vendu', 'Vendu')
-                      : L10n.t(context, 'Disponible', 'Disponible');
+                final status =
+                    (data.status ?? 'active').toLowerCase() == 'sold'
+                        ? L10n.tr(context, 'chat.room.status_sold')
+                        : L10n.tr(context, 'chat.room.status_available');
               final statusColor =
                   (data.status ?? '').toLowerCase() == 'sold'
                       ? Colors.red.shade300
@@ -294,13 +307,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                 }
                 if (messages.isEmpty) {
                   return Center(
-                    child: Text(
-                      L10n.t(
-                        context,
-                        'Pas encore de messages',
-                        'Pas encore de messages',
-                      ),
-                    ),
+                    child: Text(L10n.tr(context, 'chat.room.empty')),
                   );
                 }
                 return RefreshIndicator(
@@ -371,12 +378,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                       controller: _controller,
                       minLines: 1,
                       maxLines: 4,
-                      decoration: InputDecoration(
-                        hintText: L10n.t(
-                          context,
-                          'Votre message...',
-                          'Votre message...',
-                        ),
+                        decoration: InputDecoration(
+                          hintText: L10n.tr(context, 'chat.room.message_hint'),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -412,8 +415,17 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
           .limit(1);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Erreur: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              L10n.tr(
+                context,
+                'common.error_with',
+                params: {'error': e.toString()},
+              ),
+            ),
+          ),
+        );
       }
     }
   }

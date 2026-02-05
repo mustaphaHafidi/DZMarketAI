@@ -1,5 +1,6 @@
 ﻿import 'package:dzmarket/src/features/chat/chat_room_page.dart';
 import 'package:dzmarket/src/services/chat_repository.dart';
+import 'package:dzmarket/src/services/i18n.dart';
 import 'package:flutter/material.dart';
 
 class OrderChatGatePage extends StatefulWidget {
@@ -41,19 +42,27 @@ class _OrderChatGatePageState extends State<OrderChatGatePage> {
         }
         if (snapshot.hasError) {
           return Scaffold(
-            appBar: AppBar(title: const Text('Conversation')),
+            appBar: AppBar(title: Text(L10n.tr(context, 'chat.room.title'))),
             body: Center(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text('Erreur: ${snapshot.error}'),
+                child: Text(
+                  L10n.tr(
+                    context,
+                    'common.error_with',
+                    params: {'error': snapshot.error.toString()},
+                  ),
+                ),
               ),
             ),
           );
         }
         final data = snapshot.data;
         if (data == null) {
-          return const Scaffold(
-            body: Center(child: Text('Conversation introuvable.')),
+          return Scaffold(
+            body: Center(
+              child: Text(L10n.tr(context, 'chat.room.not_found')),
+            ),
           );
         }
         return ChatRoomPage(

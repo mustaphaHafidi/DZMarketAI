@@ -486,11 +486,14 @@ serve(async (req) => {
   }
   await supabaseUser.from("orders").update(orderUpdate).eq("id", orderId);
 
+  const statusValue = labelUrl ? "shipped" : "validated";
+  const i18nKey = labelUrl
+    ? "order.system.shipped"
+    : "order.system.validated";
   const eventPayload: Record<string, unknown> = {
-    text: labelUrl
-      ? "Commande validee, bordereau disponible."
-      : "Commande validee, bordereau en preparation.",
-    status: labelUrl ? "shipped" : "validated",
+    i18n_key: i18nKey,
+    status: statusValue,
+    status_i18n: `order.status.${statusValue}`,
     tracking_number: trackingNumber || null,
     label_url: labelUrl || null,
     courier_name: courierName || courierId,

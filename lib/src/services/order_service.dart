@@ -5,6 +5,8 @@ import 'package:dzmarket/src/services/rate_limiter.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:dzmarket/src/services/chat_repository.dart';
+import 'package:dzmarket/src/services/i18n.dart';
+import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class OrderService {
@@ -147,9 +149,14 @@ class OrderService {
     }
     if (response == null) return null;
     final orderId = response.toString();
+    final localeCode =
+        LocaleService.instance.locale.value?.languageCode ?? 'fr';
+    final messageText = L10n.trLocale(localeCode, 'order.system.created');
     final payload = {
-      'text': 'Commande enregistree, en attente de validation vendeur.',
+      'text': messageText,
+      'i18n_key': 'order.system.created',
       'status': 'pending',
+      'status_i18n': 'order.status.pending',
     };
     try {
       await supabase.rpc(
@@ -167,7 +174,7 @@ class OrderService {
     try {
       await ChatRepository().postOrderSystemMessage(
         orderId: orderId,
-        text: payload['text']!,
+        text: messageText,
         payload: payload,
         dedupeKey: 'order:$orderId:created',
       );

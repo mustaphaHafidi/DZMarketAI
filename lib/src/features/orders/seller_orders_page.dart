@@ -3,6 +3,7 @@ import 'package:dzmarket/src/models/order.dart';
 import 'package:dzmarket/src/services/order_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/widgets/refresh_controller.dart';
+import 'package:dzmarket/src/services/i18n.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -35,15 +36,15 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
   Widget build(BuildContext context) {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) {
-      return const Scaffold(
-        body: Center(child: Text('Connectez-vous pour voir vos ventes.')),
+      return Scaffold(
+        body: Center(child: Text(L10n.tr(context, 'seller_orders.login_required'))),
       );
     }
 
     final currency = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA');
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Mes ventes')),
+      appBar: AppBar(title: Text(L10n.tr(context, 'seller_orders.title'))),
       body: StreamBuilder<List<Order>>(
         key: ValueKey(_refreshEpoch),
         stream: _orderService.streamOrdersForUser(userId),
@@ -58,7 +59,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
             ..sort((a, b) =>
                 (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
           if (orders.isEmpty) {
-            return const Center(child: Text('Aucune vente pour le moment.'));
+            return Center(child: Text(L10n.tr(context, 'seller_orders.empty')));
           }
           return RefreshIndicator(
             onRefresh: () => _triggerRefresh(userId),
@@ -100,16 +101,16 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Supprimer la commande'),
-          content: const Text('Cette action annulera la commande pour le vendeur.'),
+          title: Text(L10n.tr(context, 'seller_orders.delete_title')),
+          content: Text(L10n.tr(context, 'seller_orders.delete_confirm')),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Annuler'),
+              child: Text(L10n.tr(context, 'common.cancel')),
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Supprimer'),
+              child: Text(L10n.tr(context, 'common.delete')),
             ),
           ],
         );
@@ -123,13 +124,21 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
       );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Commande annulée.')),
+          SnackBar(content: Text(L10n.tr(context, 'seller_orders.cancelled'))),
         );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e')),
+          SnackBar(
+            content: Text(
+              L10n.tr(
+                context,
+                'common.error_with',
+                params: {'error': e.toString()},
+              ),
+            ),
+          ),
         );
       }
     }
@@ -155,7 +164,11 @@ class _SellerOrderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final priceText = order.productPrice != null
         ? currency.format(order.productPrice)
-        : 'Commande ${order.id}';
+        : L10n.tr(
+            context,
+            'seller_orders.order_label',
+            params: {'id': order.id},
+          );
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -166,7 +179,12 @@ class _SellerOrderCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    order.productTitle ?? 'Produit ${order.productId}',
+                    order.productTitle ??
+                        L10n.tr(
+                          context,
+                          'seller_orders.product_label',
+                          params: {'id': order.productId ?? ''},
+                        ),
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
@@ -195,12 +213,12 @@ class _SellerOrderCard extends StatelessWidget {
             Row(
               children: [
                 IconButton(
-                  tooltip: 'Chat',
+                  tooltip: L10n.tr(context, 'common.chat'),
                   onPressed: () => context.push('/order/${order.id}/chat'),
                   icon: const Icon(Icons.chat_bubble_outline),
                 ),
                 IconButton(
-                  tooltip: 'Suivi',
+                  tooltip: L10n.tr(context, 'common.track'),
                   onPressed: () => context.push('/order/${order.id}/track'),
                   icon: const Icon(Icons.map_outlined),
                 ),
@@ -208,20 +226,20 @@ class _SellerOrderCard extends StatelessWidget {
                 TextButton.icon(
                   onPressed: onDelete,
                   icon: const Icon(Icons.delete_outline),
-                  label: const Text('Supprimer'),
+                  label: Text(L10n.tr(context, 'common.delete')),
                 ),
                 const SizedBox(width: 8),
                 if ((order.labelUrl ?? '').isNotEmpty)
                   TextButton.icon(
                     onPressed: () => onOpenLabel(order.labelUrl!),
                     icon: const Icon(Icons.picture_as_pdf_outlined),
-                    label: const Text('Ouvrir label'),
+                    label: Text(L10n.tr(context, 'seller_orders.open_label')),
                   )
                 else
                   FilledButton.icon(
                     onPressed: onGenerateLabel,
                     icon: const Icon(Icons.local_shipping_outlined),
-                    label: const Text('Générer bordereau'),
+                    label: Text(L10n.tr(context, 'seller_orders.generate_label')),
                   ),
               ],
             ),

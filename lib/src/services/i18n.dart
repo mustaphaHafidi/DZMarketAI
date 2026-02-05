@@ -8,6 +8,40 @@ class L10n {
     Locale('ar'),
   ];
 
+  /// Translate using JSON assets (and optional DB override).
+  static String tr(
+    BuildContext context,
+    String key, {
+    String? fallback,
+    Map<String, String>? params,
+  }) {
+    final locale = Localizations.localeOf(context).languageCode;
+    return trLocale(
+      locale,
+      key,
+      fallback: fallback,
+      params: params,
+    );
+  }
+
+  /// Translate without a BuildContext (e.g., services).
+  static String trLocale(
+    String locale,
+    String key, {
+    String? fallback,
+    Map<String, String>? params,
+  }) {
+    var text = TranslationService.instance.translate(locale, key) ??
+        fallback ??
+        key;
+    if (params != null && params.isNotEmpty) {
+      params.forEach((k, v) {
+        text = text.replaceAll('{$k}', v);
+      });
+    }
+    return text;
+  }
+
   /// [key] defaults to the French text; override to use a stable key from DB.
   static String t(BuildContext context, String fr, String ar, {String? key}) {
     final locale = Localizations.localeOf(context);

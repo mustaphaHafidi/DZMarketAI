@@ -2,6 +2,7 @@
 import 'package:dzmarket/src/config/supabase_options.dart';
 import 'package:dzmarket/src/models/order.dart';
 import 'package:dzmarket/src/services/order_service.dart';
+import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:flutter/material.dart';
@@ -83,7 +84,7 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
         0,
         {
           'id': _selectedCourierId,
-          'name': _selectedCourierName ?? 'Transporteur',
+          'name': _selectedCourierName ?? L10n.tr(context, 'fulfillment.courier_placeholder'),
         },
       );
     }
@@ -100,7 +101,7 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
 
   Future<void> _fulfill() async {
     if (_selectedCourierId == null || _selectedCourierName == null) {
-      setState(() => _error = 'Selectionnez un transporteur');
+      setState(() => _error = L10n.tr(context, 'fulfillment.error_select_courier'));
       return;
     }
     setState(() {
@@ -126,8 +127,8 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Expedition declenchee avec bordereau.'),
+          SnackBar(
+            content: Text(L10n.tr(context, 'fulfillment.success_label')),
           ),
         );
         Navigator.of(context).pop(true);
@@ -146,16 +147,16 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Choisir un transporteur',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        Text(
+          L10n.tr(context, 'fulfillment.choose_courier'),
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
         if (_courierLocked)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(
-              'Transporteur déjà choisi par l’acheteur.',
+              L10n.tr(context, 'fulfillment.courier_locked'),
               style: TextStyle(color: Theme.of(context).colorScheme.secondary),
             ),
           ),
@@ -165,7 +166,7 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
               .map(
                 (c) => DropdownMenuItem(
                   value: c['id'].toString(),
-                  child: Text(c['name']?.toString() ?? 'Transporteur'),
+                  child: Text(c['name']?.toString() ?? L10n.tr(context, 'fulfillment.courier_placeholder')),
                 ),
               )
               .toList(),
@@ -183,9 +184,9 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
           },
         ),
         const SizedBox(height: 16),
-        const Text(
-          'Mode de livraison',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        Text(
+          L10n.tr(context, 'fulfillment.delivery_mode'),
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         Column(
           children: [
@@ -194,28 +195,28 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
               groupValue: _deliveryMode,
               onChanged:
                   _deliveryLocked ? null : (v) => setState(() => _deliveryMode = v),
-              title: const Text('Domicile'),
+              title: Text(L10n.tr(context, 'fulfillment.delivery_home')),
             ),
             RadioListTile<String>(
               value: 'pickup_postal',
               groupValue: _deliveryMode,
               onChanged:
                   _deliveryLocked ? null : (v) => setState(() => _deliveryMode = v),
-              title: const Text('Point relais / bureau poste'),
+              title: Text(L10n.tr(context, 'fulfillment.delivery_pickup')),
             ),
             RadioListTile<String>(
               value: 'local_driver',
               groupValue: _deliveryMode,
               onChanged:
                   _deliveryLocked ? null : (v) => setState(() => _deliveryMode = v),
-              title: const Text('Coursier local'),
+              title: Text(L10n.tr(context, 'fulfillment.delivery_local')),
             ),
           ],
         ),
         const SizedBox(height: 8),
-        const Text(
-          'Option client',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        Text(
+          L10n.tr(context, 'fulfillment.option_client'),
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         DropdownButtonFormField<String>(
           value: _option,
@@ -243,14 +244,22 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
                     width: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('Générer bordereau + expédier'),
+                : Text(L10n.tr(context, 'fulfillment.generate_label')),
           ),
         ),
       ],
     );
 
     return Scaffold(
-      appBar: AppBar(title: Text('Expedition #${widget.orderId}')),
+      appBar: AppBar(
+        title: Text(
+          L10n.tr(
+            context,
+            'fulfillment.title',
+            params: {'id': widget.orderId},
+          ),
+        ),
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : Padding(

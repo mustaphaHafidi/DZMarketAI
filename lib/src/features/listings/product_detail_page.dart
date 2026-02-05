@@ -268,7 +268,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (userId == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Connectez-vous pour contacter le vendeur.')),
+        SnackBar(
+          content: Text(L10n.tr(context, 'chat.contact_login_required')),
+        ),
       );
       return;
     }
@@ -355,7 +357,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if ((_product?.stockQuantity ?? 0) <= 0 || _product?.isArchived == true) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Stock indisponible')),
+          SnackBar(content: Text(L10n.tr(context, 'order.stock_unavailable'))),
         );
       }
       return;
@@ -385,7 +387,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Commande creee: remise en main propre')),
+          SnackBar(
+            content: Text(L10n.tr(context, 'order.created.pickup')),
+          ),
         );
       }
       if (orderId != null) {
@@ -454,7 +458,15 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur creation commande: $e')),
+          SnackBar(
+            content: Text(
+              L10n.tr(
+                context,
+                'order.create_error',
+                params: {'error': e.toString()},
+              ),
+            ),
+          ),
         );
       }
       return;
@@ -462,7 +474,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (orderId == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Erreur: creation commande impossible')),
+          SnackBar(content: Text(L10n.tr(context, 'order.create_failed'))),
         );
       }
       return;
@@ -470,7 +482,17 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Commande creee: ${courierName ?? "livraison"}')),
+      SnackBar(
+        content: Text(
+          L10n.tr(
+            context,
+            'order.created.delivery',
+            params: {
+              'courier': courierName ?? L10n.tr(context, 'order.delivery.generic'),
+            },
+          ),
+        ),
+      ),
     );
     await _openOrderChat(orderId);
   }
@@ -479,10 +501,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     try {
       await ChatRepository().postOrderSystemMessage(
         orderId: orderId,
-        text: 'Commande enregistree, en attente de validation vendeur.',
+        text: L10n.tr(context, 'order.system.created'),
         payload: const {
-          'text': 'Commande enregistree, en attente de validation vendeur.',
+          'i18n_key': 'order.system.created',
           'status': 'pending',
+          'status_i18n': 'order.status.pending',
         },
         dedupeKey: 'order:$orderId:created',
       );

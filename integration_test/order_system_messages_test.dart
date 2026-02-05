@@ -48,8 +48,9 @@ void main() {
     expect(created.first['type'], 'system');
 
     final payload = {
-      'text': 'Commande validee, bordereau disponible.',
+      'i18n_key': 'order.system.validated',
       'status': 'validated',
+      'status_i18n': 'order.status.validated',
     };
     await client.rpc(
       'post_order_event',

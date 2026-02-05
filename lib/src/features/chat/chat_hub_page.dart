@@ -34,13 +34,9 @@ class _ChatHubPageState extends State<ChatHubPage> {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) {
       return Scaffold(
-        appBar: AppBar(title: Text(L10n.t(context, 'Messages', 'Messages'))),
+        appBar: AppBar(title: Text(L10n.tr(context, 'chat.title'))),
         body: Center(
-          child: Text(L10n.t(
-            context,
-            'Connectez-vous pour voir vos messages',
-            'Connectez-vous pour voir vos messages',
-          )),
+          child: Text(L10n.tr(context, 'chat.login_required')),
         ),
       );
     }
@@ -49,11 +45,11 @@ class _ChatHubPageState extends State<ChatHubPage> {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: Text(L10n.t(context, 'Messages', 'Messages')),
-          bottom: const TabBar(
+          title: Text(L10n.tr(context, 'chat.title')),
+          bottom: TabBar(
             tabs: [
-              Tab(text: 'Messages'),
-              Tab(text: 'Archivees'),
+              Tab(text: L10n.tr(context, 'chat.tab_messages')),
+              Tab(text: L10n.tr(context, 'chat.tab_archived')),
             ],
           ),
         ),
@@ -64,7 +60,7 @@ class _ChatHubPageState extends State<ChatHubPage> {
               child: TextField(
                 controller: _searchCtrl,
                 decoration: InputDecoration(
-                  hintText: L10n.t(context, 'Rechercher', 'Rechercher'),
+                  hintText: L10n.tr(context, 'chat.search'),
                   prefixIcon: const Icon(Icons.search),
                   filled: true,
                   border: OutlineInputBorder(
@@ -88,7 +84,7 @@ class _ChatHubPageState extends State<ChatHubPage> {
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Text(
-                          '${L10n.t(context, 'Erreur de chargement', 'Erreur de chargement')}\n${snapshot.error}',
+                          '${L10n.tr(context, 'chat.load_error')}\n${snapshot.error}',
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -97,13 +93,7 @@ class _ChatHubPageState extends State<ChatHubPage> {
                   final conversations = snapshot.data ?? const [];
                   if (conversations.isEmpty) {
                     return Center(
-                      child: Text(
-                        L10n.t(
-                          context,
-                          'Aucune conversation',
-                          'Aucune conversation',
-                        ),
-                      ),
+                      child: Text(L10n.tr(context, 'chat.empty')),
                     );
                   }
 
@@ -148,13 +138,7 @@ class _ChatHubPageState extends State<ChatHubPage> {
                             }).toList();
                             if (filtered.isEmpty) {
                               return Center(
-                                child: Text(
-                                  L10n.t(
-                                    context,
-                                    'Aucun resultat',
-                                    'Aucun resultat',
-                                  ),
-                                ),
+                                child: Text(L10n.tr(context, 'chat.no_results')),
                               );
                             }
                             return RefreshIndicator(
@@ -172,9 +156,15 @@ class _ChatHubPageState extends State<ChatHubPage> {
                                       (read?.lastReadAt == null ||
                                           conv.lastMessageAt!
                                               .isAfter(read!.lastReadAt!));
-                                  final subtitle = conv.lastMessageText ??
-                                      meta?.productTitle ??
-                                      '';
+                                  final rawSubtitle =
+                                      conv.lastMessageText ?? meta?.productTitle ?? '';
+                                  final subtitle = rawSubtitle.isEmpty
+                                      ? ''
+                                      : L10n.tr(
+                                          context,
+                                          rawSubtitle,
+                                          fallback: rawSubtitle,
+                                        );
                                   return Dismissible(
                                   key: ValueKey(conv.id),
                                   direction: DismissDirection.endToStart,
@@ -216,11 +206,7 @@ class _ChatHubPageState extends State<ChatHubPage> {
                                             Icons.chat_bubble_outline),
                                     title: Text(
                                       meta?.productTitle ??
-                                          L10n.t(
-                                            context,
-                                            'Conversation',
-                                            'Conversation',
-                                          ),
+                                          L10n.tr(context, 'chat.fallback_title'),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),

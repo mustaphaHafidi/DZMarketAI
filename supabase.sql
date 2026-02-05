@@ -941,20 +941,21 @@ begin
   set stock_quantity = stock_quantity - 1
   where id = p_product_id;
 
-  begin
-    perform public.post_order_event(
-      v_order_id,
-      'order_created',
-      jsonb_build_object(
-        'text', 'Commande enregistree, en attente de validation vendeur.',
-        'status', 'pending'
-      ),
-      'order:' || v_order_id || ':created'
-    );
-  exception when others then
-    -- Do not block order creation if chat/event pipeline fails.
-    null;
-  end;
+    begin
+      perform public.post_order_event(
+        v_order_id,
+        'order_created',
+        jsonb_build_object(
+          'i18n_key', 'order.system.created',
+          'status', 'pending',
+          'status_i18n', 'order.status.pending'
+        ),
+        'order:' || v_order_id || ':created'
+      );
+    exception when others then
+      -- Do not block order creation if chat/event pipeline fails.
+      null;
+    end;
 
   return v_order_id;
 end;
@@ -1336,7 +1337,7 @@ BEGIN
     RAISE EXCEPTION 'Forbidden' USING errcode = '42501';
   END IF;
 
-  v_text := coalesce(p_payload->>'text', p_event);
+    v_text := coalesce(p_payload->>'text', p_payload->>'i18n_key', p_event);
   v_sender := coalesce(auth.uid(), conv.seller_id, conv.buyer_id);
 
   IF p_dedupe_key IS NULL OR p_dedupe_key = '' THEN

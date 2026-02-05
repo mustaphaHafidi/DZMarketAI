@@ -13,6 +13,8 @@ import 'package:dzmarket/src/services/storage_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:dzmarket/src/services/chat_repository.dart';
+import 'package:dzmarket/src/services/i18n.dart';
+import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // Simple generic cache item with expiry.
@@ -271,13 +273,19 @@ class ShippingService {
         final tracking = data['tracking_number']?.toString();
         final status =
             (labelUrl != null && labelUrl.isNotEmpty) ? 'shipped' : 'validated';
+        final localeCode =
+            LocaleService.instance.locale.value?.languageCode ?? 'fr';
+        final i18nKey = status == 'shipped'
+            ? 'order.system.shipped'
+            : 'order.system.validated';
+        final messageText = L10n.trLocale(localeCode, i18nKey);
         await ChatRepository().postOrderSystemMessage(
           orderId: safeOrderId,
-          text: status == 'shipped'
-              ? 'Commande validee, bordereau disponible.'
-              : 'Commande validee, bordereau en preparation.',
+          text: messageText,
           payload: {
+            'i18n_key': i18nKey,
             'status': status,
+            'status_i18n': 'order.status.$status',
             'tracking_number': tracking,
             'label_url': labelUrl,
             'courier_name': safeCourierName,

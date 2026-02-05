@@ -27,7 +27,8 @@ class ChatMessage {
     final inferredSystem = payload != null &&
         (payload.containsKey('status') ||
             payload.containsKey('tracking_number') ||
-            payload.containsKey('label_url'));
+            payload.containsKey('label_url') ||
+            payload.containsKey('i18n_key'));
     final type = switch (typeString) {
       'system' => ChatMessageType.system,
       'label' => ChatMessageType.label,
