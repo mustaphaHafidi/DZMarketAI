@@ -7,6 +7,7 @@ import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/widgets/refresh_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ChatRoomPage extends StatefulWidget {
   const ChatRoomPage({
@@ -99,6 +100,63 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     try {
       await _repo.markRead(widget.conversationId, last.id);
     } catch (_) {}
+  }
+
+  Widget _buildSystemMessage(ChatMessage msg) {
+    final payload = msg.payload ?? const {};
+    final status = payload['status']?.toString();
+    final tracking = payload['tracking_number']?.toString();
+    final labelUrl = payload['label_url']?.toString();
+    final hasLabel = labelUrl != null && labelUrl.isNotEmpty;
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceVariant,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.4),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              msg.text,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            if (status != null && status.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text('Statut: $status'),
+              ),
+            if (tracking != null && tracking.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('Tracking: $tracking'),
+              ),
+            if (hasLabel)
+              TextButton.icon(
+                onPressed: () async {
+                  final uri = Uri.tryParse(labelUrl);
+                  if (uri != null) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  }
+                },
+                icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                label: const Text('Ouvrir bordereau'),
+              )
+            else
+              const Padding(
+                padding: EdgeInsets.only(top: 4),
+                child: Text('Bordereau: en preparation'),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -253,6 +311,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                     itemCount: messages.length,
                     itemBuilder: (context, index) {
                       final msg = messages[index];
+                      if (msg.isSystem || msg.isLabel) {
+                        return _buildSystemMessage(msg);
+                      }
                       final isMine = msg.senderId == currentUser;
                       return Align(
                         alignment:

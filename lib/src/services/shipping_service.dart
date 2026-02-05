@@ -12,6 +12,8 @@ import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/services/storage_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:dzmarket/src/services/chat_repository.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 // Simple generic cache item with expiry.
 class _CacheItem<T> {
@@ -263,6 +265,28 @@ class ShippingService {
       throw StateError(data['message']?.toString() ?? 'Shipment failed');
     }
     if (data is Map<String, dynamic>) {
+      // Best-effort system message for order status.
+      try {
+        final labelUrl = data['label_url']?.toString();
+        final tracking = data['tracking_number']?.toString();
+        final status =
+            (labelUrl != null && labelUrl.isNotEmpty) ? 'shipped' : 'validated';
+        await ChatRepository().postOrderSystemMessage(
+          orderId: safeOrderId,
+          text: status == 'shipped'
+              ? 'Commande validee, bordereau disponible.'
+              : 'Commande validee, bordereau en preparation.',
+          payload: {
+            'status': status,
+            'tracking_number': tracking,
+            'label_url': labelUrl,
+            'courier_name': safeCourierName,
+          },
+          dedupeKey: 'order:$safeOrderId:$status',
+        );
+      } catch (_) {
+        // Ignore chat message errors.
+      }
       return data;
     }
     return {'ok': true};
@@ -272,12 +296,26 @@ class ShippingService {
   Future<Map<String, dynamic>> buildSelectionFromOrder(String orderId) async {
     final safeOrderId = InputSanitizer.sanitizeId(orderId, maxLength: 64);
     // Charge order + buyer + seller + address + product (RLS: vendeur ou service)
-    final orderRes = await supabase
-        .from(SupabaseTables.orders)
-        .select(
-            'product_id,buyer_id,seller_id,shipping_address_id,agreed_price,sale_price')
-        .eq('id', safeOrderId)
-        .maybeSingle();
+    Map<String, dynamic>? orderRes;
+    try {
+      orderRes = await supabase
+          .from(SupabaseTables.orders)
+          .select(
+              'product_id,buyer_id,seller_id,shipping_address_id,agreed_price,sale_price,shipping_selection')
+          .eq('id', safeOrderId)
+          .maybeSingle();
+    } on PostgrestException catch (e) {
+      if (e.code == '42703' && e.message.contains('shipping_selection')) {
+        orderRes = await supabase
+            .from(SupabaseTables.orders)
+            .select(
+                'product_id,buyer_id,seller_id,shipping_address_id,agreed_price,sale_price')
+            .eq('id', safeOrderId)
+            .maybeSingle();
+      } else {
+        rethrow;
+      }
+    }
     if (orderRes == null) {
       throw StateError('Commande introuvable');
     }
@@ -289,9 +327,34 @@ class ShippingService {
     final sellerId = orderRow['seller_id']?.toString() ?? '';
     final productId = orderRow['product_id']?.toString();
     final addressId = orderRow['shipping_address_id']?.toString();
+    final storedSelection = orderRow['shipping_selection'];
     final dynamic priceValue =
         orderRow['agreed_price'] ?? orderRow['sale_price'];
     double price = priceValue is num ? priceValue.toDouble() : 0.0;
+
+    // If buyer selection is already stored, reuse it to avoid name mismatches.
+    if (storedSelection is Map) {
+      final selection =
+          Map<String, dynamic>.from(storedSelection as Map<dynamic, dynamic>);
+      selection['order_id'] = safeOrderId;
+      selection['from_wilaya_name'] ??= selection['senderWilaya'];
+      selection['to_wilaya_name'] ??= selection['receiverWilaya'];
+      selection['to_commune_name'] ??= selection['receiverCommune'];
+      selection['receiverWilaya'] ??= selection['to_wilaya_name'];
+      selection['receiverCommune'] ??= selection['to_commune_name'];
+      selection['phone_main'] ??= selection['phone'];
+      selection['contact_phone'] ??= selection['phone_main'];
+      selection['productList'] ??= selection['product_list'];
+      selection['declared_value'] ??= selection['declaredValue'];
+      selection['is_stopdesk'] ??=
+          selection['deliveryType'] == 'stopdesk' ||
+          selection['is_stopdesk'] == true;
+      if (selection['stopdesk_id'] == null &&
+          selection['stopdeskId'] != null) {
+        selection['stopdesk_id'] = selection['stopdeskId'];
+      }
+      return selection;
+    }
 
     // Adresse acheteur
     String toWilaya = '';

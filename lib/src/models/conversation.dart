@@ -4,6 +4,7 @@ class Conversation {
     required this.buyerId,
     required this.sellerId,
     this.productId,
+    this.orderId,
     required this.lastMessageAt,
     required this.lastMessageText,
     this.buyerHiddenAt,
@@ -14,6 +15,7 @@ class Conversation {
   final String? buyerId;
   final String? sellerId;
   final String? productId;
+  final String? orderId;
   final DateTime? lastMessageAt;
   final String? lastMessageText;
   final DateTime? buyerHiddenAt;
@@ -25,6 +27,7 @@ class Conversation {
       buyerId: json['buyer_id']?.toString(),
       sellerId: json['seller_id']?.toString(),
       productId: json['product_id']?.toString(),
+      orderId: json['order_id']?.toString(),
       lastMessageAt: json['last_message_at'] != null
           ? DateTime.tryParse(json['last_message_at'] as String)
           : null,

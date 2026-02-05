@@ -9,7 +9,7 @@ import '../test/test_supabase.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('Chat v2: hide then reappear on new message', (tester) async {
+  testWidgets('Chat v2: hide stays hidden until restore', (tester) async {
     if (!(TestEnv.hasSupabaseCreds &&
         TestEnv.hasAuthCreds &&
         TestEnv.hasSellerAuthCreds)) {
@@ -62,7 +62,7 @@ void main() {
         afterDelete.any((row) => row['id'].toString() == conversationId);
     expect(foundAfterDelete, isFalse);
 
-    // 3) Seller sends new message (should unhide for buyer)
+    // 3) Seller sends new message (should stay hidden for buyer)
     await client.auth.signOut();
     await client.auth.signInWithPassword(
       email: TestEnv.testSellerEmail!,
@@ -70,7 +70,7 @@ void main() {
     );
     await repo.sendMessage(conversationId, 'seller ping');
 
-    // 4) Buyer logs back in: conversation should reappear and be first
+    // 4) Buyer logs back in: conversation should still be hidden
     await client.auth.signOut();
     await client.auth.signInWithPassword(
       email: TestEnv.testEmail!,
@@ -79,9 +79,19 @@ void main() {
 
     final refreshed = await client
         .rpc('get_conversations', params: {'p_limit': 20}) as List;
-    expect(refreshed.isNotEmpty, isTrue);
-    final topId = refreshed.first['id'].toString();
-    expect(topId, conversationId);
+    final stillHidden =
+        refreshed.any((row) => row['id'].toString() == conversationId);
+    expect(stillHidden, isFalse);
+
+    // 5) Restore and ensure it reappears
+    await client.rpc('restore_conversation', params: {
+      'p_conversation_id': conversationId,
+    });
+    final restored = await client
+        .rpc('get_conversations', params: {'p_limit': 20}) as List;
+    final foundRestored =
+        restored.any((row) => row['id'].toString() == conversationId);
+    expect(foundRestored, isTrue);
 
     await client.auth.signOut();
   });

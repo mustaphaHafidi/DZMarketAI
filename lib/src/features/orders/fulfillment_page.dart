@@ -1,7 +1,9 @@
 // ignore_for_file: deprecated_member_use
-import 'package:dzmarket/src/services/shipping_service.dart';
-import 'package:dzmarket/src/services/order_service.dart';
+import 'package:dzmarket/src/config/supabase_options.dart';
 import 'package:dzmarket/src/models/order.dart';
+import 'package:dzmarket/src/services/order_service.dart';
+import 'package:dzmarket/src/services/shipping_service.dart';
+import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:flutter/material.dart';
 
 class FulfillmentPage extends StatefulWidget {
@@ -16,33 +18,89 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
   final _shipping = ShippingService();
   final _orderService = OrderService();
   List<Map<String, dynamic>> _couriers = const [];
+  List<String> _optionChoices = ShippingService.options;
   String? _selectedCourierId;
   String? _selectedCourierName;
   String? _deliveryMode = 'home';
   String? _option = ShippingService.options.first;
   bool _saving = false;
   String? _error;
+  bool _courierLocked = false;
+  bool _deliveryLocked = false;
+  bool _optionLocked = false;
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadCouriers();
+    _init();
+  }
+
+  Future<void> _init() async {
+    await _loadOrderDefaults();
+    await _loadCouriers();
+    if (mounted) {
+      setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadOrderDefaults() async {
+    final orderRow = await supabase
+        .from(SupabaseTables.orders)
+        .select('courier_id,courier_name,delivery_method,shipping_option')
+        .eq('id', widget.orderId)
+        .maybeSingle();
+    if (orderRow is Map<String, dynamic>) {
+      final courierId = orderRow['courier_id']?.toString();
+      final courierName = orderRow['courier_name']?.toString();
+      final deliveryMode = orderRow['delivery_method']?.toString();
+      final option = orderRow['shipping_option']?.toString();
+      if (courierId != null && courierId.isNotEmpty) {
+        _selectedCourierId = courierId;
+        _selectedCourierName = courierName;
+        _courierLocked = true;
+      }
+      if (deliveryMode != null && deliveryMode.isNotEmpty) {
+        _deliveryMode = deliveryMode;
+        _deliveryLocked = true;
+      }
+      if (option != null && option.isNotEmpty) {
+        _option = option;
+        _optionLocked = true;
+        if (!_optionChoices.contains(option)) {
+          _optionChoices = [option, ..._optionChoices];
+        }
+      }
+    }
   }
 
   Future<void> _loadCouriers() async {
     final list = await _shipping.fetchCouriers();
-    setState(() {
-      _couriers = list;
-      if (list.isNotEmpty) {
-        _selectedCourierId = list.first['id'].toString();
-        _selectedCourierName = list.first['name']?.toString();
-      }
-    });
+    final updated = List<Map<String, dynamic>>.from(list);
+    if (_selectedCourierId != null &&
+        updated.every((c) => c['id']?.toString() != _selectedCourierId)) {
+      updated.insert(
+        0,
+        {
+          'id': _selectedCourierId,
+          'name': _selectedCourierName ?? 'Transporteur',
+        },
+      );
+    }
+    if (_selectedCourierId == null && updated.isNotEmpty) {
+      _selectedCourierId = updated.first['id'].toString();
+      _selectedCourierName = updated.first['name']?.toString();
+    }
+    if (mounted) {
+      setState(() {
+        _couriers = updated;
+      });
+    }
   }
 
   Future<void> _fulfill() async {
     if (_selectedCourierId == null || _selectedCourierName == null) {
-      setState(() => _error = 'Sélectionnez un transporteur');
+      setState(() => _error = 'Selectionnez un transporteur');
       return;
     }
     setState(() {
@@ -69,7 +127,7 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Expédition déclenchée avec bordereau.'),
+            content: Text('Expedition declenchee avec bordereau.'),
           ),
         );
         Navigator.of(context).pop(true);
@@ -93,6 +151,14 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
+        if (_courierLocked)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              'Transporteur déjà choisi par l’acheteur.',
+              style: TextStyle(color: Theme.of(context).colorScheme.secondary),
+            ),
+          ),
         DropdownButtonFormField<String>(
           value: _selectedCourierId,
           items: _couriers
@@ -103,7 +169,9 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
                 ),
               )
               .toList(),
-          onChanged: (v) {
+          onChanged: _courierLocked
+              ? null
+              : (v) {
             final courier = _couriers.firstWhere(
               (c) => c['id'].toString() == v,
               orElse: () => {},
@@ -124,19 +192,22 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
             RadioListTile<String>(
               value: 'home',
               groupValue: _deliveryMode,
-              onChanged: (v) => setState(() => _deliveryMode = v),
+              onChanged:
+                  _deliveryLocked ? null : (v) => setState(() => _deliveryMode = v),
               title: const Text('Domicile'),
             ),
             RadioListTile<String>(
               value: 'pickup_postal',
               groupValue: _deliveryMode,
-              onChanged: (v) => setState(() => _deliveryMode = v),
+              onChanged:
+                  _deliveryLocked ? null : (v) => setState(() => _deliveryMode = v),
               title: const Text('Point relais / bureau poste'),
             ),
             RadioListTile<String>(
               value: 'local_driver',
               groupValue: _deliveryMode,
-              onChanged: (v) => setState(() => _deliveryMode = v),
+              onChanged:
+                  _deliveryLocked ? null : (v) => setState(() => _deliveryMode = v),
               title: const Text('Coursier local'),
             ),
           ],
@@ -148,10 +219,10 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
         ),
         DropdownButtonFormField<String>(
           value: _option,
-          items: ShippingService.options
+          items: _optionChoices
               .map((o) => DropdownMenuItem(value: o, child: Text(o)))
               .toList(),
-          onChanged: (v) => setState(() => _option = v),
+          onChanged: _optionLocked ? null : (v) => setState(() => _option = v),
         ),
         const SizedBox(height: 16),
         if (_error != null)
@@ -179,8 +250,8 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
     );
 
     return Scaffold(
-      appBar: AppBar(title: Text('Expédition #${widget.orderId}')),
-      body: _couriers.isEmpty
+      appBar: AppBar(title: Text('Expedition #${widget.orderId}')),
+      body: _loading
           ? const Center(child: CircularProgressIndicator())
           : Padding(
               padding: const EdgeInsets.all(16),

@@ -47,18 +47,48 @@ class ChatRepository {
             .toList());
   }
 
-  Future<ChatMessage> sendMessage(String conversationId, String text) async {
-    final result = await _client.rpc(
-      'send_message',
-      params: {
-        'p_conversation_id': conversationId,
-        'p_text': text,
-      },
-    );
-    if (result == null) {
-      throw StateError('send_message returned null');
+  Future<ChatMessage> sendMessage(
+    String conversationId,
+    String text, {
+    String type = 'text',
+    Map<String, dynamic>? payload,
+    String? dedupeKey,
+  }) async {
+    try {
+      final result = await _client.rpc(
+        'send_message',
+        params: {
+          'p_conversation_id': conversationId,
+          'p_text': text,
+          if (type.isNotEmpty) 'p_type': type,
+          if (payload != null) 'p_payload': payload,
+          if (dedupeKey != null) 'p_dedupe_key': dedupeKey,
+        },
+      );
+      if (result == null) {
+        throw StateError('send_message returned null');
+      }
+      return ChatMessage.fromJson(result as Map<String, dynamic>);
+    } on PostgrestException catch (e) {
+      final missingNewArgs = e.code == 'PGRST202' ||
+          e.code == '42883' ||
+          e.message.contains('send_message') &&
+              (e.message.contains('p_type') ||
+                  e.message.contains('p_payload') ||
+                  e.message.contains('p_dedupe_key'));
+      if (!missingNewArgs) rethrow;
+      final result = await _client.rpc(
+        'send_message',
+        params: {
+          'p_conversation_id': conversationId,
+          'p_text': text,
+        },
+      );
+      if (result == null) {
+        throw StateError('send_message returned null');
+      }
+      return ChatMessage.fromJson(result as Map<String, dynamic>);
     }
-    return ChatMessage.fromJson(result as Map<String, dynamic>);
   }
 
   Future<void> deleteConversation(String conversationId) async {
@@ -105,6 +135,103 @@ class ChatRepository {
     return Conversation.fromJson(result as Map<String, dynamic>);
   }
 
+  /// Ensure a conversation exists for a given order.
+  Future<Conversation> ensureOrderConversation(String orderId) async {
+    try {
+      final result = await _client.rpc(
+        'ensure_order_conversation',
+        params: {'p_order_id': orderId},
+      );
+      if (result == null) {
+        throw StateError('ensure_order_conversation returned null');
+      }
+      return Conversation.fromJson(result as Map<String, dynamic>);
+    } on PostgrestException catch (e) {
+      final missingFn = e.code == 'PGRST202' ||
+          e.code == '42883' ||
+          e.message.contains('ensure_order_conversation');
+      if (!missingFn) rethrow;
+      final orderRow = await _client
+          .from(SupabaseTables.orders)
+          .select('product_id,buyer_id,seller_id')
+          .eq('id', orderId)
+          .maybeSingle();
+      if (orderRow == null) {
+        throw StateError('Order not found');
+      }
+      final productId = orderRow['product_id']?.toString() ?? '';
+      final buyerId = orderRow['buyer_id']?.toString() ?? '';
+      final sellerId = orderRow['seller_id']?.toString() ?? '';
+      if (productId.isEmpty || buyerId.isEmpty || sellerId.isEmpty) {
+        throw StateError('Order missing participants');
+      }
+      return ensureConversation(
+        productId: productId,
+        buyerId: buyerId,
+        sellerId: sellerId,
+      );
+    }
+  }
+
+  Future<void> postOrderSystemMessage({
+    required String orderId,
+    required String text,
+    Map<String, dynamic>? payload,
+    String? dedupeKey,
+  }) async {
+    final conv = await ensureOrderConversation(orderId);
+    try {
+      await sendMessage(
+        conv.id,
+        text,
+        type: 'system',
+        payload: payload,
+        dedupeKey: dedupeKey,
+      );
+      return;
+    } catch (_) {
+      // Fallback to direct insert if RPC fails.
+    }
+
+    final senderId = _client.auth.currentUser?.id;
+    if (senderId == null) return;
+
+    if (dedupeKey != null && dedupeKey.isNotEmpty) {
+      final existing = await _client
+          .from(SupabaseTables.messages)
+          .select('id')
+          .eq('conversation_id', conv.id)
+          .eq('dedupe_key', dedupeKey)
+          .maybeSingle();
+      if (existing != null) return;
+    }
+
+    try {
+      await _client.from(SupabaseTables.messages).insert({
+        'conversation_id': conv.id,
+        'sender_id': senderId,
+        'text': text,
+        'type': 'system',
+        if (payload != null) 'payload': payload,
+        if (dedupeKey != null) 'dedupe_key': dedupeKey,
+      });
+    } catch (_) {
+      // Fallback without extended columns.
+      await _client.from(SupabaseTables.messages).insert({
+        'conversation_id': conv.id,
+        'sender_id': senderId,
+        'text': text,
+      });
+    }
+
+    try {
+      await _client.from(SupabaseTables.conversations).update({
+        'last_message_at': DateTime.now().toIso8601String(),
+        'last_message_text': text,
+      }).eq('id', conv.id);
+    } catch (_) {}
+  }
+
   /// Stream read states for the current user; can be combined client-side.
   Stream<Map<String, ReadState>> watchReadStates() {
     final userId = _client.auth.currentUser?.id;
@@ -117,8 +244,7 @@ class ChatRepository {
         .eq('user_id', userId)
         .map((rows) => {
               for (final row in rows)
-                row['conversation_id'].toString():
-                    ReadState.fromJson(row as Map<String, dynamic>)
+                row['conversation_id'].toString(): ReadState.fromJson(row)
             });
   }
 }

@@ -19,6 +19,17 @@ class SellerOrdersPage extends StatefulWidget {
 class _SellerOrdersPageState extends State<SellerOrdersPage> {
   final RefreshController _refreshController = RefreshController();
   final _orderService = OrderService();
+  int _refreshEpoch = 0;
+
+  Future<void> _triggerRefresh(String userId) async {
+    await _refreshController.run(
+      context,
+      () => _orderService.refreshOrders(userId),
+    );
+    if (mounted) {
+      setState(() => _refreshEpoch++);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,6 +45,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('Mes ventes')),
       body: StreamBuilder<List<Order>>(
+        key: ValueKey(_refreshEpoch),
         stream: _orderService.streamOrdersForUser(userId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -49,10 +61,10 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
             return const Center(child: Text('Aucune vente pour le moment.'));
           }
           return RefreshIndicator(
-            onRefresh: () =>
-                _refreshController.run(context, () => _orderService.refreshOrders(userId)),
+            onRefresh: () => _triggerRefresh(userId),
             child: ListView.builder(
               padding: const EdgeInsets.all(12),
+              physics: const AlwaysScrollableScrollPhysics(),
               itemCount: orders.length,
               itemBuilder: (context, index) {
                 final order = orders[index];
@@ -60,11 +72,14 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
                   order: order,
                   currency: currency,
                   onGenerateLabel: () async {
-                    await Navigator.of(context).push(
+                    final updated = await Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => FulfillmentPage(orderId: order.id),
                       ),
                     );
+                    if (updated == true && context.mounted) {
+                      await _triggerRefresh(userId);
+                    }
                   },
                   onOpenLabel: (labelUrl) async {
                     final uri = Uri.tryParse(labelUrl);

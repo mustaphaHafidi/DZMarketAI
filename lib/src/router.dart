@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:dzmarket/src/features/auth/sign_in_page.dart';
 import 'package:dzmarket/src/features/auth/sign_up_page.dart';
-import 'package:dzmarket/src/features/chat/chat_room_page.dart';
+import 'package:dzmarket/src/features/chat/order_chat_gate_page.dart';
 import 'package:dzmarket/src/features/home/home_shell.dart';
 import 'package:dzmarket/src/features/listings/product_detail_page.dart';
 import 'package:dzmarket/src/features/tracking/map_tracking_page.dart';
@@ -85,7 +85,7 @@ GoRouter createRouter({List<NavigatorObserver> observers = const []}) {
             name: 'order-chat',
               builder: (context, state) {
                 final orderId = state.pathParameters['id'] ?? '';
-              return ChatRoomPage(conversationId: 'order:$orderId');
+              return OrderChatGatePage(orderId: orderId);
               },
             ),
           GoRoute(

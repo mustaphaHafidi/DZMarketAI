@@ -159,13 +159,29 @@ serve(async (req) => {
     return jsonResponse({ ok: false, message: "Rate limit error" }, 500);
   }
 
-  const { data: order, error: orderError } = await supabaseUser
-    .from("orders")
-    .select(
-      "id, seller_id, buyer_id, courier_id, courier_name, delivery_method, shipping_option, shipping_cost, tracking_number, label_url, status",
-    )
-    .eq("id", orderId)
-    .maybeSingle();
+  const baseOrderSelect =
+    "id, seller_id, buyer_id, courier_id, courier_name, delivery_method, shipping_option, shipping_cost, tracking_number, label_url, status";
+  let order = null;
+  let orderError = null;
+  {
+    const res = await supabaseUser
+      .from("orders")
+      .select(`${baseOrderSelect}, shipping_selection`)
+      .eq("id", orderId)
+      .maybeSingle();
+    order = res.data;
+    orderError = res.error;
+  }
+  if (orderError && (orderError.code === "42703" ||
+      `${orderError.message}`.includes("shipping_selection"))) {
+    const res = await supabaseUser
+      .from("orders")
+      .select(baseOrderSelect)
+      .eq("id", orderId)
+      .maybeSingle();
+    order = res.data;
+    orderError = res.error;
+  }
   if (orderError || !order) {
     return jsonResponse({ ok: false, message: "Order not found" }, 404);
   }
@@ -198,7 +214,9 @@ serve(async (req) => {
     return jsonResponse({ ok: false, message: "Missing courier info" }, 400);
   }
 
-  const selection = (payload.selection as Selection | undefined) ?? undefined;
+  const selection =
+    (payload.selection as Selection | undefined) ??
+    (order?.shipping_selection as Selection | undefined);
   const deliveryMode =
     textValue(payload.delivery_mode) || textValue(order.delivery_method);
   const shippingOption =
@@ -468,18 +486,27 @@ serve(async (req) => {
   }
   await supabaseUser.from("orders").update(orderUpdate).eq("id", orderId);
 
-  if (labelUrl) {
-    await supabaseUser.from("messages").insert({
-      room_id: `order:${orderId}`,
-      content: "Bordereau disponible",
-      type: "label",
-      payload: {
-        label_url: labelUrl,
-        tracking_number: trackingNumber,
-        carrier: courierName || courierId,
-      },
-      sender_id: effectiveUserId,
+  const eventPayload: Record<string, unknown> = {
+    text: labelUrl
+      ? "Commande validee, bordereau disponible."
+      : "Commande validee, bordereau en preparation.",
+    status: labelUrl ? "shipped" : "validated",
+    tracking_number: trackingNumber || null,
+    label_url: labelUrl || null,
+    courier_name: courierName || courierId,
+  };
+  const eventKey = labelUrl
+    ? `order:${orderId}:shipped`
+    : `order:${orderId}:validated`;
+  try {
+    await supabaseAdmin.rpc("post_order_event", {
+      p_order_id: Number(orderId),
+      p_event: labelUrl ? "order_shipped" : "order_validated",
+      p_payload: eventPayload,
+      p_dedupe_key: eventKey,
     });
+  } catch (_) {
+    // Ignore chat event errors; shipment generation should still succeed.
   }
 
   await supabaseUser.rpc("log_audit", {

@@ -4,6 +4,8 @@ import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/rate_limiter.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:rxdart/rxdart.dart';
+import 'package:dzmarket/src/services/chat_repository.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class OrderService {
   Stream<List<Order>> streamOrdersForUser(String userId) {
@@ -82,6 +84,7 @@ class OrderService {
     String? courierName,
     double? shippingCost,
     double? feeAmount,
+    Map<String, dynamic>? shippingSelection,
   }) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) throw StateError('User must be signed in to create an order');
@@ -102,26 +105,76 @@ class OrderService {
       throw FormatException('Frais invalides.');
     }
 
-    final response = await RateLimiter.instance.run(
-      'orders.create.rpc',
-      () => supabase.rpc(
-        'create_order',
-        params: {
-          'p_product_id': safeProductId,
-          'p_shipping_address_id': safeAddressId,
-          'p_payment_method': safePaymentMethod,
-          'p_shipping_option': safeShippingOption,
-          'p_delivery_method': safeDeliveryMethod,
-          'p_agreed_price': agreedPrice,
-          'p_courier_id': safeCourierId,
-          'p_courier_name': safeCourierName,
-          'p_shipping_cost': shippingCost,
-          'p_fee_amount': feeAmount,
-        },
-      ),
-    );
+    final params = {
+      'p_product_id': safeProductId,
+      'p_shipping_address_id': safeAddressId,
+      'p_payment_method': safePaymentMethod,
+      'p_shipping_option': safeShippingOption,
+      'p_delivery_method': safeDeliveryMethod,
+      'p_agreed_price': agreedPrice,
+      'p_courier_id': safeCourierId,
+      'p_courier_name': safeCourierName,
+      'p_shipping_cost': shippingCost,
+      'p_fee_amount': feeAmount,
+      if (shippingSelection != null) 'p_shipping_selection': shippingSelection,
+    };
+    dynamic response;
+    try {
+      response = await RateLimiter.instance.run(
+        'orders.create.rpc',
+        () => supabase.rpc(
+          'create_order',
+          params: params,
+        ),
+      );
+    } on PostgrestException catch (e) {
+      final isMissingParamFunction = (e.code == '42883') ||
+          e.message.contains('create_order') &&
+              e.message.contains('p_shipping_selection');
+      if (shippingSelection != null && isMissingParamFunction) {
+        final fallback = Map<String, dynamic>.from(params);
+        fallback.remove('p_shipping_selection');
+        response = await RateLimiter.instance.run(
+          'orders.create.rpc.fallback',
+          () => supabase.rpc(
+            'create_order',
+            params: fallback,
+          ),
+        );
+      } else {
+        rethrow;
+      }
+    }
     if (response == null) return null;
-    return response.toString();
+    final orderId = response.toString();
+    final payload = {
+      'text': 'Commande enregistree, en attente de validation vendeur.',
+      'status': 'pending',
+    };
+    try {
+      await supabase.rpc(
+        'post_order_event',
+        params: {
+          'p_order_id': orderId,
+          'p_event': 'order_created',
+          'p_payload': payload,
+          'p_dedupe_key': 'order:$orderId:created',
+        },
+      );
+    } catch (_) {
+      // Do not fail order creation if chat event fails.
+    }
+    try {
+      await ChatRepository().postOrderSystemMessage(
+        orderId: orderId,
+        text: payload['text']!,
+        payload: payload,
+        dedupeKey: 'order:$orderId:created',
+      );
+    } catch (_) {
+      // Best-effort fallback; ignore if not possible.
+    }
+    return orderId;
   }
 
   Future<void> assignDriver({

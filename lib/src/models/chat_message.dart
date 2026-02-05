@@ -1,9 +1,13 @@
+enum ChatMessageType { text, system, label }
+
 class ChatMessage {
   const ChatMessage({
     required this.id,
     required this.conversationId,
     required this.senderId,
     required this.text,
+    required this.type,
+    this.payload,
     this.createdAt,
     this.deletedAt,
   });
@@ -12,15 +16,30 @@ class ChatMessage {
   final String conversationId;
   final String senderId;
   final String text;
+  final ChatMessageType type;
+  final Map<String, dynamic>? payload;
   final DateTime? createdAt;
   final DateTime? deletedAt;
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    final typeString = (json['type'] as String?) ?? 'text';
+    final payload = (json['payload'] as Map?)?.cast<String, dynamic>();
+    final inferredSystem = payload != null &&
+        (payload.containsKey('status') ||
+            payload.containsKey('tracking_number') ||
+            payload.containsKey('label_url'));
+    final type = switch (typeString) {
+      'system' => ChatMessageType.system,
+      'label' => ChatMessageType.label,
+      _ => inferredSystem ? ChatMessageType.system : ChatMessageType.text,
+    };
     return ChatMessage(
       id: json['id']?.toString() ?? '',
       conversationId: json['conversation_id']?.toString() ?? '',
       senderId: json['sender_id']?.toString() ?? '',
       text: json['text']?.toString() ?? '',
+      type: type,
+      payload: payload,
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'] as String)
           : null,
@@ -29,6 +48,9 @@ class ChatMessage {
           : null,
     );
   }
+
+  bool get isSystem => type == ChatMessageType.system;
+  bool get isLabel => type == ChatMessageType.label;
 }
 
 class ReadState {

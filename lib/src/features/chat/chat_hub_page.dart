@@ -53,7 +53,7 @@ class _ChatHubPageState extends State<ChatHubPage> {
           bottom: const TabBar(
             tabs: [
               Tab(text: 'Messages'),
-              Tab(text: 'Archivées'),
+              Tab(text: 'Archivees'),
             ],
           ),
         ),
@@ -124,7 +124,7 @@ class _ChatHubPageState extends State<ChatHubPage> {
                               .where((c) => c.isHiddenForUser(userId))
                               .toList();
 
-                          Future<void> _manualRefresh() async {
+                          Future<void> manualRefresh() async {
                             await _refreshController.run(context, () async {
                               // force fetch conversations snapshot to resync stream/metas
                               await supabase
@@ -158,7 +158,7 @@ class _ChatHubPageState extends State<ChatHubPage> {
                               );
                             }
                             return RefreshIndicator(
-                              onRefresh: _manualRefresh,
+                              onRefresh: manualRefresh,
                               child: ListView.separated(
                                 itemCount: filtered.length,
                                 separatorBuilder: (_, __) =>

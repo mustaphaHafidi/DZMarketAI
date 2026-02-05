@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cached_network_image_platform_interface/cached_network_image_platform_interface.dart';
 import 'package:dzmarket/src/features/chat/chat_room_page.dart';
+import 'package:dzmarket/src/features/chat/order_chat_gate_page.dart';
 import 'package:dzmarket/src/models/offer.dart';
 import 'package:dzmarket/src/models/product.dart';
 import 'package:dzmarket/src/services/chat_repository.dart';
@@ -374,7 +375,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         etaLabel: 'Remise en main propre',
       );
       if (!confirmed) return;
-      await OrderService().createOrder(
+      final orderId = await OrderService().createOrder(
         productId: widget.productId,
         shippingOption: 'pickup',
         paymentMethod: 'cod',
@@ -386,6 +387,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Commande creee: remise en main propre')),
         );
+      }
+      if (orderId != null) {
+        await _openOrderChat(orderId);
       }
       return;
     }
@@ -434,16 +438,27 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (!confirmed) return;
 
     final orderService = OrderService();
-    final orderId = await orderService.createOrder(
-      productId: widget.productId,
-      shippingOption: shippingOption,
-      paymentMethod: paymentMethod,
-      agreedPrice: agreed,
-      courierId: courierId,
-      courierName: courierName,
-      deliveryMethod: deliveryMode,
-      shippingCost: shippingCost,
-    );
+    String? orderId;
+    try {
+      orderId = await orderService.createOrder(
+        productId: widget.productId,
+        shippingOption: shippingOption,
+        paymentMethod: paymentMethod,
+        agreedPrice: agreed,
+        courierId: courierId,
+        courierName: courierName,
+        deliveryMethod: deliveryMode,
+        shippingCost: shippingCost,
+        shippingSelection: selection,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur creation commande: $e')),
+        );
+      }
+      return;
+    }
     if (orderId == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -453,40 +468,32 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       return;
     }
 
-    if (courierId != null && courierName != null) {
-      try {
-        final response = await shippingService.createShipment(
-          orderId: orderId,
-          courierId: courierId,
-          courierName: courierName,
-          deliveryMode: deliveryMode,
-          shippingOption: shippingOption,
-          shippingCost: shippingCost,
-          selection: {
-            ...selection,
-            'productTitle': _product?.title ?? 'Article',
-            'price': selection['price'] ?? (agreed ?? 0),
-          },
-        );
-        if (isYalidine && mounted) {
-          final summary = response['summary'];
-          if (summary is Map<String, dynamic>) {
-            await _showYalidineSummary(summary);
-          }
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Erreur transporteur: $e')),
-          );
-        }
-        return;
-      }
-    }
-
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Commande creee: ${courierName ?? "livraison"}')),
+    );
+    await _openOrderChat(orderId);
+  }
+
+  Future<void> _openOrderChat(String orderId) async {
+    try {
+      await ChatRepository().postOrderSystemMessage(
+        orderId: orderId,
+        text: 'Commande enregistree, en attente de validation vendeur.',
+        payload: const {
+          'text': 'Commande enregistree, en attente de validation vendeur.',
+          'status': 'pending',
+        },
+        dedupeKey: 'order:$orderId:created',
+      );
+    } catch (_) {
+      // Best-effort only; chat room can still be opened even if this fails.
+    }
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => OrderChatGatePage(orderId: orderId),
+      ),
     );
   }
 

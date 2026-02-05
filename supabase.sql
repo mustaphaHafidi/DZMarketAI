@@ -753,6 +753,7 @@ create table if not exists public.orders (
     fee_amount numeric(12,2) default 0,
     delivery_cost numeric(12,2) default 0,
     stock_applied boolean not null default false,
+    shipping_selection jsonb,
     created_at timestamptz default now(),
     updated_at timestamptz default now()
   );
@@ -781,6 +782,8 @@ $$;
     add column if not exists fee_amount numeric(12,2) default 0,
     add column if not exists delivery_cost numeric(12,2) default 0,
     add column if not exists stock_applied boolean default false;
+alter table public.orders
+  add column if not exists shipping_selection jsonb;
 -- ensure status constraint if missing
 do $$
 begin
@@ -831,6 +834,24 @@ end;
 $$ language plpgsql;
 
 -- Atomic order creation with stock reservation (RPC used by client app)
+-- Stub for post_order_event (overwritten later after chat schema is defined)
+create or replace function public.post_order_event(
+  p_order_id bigint,
+  p_event text,
+  p_payload jsonb,
+  p_dedupe_key text
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- no-op placeholder to satisfy create_order dependencies during first run
+  return;
+end;
+$$;
+
+drop function if exists public.create_order(bigint, bigint, text, text, text, numeric, text, text, numeric, numeric);
 create or replace function public.create_order(
   p_product_id bigint,
   p_shipping_address_id bigint,
@@ -841,7 +862,8 @@ create or replace function public.create_order(
   p_courier_id text,
   p_courier_name text,
   p_shipping_cost numeric,
-  p_fee_amount numeric
+  p_fee_amount numeric,
+  p_shipping_selection jsonb default null
 ) returns bigint
 language plpgsql
 security definer
@@ -892,6 +914,7 @@ begin
     cost_price,
     fee_amount,
     delivery_cost,
+    shipping_selection,
     status
   ) values (
     p_product_id,
@@ -910,6 +933,7 @@ begin
     v_cost,
     coalesce(p_fee_amount, 0),
     coalesce(p_shipping_cost, 0),
+    p_shipping_selection,
     'pending'
   ) returning id into v_order_id;
 
@@ -917,11 +941,26 @@ begin
   set stock_quantity = stock_quantity - 1
   where id = p_product_id;
 
+  begin
+    perform public.post_order_event(
+      v_order_id,
+      'order_created',
+      jsonb_build_object(
+        'text', 'Commande enregistree, en attente de validation vendeur.',
+        'status', 'pending'
+      ),
+      'order:' || v_order_id || ':created'
+    );
+  exception when others then
+    -- Do not block order creation if chat/event pipeline fails.
+    null;
+  end;
+
   return v_order_id;
 end;
 $$;
-revoke all on function public.create_order(bigint, bigint, text, text, text, numeric, text, text, numeric, numeric) from public;
-grant execute on function public.create_order(bigint, bigint, text, text, text, numeric, text, text, numeric, numeric) to authenticated;
+revoke all on function public.create_order(bigint, bigint, text, text, text, numeric, text, text, numeric, numeric, jsonb) from public;
+grant execute on function public.create_order(bigint, bigint, text, text, text, numeric, text, text, numeric, numeric, jsonb) to authenticated;
 
 alter table public.orders enable row level security;
 drop policy if exists "orders select buyer driver seller" on public.orders;
@@ -1084,6 +1123,7 @@ CREATE TABLE IF NOT EXISTS public.conversations (
   buyer_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
   seller_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
   product_id bigint REFERENCES public.products(id) ON DELETE SET NULL,
+  order_id bigint REFERENCES public.orders(id) ON DELETE SET NULL,
   last_message_at timestamptz DEFAULT now(),
   last_message_text text,
   buyer_hidden_at timestamptz,
@@ -1091,9 +1131,15 @@ CREATE TABLE IF NOT EXISTS public.conversations (
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS conv_product_buyer_seller_uniq
-  ON public.conversations(product_id, buyer_id, seller_id)
-  WHERE product_id IS NOT NULL;
+ALTER TABLE public.conversations
+  ADD COLUMN IF NOT EXISTS order_id bigint REFERENCES public.orders(id) ON DELETE SET NULL;
+  DROP INDEX IF EXISTS conv_product_buyer_seller_uniq;
+  CREATE UNIQUE INDEX IF NOT EXISTS conv_product_buyer_seller_uniq
+    ON public.conversations(product_id, buyer_id, seller_id)
+    WHERE product_id IS NOT NULL AND order_id IS NULL;
+  DROP INDEX IF EXISTS conv_order_uniq;
+  CREATE UNIQUE INDEX IF NOT EXISTS conv_order_uniq
+    ON public.conversations(order_id);
 CREATE INDEX IF NOT EXISTS conv_participants_last_msg_idx
   ON public.conversations(buyer_id, seller_id, last_message_at DESC);
 
@@ -1103,9 +1149,37 @@ CREATE TABLE IF NOT EXISTS public.messages (
   conversation_id uuid NOT NULL REFERENCES public.conversations(id) ON DELETE CASCADE,
   sender_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE SET NULL,
   text text NOT NULL,
+  type text default 'text',
+  payload jsonb,
+  dedupe_key text,
   created_at timestamptz DEFAULT now(),
   deleted_at timestamptz
 );
+ALTER TABLE public.messages
+  ADD COLUMN IF NOT EXISTS type text default 'text',
+  ADD COLUMN IF NOT EXISTS payload jsonb,
+  ADD COLUMN IF NOT EXISTS dedupe_key text;
+CREATE UNIQUE INDEX IF NOT EXISTS messages_dedupe_uniq
+  ON public.messages(conversation_id, dedupe_key)
+  WHERE dedupe_key IS NOT NULL;
+
+-- Keep conversation ordering stable on any message insert (fallback safety).
+CREATE OR REPLACE FUNCTION public.update_conversation_last_message()
+RETURNS trigger AS $$
+BEGIN
+  UPDATE public.conversations
+  SET last_message_at = NEW.created_at,
+      last_message_text = NEW.text,
+      updated_at = now()
+  WHERE id = NEW.conversation_id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS messages_update_conversation ON public.messages;
+CREATE TRIGGER messages_update_conversation
+  AFTER INSERT ON public.messages
+  FOR EACH ROW EXECUTE PROCEDURE public.update_conversation_last_message();
 
 -- Read states
 CREATE TABLE IF NOT EXISTS public.reads (
@@ -1125,35 +1199,186 @@ RETURNS boolean LANGUAGE sql STABLE AS $$
   );
 $$;
 
--- RPC: ensure_conversation (idempotent create by product/buyer/seller)
-CREATE OR REPLACE FUNCTION public.ensure_conversation(p_product_id bigint,
-                                                     p_buyer_id uuid,
-                                                     p_seller_id uuid)
-RETURNS public.conversations
-LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE
-  conv public.conversations;
-BEGIN
-  IF auth.uid() NOT IN (p_buyer_id, p_seller_id) THEN
+  -- RPC: ensure_conversation (idempotent create by product/buyer/seller)
+  CREATE OR REPLACE FUNCTION public.ensure_conversation(p_product_id bigint,
+                                                       p_buyer_id uuid,
+                                                       p_seller_id uuid)
+  RETURNS public.conversations
+  LANGUAGE plpgsql SECURITY DEFINER AS $$
+  DECLARE
+    conv public.conversations;
+  BEGIN
+    IF auth.uid() NOT IN (p_buyer_id, p_seller_id) THEN
+      RAISE EXCEPTION 'Forbidden' USING errcode = '42501';
+    END IF;
+
+    PERFORM pg_advisory_xact_lock(hashtext('conv:' || p_product_id::text || ':' || p_buyer_id::text || ':' || p_seller_id::text));
+
+    SELECT *
+      INTO conv
+    FROM public.conversations c
+    WHERE c.product_id = p_product_id
+      AND c.buyer_id = p_buyer_id
+      AND c.seller_id = p_seller_id
+    LIMIT 1;
+
+    IF conv.id IS NOT NULL THEN
+      RETURN conv;
+    END IF;
+
+    INSERT INTO public.conversations (product_id, buyer_id, seller_id, last_message_at, last_message_text)
+    VALUES (p_product_id, p_buyer_id, p_seller_id, now(), NULL)
+    RETURNING * INTO conv;
+
+    RETURN conv;
+  END;
+  $$;
+
+-- RPC: ensure_order_conversation (idempotent create by order)
+  CREATE OR REPLACE FUNCTION public.ensure_order_conversation(p_order_id bigint)
+  RETURNS public.conversations
+  LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public
+  AS $$
+  DECLARE
+    conv public.conversations;
+    ord record;
+  BEGIN
+    PERFORM pg_advisory_xact_lock(hashtext('order_conv:' || p_order_id::text));
+
+    SELECT *
+      INTO conv
+    FROM public.conversations c
+    WHERE c.order_id = p_order_id
+    LIMIT 1;
+
+  IF conv.id IS NOT NULL THEN
+    RETURN conv;
+  END IF;
+
+  SELECT id, buyer_id, seller_id, product_id
+    INTO ord
+  FROM public.orders
+  WHERE id = p_order_id;
+
+  IF ord.id IS NULL THEN
+    RAISE EXCEPTION 'Order not found' USING errcode = 'P0002';
+  END IF;
+
+  IF auth.uid() IS NOT NULL
+     AND auth.uid() NOT IN (ord.buyer_id, ord.seller_id)
+     AND auth.role() <> 'service_role' THEN
     RAISE EXCEPTION 'Forbidden' USING errcode = '42501';
   END IF;
 
-  INSERT INTO public.conversations (product_id, buyer_id, seller_id, last_message_at, last_message_text)
-  VALUES (p_product_id, p_buyer_id, p_seller_id, now(), NULL)
-  ON CONFLICT (product_id, buyer_id, seller_id)
-    WHERE product_id IS NOT NULL
-    DO UPDATE SET last_message_at = greatest(EXCLUDED.last_message_at, public.conversations.last_message_at),
-                  updated_at = now()
-  RETURNING * INTO conv;
+  SELECT *
+    INTO conv
+  FROM public.conversations c
+  WHERE c.product_id = ord.product_id
+    AND c.buyer_id = ord.buyer_id
+    AND c.seller_id = ord.seller_id
+  LIMIT 1;
 
-  RETURN conv;
+    IF conv.id IS NOT NULL THEN
+      IF conv.order_id IS NULL THEN
+        UPDATE public.conversations
+        SET order_id = p_order_id,
+            updated_at = now()
+        WHERE id = conv.id
+        RETURNING * INTO conv;
+      END IF;
+      RETURN conv;
+    END IF;
+
+    INSERT INTO public.conversations (
+      order_id,
+      product_id,
+      buyer_id,
+      seller_id,
+      last_message_at,
+      last_message_text
+    ) VALUES (
+      p_order_id,
+      ord.product_id,
+      ord.buyer_id,
+      ord.seller_id,
+      now(),
+      NULL
+    )
+    RETURNING * INTO conv;
+
+    RETURN conv;
+  END;
+  $$;
+
+-- RPC: post_order_event (system message with dedupe)
+CREATE OR REPLACE FUNCTION public.post_order_event(
+  p_order_id bigint,
+  p_event text,
+  p_payload jsonb,
+  p_dedupe_key text
+)
+RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  conv public.conversations;
+  msg public.messages;
+  v_text text;
+  v_sender uuid;
+BEGIN
+  conv := public.ensure_order_conversation(p_order_id);
+
+  IF auth.uid() IS NOT NULL
+     AND auth.uid() NOT IN (conv.buyer_id, conv.seller_id)
+     AND auth.role() <> 'service_role' THEN
+    RAISE EXCEPTION 'Forbidden' USING errcode = '42501';
+  END IF;
+
+  v_text := coalesce(p_payload->>'text', p_event);
+  v_sender := coalesce(auth.uid(), conv.seller_id, conv.buyer_id);
+
+  IF p_dedupe_key IS NULL OR p_dedupe_key = '' THEN
+    INSERT INTO public.messages (conversation_id, sender_id, text, type, payload)
+    VALUES (conv.id, v_sender, v_text, 'system', p_payload)
+    RETURNING * INTO msg;
+  ELSE
+    INSERT INTO public.messages (conversation_id, sender_id, text, type, payload, dedupe_key)
+    VALUES (conv.id, v_sender, v_text, 'system', p_payload, p_dedupe_key)
+    ON CONFLICT (conversation_id, dedupe_key) DO NOTHING
+    RETURNING * INTO msg;
+
+    IF msg.id IS NULL THEN
+      SELECT * INTO msg
+      FROM public.messages
+      WHERE conversation_id = conv.id AND dedupe_key = p_dedupe_key;
+    END IF;
+  END IF;
+
+  IF msg.id IS NOT NULL THEN
+    UPDATE public.conversations
+    SET last_message_at   = msg.created_at,
+        last_message_text = msg.text,
+        updated_at        = now()
+    WHERE id = conv.id;
+  END IF;
 END;
 $$;
 
 -- RPC: send_message
-CREATE OR REPLACE FUNCTION public.send_message(p_conversation_id uuid, p_text text)
+DROP FUNCTION IF EXISTS public.send_message(uuid, text) CASCADE;
+CREATE OR REPLACE FUNCTION public.send_message(
+  p_conversation_id uuid,
+  p_text text,
+  p_type text DEFAULT 'text',
+  p_payload jsonb DEFAULT NULL,
+  p_dedupe_key text DEFAULT NULL
+)
 RETURNS public.messages
-LANGUAGE plpgsql SECURITY DEFINER AS $$
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public
+AS $$
 DECLARE
   msg public.messages;
   other uuid;
@@ -1174,9 +1399,22 @@ BEGIN
     RAISE EXCEPTION 'blocked' USING errcode = '42501';
   END IF;
 
-  INSERT INTO public.messages (conversation_id, sender_id, text)
-  VALUES (p_conversation_id, auth.uid(), p_text)
-  RETURNING * INTO msg;
+  IF p_dedupe_key IS NULL OR p_dedupe_key = '' THEN
+    INSERT INTO public.messages (conversation_id, sender_id, text, type, payload)
+    VALUES (p_conversation_id, auth.uid(), p_text, coalesce(p_type, 'text'), p_payload)
+    RETURNING * INTO msg;
+  ELSE
+    INSERT INTO public.messages (conversation_id, sender_id, text, type, payload, dedupe_key)
+    VALUES (p_conversation_id, auth.uid(), p_text, coalesce(p_type, 'text'), p_payload, p_dedupe_key)
+    ON CONFLICT (conversation_id, dedupe_key) DO NOTHING
+    RETURNING * INTO msg;
+    IF msg.id IS NULL THEN
+      SELECT * INTO msg
+      FROM public.messages
+      WHERE conversation_id = p_conversation_id
+        AND dedupe_key = p_dedupe_key;
+    END IF;
+  END IF;
 
   UPDATE public.conversations
   SET last_message_at   = msg.created_at,
@@ -1249,6 +1487,7 @@ RETURNS TABLE (
   buyer_id uuid,
   seller_id uuid,
   product_id bigint,
+  order_id bigint,
   last_message_at timestamptz,
   last_message_text text,
   buyer_hidden_at timestamptz,
@@ -1268,7 +1507,7 @@ RETURNS TABLE (
       OR (b.last_message_at, b.id) < (p_cursor_last, p_cursor_id)
     )
   )
-  SELECT b.id, b.buyer_id, b.seller_id, b.product_id, b.last_message_at, b.last_message_text, b.buyer_hidden_at, b.seller_hidden_at
+  SELECT b.id, b.buyer_id, b.seller_id, b.product_id, b.order_id, b.last_message_at, b.last_message_text, b.buyer_hidden_at, b.seller_hidden_at
   FROM filtered b
   ORDER BY b.last_message_at DESC, b.id DESC
   LIMIT p_limit;
