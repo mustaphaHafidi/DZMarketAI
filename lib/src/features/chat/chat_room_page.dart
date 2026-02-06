@@ -27,6 +27,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   final _repo = ChatRepository();
   final _controller = TextEditingController();
   bool _sending = false;
+  String? _sellerId;
+  String? _buyerId;
+  String? _productId;
+  late Future<void> _conversationFuture;
   late Future<_ProductHeaderData?> _headerFuture;
   final RefreshController _refreshController = RefreshController();
 
@@ -39,20 +43,30 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   @override
   void initState() {
     super.initState();
-    _headerFuture = _loadHeader();
+    _conversationFuture = _loadConversationInfo();
+    _headerFuture = _conversationFuture.then((_) => _loadHeader());
+  }
+
+  Future<void> _loadConversationInfo() async {
+    try {
+      final conv = await supabase
+          .from('conversations')
+          .select('product_id,seller_id,buyer_id')
+          .eq('id', widget.conversationId)
+          .maybeSingle();
+      if (conv == null) return;
+      if (!mounted) return;
+      setState(() {
+        _productId = conv['product_id']?.toString();
+        _sellerId = conv['seller_id']?.toString();
+        _buyerId = conv['buyer_id']?.toString();
+      });
+    } catch (_) {}
   }
 
   Future<_ProductHeaderData?> _loadHeader() async {
     try {
-      var productId = widget.productId;
-      if (productId == null || productId.isEmpty) {
-        final conv = await supabase
-            .from('conversations')
-            .select('product_id')
-            .eq('id', widget.conversationId)
-            .maybeSingle();
-        productId = conv?['product_id']?.toString();
-      }
+      var productId = widget.productId ?? _productId;
       if (productId == null || productId.isEmpty) return null;
 
       final product = await supabase
@@ -102,7 +116,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     } catch (_) {}
   }
 
-  Widget _buildSystemMessage(ChatMessage msg) {
+  Widget _buildSystemMessageForRole(
+    ChatMessage msg, {
+    required bool isSeller,
+  }) {
     final payload = msg.payload ?? const {};
     final i18nKey = payload['i18n_key']?.toString();
     final status = payload['status']?.toString();
@@ -153,15 +170,19 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                     '${L10n.tr(context, 'chat.room.system_tracking')}: $tracking',
                   ),
                 ),
-            if (hasLabel)
-              TextButton.icon(
-                onPressed: () async {
-                  final uri = Uri.tryParse(labelUrl);
-                  if (uri != null) {
-                    await launchUrl(uri, mode: LaunchMode.externalApplication);
-                  }
-                },
-                icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+            if (isSeller)
+              if (hasLabel)
+                TextButton.icon(
+                  onPressed: () async {
+                    final uri = Uri.tryParse(labelUrl);
+                    if (uri != null) {
+                      await launchUrl(
+                        uri,
+                        mode: LaunchMode.externalApplication,
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
                   label: Text(L10n.tr(context, 'chat.room.label_open')),
                 )
               else
@@ -179,6 +200,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   Widget build(BuildContext context) {
     final formatter = DateFormat.Hm();
     final currentUser = supabase.auth.currentUser?.id;
+    final isSeller = currentUser != null && _sellerId == currentUser;
 
       return Scaffold(
         appBar: AppBar(
@@ -322,7 +344,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                     itemBuilder: (context, index) {
                       final msg = messages[index];
                       if (msg.isSystem || msg.isLabel) {
-                        return _buildSystemMessage(msg);
+                        return _buildSystemMessageForRole(
+                          msg,
+                          isSeller: isSeller,
+                        );
                       }
                       final isMine = msg.senderId == currentUser;
                       return Align(

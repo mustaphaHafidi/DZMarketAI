@@ -215,6 +215,7 @@ class _SellerOrderCard extends StatelessWidget {
               ),
             const SizedBox(height: 8),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 IconButton(
                   tooltip: L10n.tr(context, 'common.chat'),
@@ -226,25 +227,35 @@ class _SellerOrderCard extends StatelessWidget {
                   onPressed: () => context.push('/order/${order.id}/track'),
                   icon: const Icon(Icons.map_outlined),
                 ),
-                const Spacer(),
-                TextButton.icon(
-                  onPressed: onDelete,
-                  icon: const Icon(Icons.delete_outline),
-                  label: Text(L10n.tr(context, 'common.delete')),
-                ),
                 const SizedBox(width: 8),
-                if ((order.labelUrl ?? '').isNotEmpty)
-                  TextButton.icon(
-                    onPressed: () => onOpenLabel(order.labelUrl!),
-                    icon: const Icon(Icons.picture_as_pdf_outlined),
-                    label: Text(L10n.tr(context, 'seller_orders.open_label')),
-                  )
-                else
-                  FilledButton.icon(
-                    onPressed: onGenerateLabel,
-                    icon: const Icon(Icons.local_shipping_outlined),
-                    label: Text(L10n.tr(context, 'seller_orders.generate_label')),
+                Expanded(
+                  child: Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      TextButton.icon(
+                        onPressed: onDelete,
+                        icon: const Icon(Icons.delete_outline),
+                        label: Text(L10n.tr(context, 'common.delete')),
+                      ),
+                      if ((order.labelUrl ?? '').isNotEmpty)
+                        TextButton.icon(
+                          onPressed: () => onOpenLabel(order.labelUrl!),
+                          icon: const Icon(Icons.picture_as_pdf_outlined),
+                          label:
+                              Text(L10n.tr(context, 'seller_orders.open_label')),
+                        )
+                      else
+                        FilledButton.icon(
+                          onPressed: onGenerateLabel,
+                          icon: const Icon(Icons.local_shipping_outlined),
+                          label: Text(
+                              L10n.tr(context, 'seller_orders.generate_label')),
+                        ),
+                    ],
                   ),
+                ),
               ],
             ),
           ],
