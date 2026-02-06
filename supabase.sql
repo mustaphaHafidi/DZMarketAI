@@ -661,11 +661,14 @@ create table if not exists public.seller_delivery_settings (
 alter table public.seller_delivery_settings enable row level security;
 drop policy if exists "seller delivery select own" on public.seller_delivery_settings;
 drop policy if exists "seller delivery upsert own" on public.seller_delivery_settings;
+drop policy if exists "seller delivery update own" on public.seller_delivery_settings;
 drop policy if exists "seller delivery delete own" on public.seller_delivery_settings;
 create policy "seller delivery select own" on public.seller_delivery_settings
   for select using (auth.uid() = owner_id);
 create policy "seller delivery upsert own" on public.seller_delivery_settings
   for insert with check (auth.uid() = owner_id);
+create policy "seller delivery update own" on public.seller_delivery_settings
+  for update using (auth.uid() = owner_id) with check (auth.uid() = owner_id);
 create policy "seller delivery delete own" on public.seller_delivery_settings
   for delete using (auth.uid() = owner_id);
 drop trigger if exists seller_delivery_touch on public.seller_delivery_settings;
@@ -689,9 +692,9 @@ set search_path = public
 as $$
 begin
   return query
-  select s.courier_id, c.name
+  select s.courier_id, coalesce(c.name, s.courier_id) as courier_name
   from public.seller_delivery_settings s
-  join public.couriers c on c.code = s.courier_id
+  left join public.couriers c on c.code = s.courier_id
   where s.owner_id = seller_id
     and s.api_key is not null
     and (
@@ -1280,16 +1283,18 @@ $$;
     AND c.seller_id = ord.seller_id
   LIMIT 1;
 
-    IF conv.id IS NOT NULL THEN
-      IF conv.order_id IS NULL THEN
-        UPDATE public.conversations
-        SET order_id = p_order_id,
-            updated_at = now()
-        WHERE id = conv.id
-        RETURNING * INTO conv;
+      IF conv.id IS NOT NULL THEN
+        IF conv.order_id IS NULL THEN
+          UPDATE public.conversations
+          SET order_id = p_order_id,
+              buyer_hidden_at = NULL,
+              seller_hidden_at = NULL,
+              updated_at = now()
+          WHERE id = conv.id
+          RETURNING * INTO conv;
+        END IF;
+        RETURN conv;
       END IF;
-      RETURN conv;
-    END IF;
 
     INSERT INTO public.conversations (
       order_id,

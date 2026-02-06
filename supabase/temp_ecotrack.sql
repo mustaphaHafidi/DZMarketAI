@@ -6,9 +6,9 @@ set search_path = public
 as $$
 begin
   return query
-  select s.courier_id, c.name
+  select s.courier_id, coalesce(c.name, s.courier_id) as courier_name
   from public.seller_delivery_settings s
-  join public.couriers c on c.code = s.courier_id
+  left join public.couriers c on c.code = s.courier_id
   where s.owner_id = seller_id
     and s.api_key is not null
     and (

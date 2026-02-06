@@ -121,6 +121,7 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
       if (!mounted) return;
       setState(() {
         _validating = false;
+        _saving = false;
         _error = message == null || message.isEmpty
             ? L10n.tr(context, 'courier_settings.error_invalid_token')
             : L10n.tr(
@@ -128,7 +129,7 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
                 'courier_settings.error_invalid_token_detail',
                 params: {'error': message},
               );
-        _status = L10n.tr(context, 'courier_settings.status_saved_unverified');
+        _status = null;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -143,6 +144,7 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
           ),
         ),
       );
+      return;
     }
 
     setState(() {

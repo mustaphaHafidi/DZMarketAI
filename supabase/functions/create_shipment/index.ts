@@ -86,6 +86,21 @@ const uploadLabel = async (
   return data?.signedUrl ?? "";
 };
 
+const ecotrackBaseUrls = () => {
+  const envValue = (Deno.env.get("ECOTRACK_BASE_URL") ?? "").trim();
+  const candidates = [envValue, "https://api.ecotrack.dz", "https://ovred.ecotrack.dz"];
+  const seen = new Set<string>();
+  return candidates.filter((v) => {
+    const normalized = v.replace(/\/+$/, "");
+    if (!normalized || seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
+};
+
+const joinUrl = (base: string, path: string) =>
+  `${base.replace(/\/+$/, "")}${path}`;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ ok: false, message: "Method not allowed" }, 405);
@@ -367,11 +382,11 @@ serve(async (req) => {
       tracking: trackingNumber,
       label_url: labelUrl,
     };
-  } else if (isEcotrack) {
-    if (!selection) {
-      return jsonResponse({ ok: false, message: "Missing shipment selection" }, 400);
-    }
-    const orderPayload: Record<string, string> = {
+    } else if (isEcotrack) {
+      if (!selection) {
+        return jsonResponse({ ok: false, message: "Missing shipment selection" }, 400);
+      }
+      const orderPayload: Record<string, string> = {
       reference: orderId,
       nom_client: `${textValue(pick(selection, "familyname"))} ${textValue(pick(selection, "firstname"))}`.trim(),
       telephone:
@@ -386,45 +401,75 @@ serve(async (req) => {
       produit: textValue(pick(selection, "productList")),
       boutique: textValue(pick(selection, "shopName")),
       type: pick(selection, "hasExchange") === true ? "2" : "1",
-      stop_desk: pick(selection, "deliveryType") === "stopdesk" ? "1" : "0",
-      weight: textValue(pick(selection, "weight")),
-    };
-    const params = new URLSearchParams(orderPayload);
-    const resp = await fetch("https://api.ecotrack.dz/api/v1/create/order", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${textValue(settingsRow?.api_key)}`,
-        Accept: "application/json",
-      },
-      body: params,
-    });
-    if (!resp.ok) {
-      return jsonResponse({ ok: false, message: `Ecotrack ${resp.status}` }, 502);
-    }
-    const decoded = await resp.json();
-    const results = decoded?.results ?? {};
-    const result = results?.[orderId] ?? decoded;
-    if (result?.success === false) {
-      return jsonResponse({ ok: false, message: textValue(result?.message) }, 400);
-    }
-    trackingNumber = textValue(result?.tracking ?? decoded?.tracking);
-    if (!trackingNumber) {
-      return jsonResponse({ ok: false, message: "Tracking missing" }, 500);
-    }
-    const labelResp = await fetch(
-      `https://api.ecotrack.dz/api/v1/get/order/label?tracking=${encodeURIComponent(trackingNumber)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${textValue(settingsRow?.api_key)}`,
-          Accept: "application/pdf,application/json",
-        },
-      },
-    );
-    if (!labelResp.ok) {
-      return jsonResponse({ ok: false, message: `Label ${labelResp.status}` }, 502);
-    }
-    const contentType = labelResp.headers.get("content-type") ?? "";
-    let bytes: Uint8Array | null = null;
+        stop_desk: pick(selection, "deliveryType") === "stopdesk" ? "1" : "0",
+        weight: textValue(pick(selection, "weight")),
+      };
+      const params = new URLSearchParams(orderPayload);
+      const baseUrls = ecotrackBaseUrls();
+      let resp: Response | null = null;
+      let errorBody = "";
+      for (const base of baseUrls) {
+        const url = `${joinUrl(base, "/api/v1/create/order")}?${params.toString()}`;
+        resp = await fetch(url, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${textValue(settingsRow?.api_key)}`,
+            Accept: "application/json",
+          },
+        });
+        if (resp.ok) break;
+        try {
+          errorBody = await resp.text();
+        } catch {
+          errorBody = "";
+        }
+        if (resp.status !== 404 && resp.status !== 405) break;
+      }
+      if (!resp || !resp.ok) {
+        const suffix = errorBody ? `: ${errorBody}` : "";
+        return jsonResponse(
+          { ok: false, message: `Ecotrack ${resp?.status ?? "error"}${suffix}` },
+          502,
+        );
+      }
+      const decoded = await resp.json();
+      const results = decoded?.results ?? {};
+      const result = results?.[orderId] ?? decoded;
+      if (result?.success === false) {
+        return jsonResponse({ ok: false, message: textValue(result?.message) }, 400);
+      }
+      trackingNumber = textValue(result?.tracking ?? decoded?.tracking);
+      if (!trackingNumber) {
+        return jsonResponse({ ok: false, message: "Tracking missing" }, 500);
+      }
+      const labelUrls = baseUrls.length ? baseUrls : ecotrackBaseUrls();
+      let labelResp: Response | null = null;
+      let labelError = "";
+      for (const base of labelUrls) {
+        const labelUrlCandidate = `${joinUrl(base, "/api/v1/get/order/label")}?tracking=${encodeURIComponent(trackingNumber)}`;
+        labelResp = await fetch(labelUrlCandidate, {
+          headers: {
+            Authorization: `Bearer ${textValue(settingsRow?.api_key)}`,
+            Accept: "application/pdf,application/json",
+          },
+        });
+        if (labelResp.ok) break;
+        try {
+          labelError = await labelResp.text();
+        } catch {
+          labelError = "";
+        }
+        if (labelResp.status !== 404 && labelResp.status !== 405) break;
+      }
+      if (!labelResp || !labelResp.ok) {
+        const suffix = labelError ? `: ${labelError}` : "";
+        return jsonResponse(
+          { ok: false, message: `Label ${labelResp?.status ?? "error"}${suffix}` },
+          502,
+        );
+      }
+      const contentType = labelResp.headers.get("content-type") ?? "";
+      let bytes: Uint8Array | null = null;
     if (contentType.includes("application/pdf")) {
       bytes = new Uint8Array(await labelResp.arrayBuffer());
     } else {

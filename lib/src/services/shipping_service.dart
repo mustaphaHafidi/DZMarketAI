@@ -116,6 +116,16 @@ class ShippingService {
 
   Future<List<Map<String, String>>> fetchCouriers() async => couriers;
 
+  static String? _courierNameFromId(String? courierId) {
+    if (courierId == null || courierId.isEmpty) return null;
+    final normalized = courierId.toLowerCase();
+    final match = couriers.firstWhere(
+      (c) => (c['id'] ?? '').toLowerCase() == normalized,
+      orElse: () => const <String, String>{},
+    );
+    return match['name'];
+  }
+
   static Map<String, String> deliveryMode(String option) {
     final key = _optionKeyMap[option] ?? option;
     if (key == 'shipping.option.local') return {'mode': 'local_driver'};
@@ -202,26 +212,27 @@ class ShippingService {
       // swallow and try fallback
     }
 
-    try {
-      // Fallback if RPC unavailable: attempt direct select (may be blocked by RLS)
-      final rows = await RateLimiter.instance.run(
-        'shipments.couriers.select',
-        () => supabase
-            .from('seller_delivery_settings')
-            .select('courier_id, api_key, api_secret, sender_id, couriers(name)')
-            .eq('owner_id', safeSellerId)
-            .not('api_key', 'is', null)
-            .not('api_secret', 'is', null),
-      );
-      return rows
-          .map(
-            (r) => {
-              'courier_id': r['courier_id'],
-              'courier_name':
-                  (r['couriers'] as Map?)?['name'] ?? 'Transporteur',
-            },
-          )
-          .toList();
+      try {
+        // Fallback if RPC unavailable: attempt direct select (may be blocked by RLS)
+        final rows = await RateLimiter.instance.run(
+          'shipments.couriers.select',
+          () => supabase
+              .from('seller_delivery_settings')
+              .select('courier_id, api_key, api_secret, sender_id, couriers(name)')
+              .eq('owner_id', safeSellerId)
+              .not('api_key', 'is', null)
+              .or('courier_id.eq.ecotrack,api_secret.not.is.null'),
+        );
+        return rows
+            .map(
+              (r) => {
+                'courier_id': r['courier_id'],
+                'courier_name': (r['couriers'] as Map?)?['name'] ??
+                    _courierNameFromId(r['courier_id']?.toString()) ??
+                    r['courier_id']?.toString(),
+              },
+            )
+            .toList();
     } catch (_) {}
     return const [];
   }

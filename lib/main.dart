@@ -24,7 +24,11 @@ Future<void> main() async {
   // Log in debug to confirm the runtime config actually matches the project (helps diagnose "invalid API key").
   assert(() {
     debugPrint('Supabase URL: ${config.supabaseUrl}');
-    debugPrint('Supabase anon key (prefix): ${config.supabaseAnonKey.substring(0, 8)}...');
+    final prefixLen =
+        config.supabaseAnonKey.length < 8 ? config.supabaseAnonKey.length : 8;
+    debugPrint(
+      'Supabase anon key (prefix): ${config.supabaseAnonKey.substring(0, prefixLen)}...',
+    );
     return true;
   }());
 
