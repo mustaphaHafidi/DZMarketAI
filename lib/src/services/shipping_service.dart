@@ -1,19 +1,18 @@
 ﻿import 'dart:convert';
 import 'package:dzmarket/src/config/supabase_options.dart';
-import 'package:dzmarket/src/models/message.dart';
 import 'package:dzmarket/src/models/parcel_import_model.dart';
 import 'package:dzmarket/src/models/shipment.dart';
+import 'package:dzmarket/src/services/chat_repository.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/label_service.dart';
-import 'package:dzmarket/src/services/message_service.dart';
 import 'package:dzmarket/src/services/notification_service.dart';
 import 'package:dzmarket/src/services/rate_limiter.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/services/storage_service.dart';
+import 'package:dzmarket/src/services/phone_formatter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
-import 'package:dzmarket/src/services/chat_repository.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -112,6 +111,12 @@ class ShippingService {
       'contact': 'contact@ecotrack.dz',
       'coverage': 'Local/National',
     },
+    {
+      'id': 'zrexpress',
+      'name': 'ZR Express',
+      'contact': 'support@zrexpress.app',
+      'coverage': 'National',
+    },
   ];
 
   Future<List<Map<String, String>>> fetchCouriers() async => couriers;
@@ -133,6 +138,17 @@ class ShippingService {
       return {'mode': 'pickup_postal'};
     }
     return {'mode': 'home'};
+  }
+
+  static String _normalizeCourierKey(String? value) {
+    if (value == null) return '';
+    return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  }
+
+  static bool isZrExpressCourier({String? courierId, String? courierName}) {
+    final idKey = _normalizeCourierKey(courierId);
+    final nameKey = _normalizeCourierKey(courierName);
+    return idKey.contains('zrexpress') || nameKey.contains('zrexpress');
   }
 
   static String optionLabel(BuildContext context, String option) {
@@ -324,40 +340,74 @@ class ShippingService {
     );
     final data = response.data;
     if (data is Map && data['ok'] == false) {
-      throw StateError(data['message']?.toString() ?? 'Shipment failed');
-    }
-    if (data is Map<String, dynamic>) {
-      // Best-effort system message for order status.
-      try {
-        final labelUrl = data['label_url']?.toString();
-        final tracking = data['tracking_number']?.toString();
-        final status =
-            (labelUrl != null && labelUrl.isNotEmpty) ? 'shipped' : 'validated';
-        final localeCode =
+      final rawMessage = data['message']?.toString() ?? 'Shipment failed';
+      if (rawMessage == 'zr_phone_invalid') {
+        final locale =
             LocaleService.instance.locale.value?.languageCode ?? 'fr';
-        final i18nKey = status == 'shipped'
-            ? 'order.system.shipped'
-            : 'order.system.validated';
-        final messageText = L10n.trLocale(localeCode, i18nKey);
-        await ChatRepository().postOrderSystemMessage(
-          orderId: safeOrderId,
-          text: messageText,
-          payload: {
-            'i18n_key': i18nKey,
-            'status': status,
-            'status_i18n': 'order.status.$status',
-            'tracking_number': tracking,
-            'label_url': labelUrl,
-            'courier_name': safeCourierName,
-          },
-          dedupeKey: 'order:$safeOrderId:$status',
+        throw StateError(L10n.trLocale(locale, 'checkout.error_zr_phone'));
+      }
+      throw StateError(rawMessage);
+    }
+    if (data is Map) {
+      final map = Map<String, dynamic>.from(data);
+      try {
+        final tracking = map['tracking_number']?.toString();
+        final labelUrl = map['label_url']?.toString();
+        final hasLabel = labelUrl != null && labelUrl.isNotEmpty;
+        final statusValue = hasLabel ? 'shipped' : 'validated';
+        final labelKey =
+            hasLabel ? 'order.system.shipped' : 'order.system.validated';
+        final eventKey =
+            hasLabel ? 'order:${orderId}:shipped' : 'order:${orderId}:validated';
+        final locale =
+            LocaleService.instance.locale.value?.languageCode ?? 'fr';
+        await _postOrderSystemMessage(
+          orderId: orderId,
+          text: L10n.trLocale(locale, labelKey),
+          i18nKey: labelKey,
+          status: statusValue,
+          statusI18n: 'order.status.$statusValue',
+          trackingNumber: tracking,
+          labelUrl: labelUrl,
+          courierName: courierName,
+          dedupeKey: eventKey,
         );
       } catch (_) {
-        // Ignore chat message errors.
+        // Best-effort: do not block shipment flow.
       }
-      return data;
+      return map;
     }
     return {'ok': true};
+  }
+
+  Future<void> _postOrderSystemMessage({
+    required String orderId,
+    required String text,
+    String? i18nKey,
+    String? status,
+    String? statusI18n,
+    String? trackingNumber,
+    String? labelUrl,
+    String? courierName,
+    String? dedupeKey,
+  }) async {
+    try {
+      await ChatRepository().postOrderSystemMessage(
+        orderId: orderId,
+        text: text,
+        payload: {
+          if (i18nKey != null) 'i18n_key': i18nKey,
+          if (status != null) 'status': status,
+          if (statusI18n != null) 'status_i18n': statusI18n,
+          if (trackingNumber != null) 'tracking_number': trackingNumber,
+          if (labelUrl != null) 'label_url': labelUrl,
+          if (courierName != null) 'courier_name': courierName,
+        },
+        dedupeKey: dedupeKey,
+      );
+    } catch (_) {
+      // Best-effort: avoid blocking shipment flow.
+    }
   }
 
   /// Génère une selection Yalidine/Ecotrack à partir de la commande + profil vendeur/acheteur + adresse.
@@ -399,16 +449,52 @@ class ShippingService {
     double price = priceValue is num ? priceValue.toDouble() : 0.0;
 
     // If buyer selection is already stored, reuse it to avoid name mismatches.
-    if (storedSelection is Map) {
-      final selection = Map<String, dynamic>.from(storedSelection);
-      selection['order_id'] = safeOrderId;
-      selection['from_wilaya_name'] ??= selection['senderWilaya'];
-      selection['to_wilaya_name'] ??= selection['receiverWilaya'];
-      selection['to_commune_name'] ??= selection['receiverCommune'];
+      if (storedSelection is Map) {
+        final selection = Map<String, dynamic>.from(storedSelection);
+        selection['order_id'] = safeOrderId;
+        selection['from_wilaya_name'] ??= selection['senderWilaya'];
+        selection['to_wilaya_name'] ??= selection['receiverWilaya'];
+        selection['to_commune_name'] ??= selection['receiverCommune'];
+      selection['receiverDaira'] ??=
+            selection['receiver_daira'] ?? selection['to_daira_name'];
+      selection['receiver_daira'] ??= selection['receiverDaira'];
       selection['receiverWilaya'] ??= selection['to_wilaya_name'];
       selection['receiverCommune'] ??= selection['to_commune_name'];
+      selection['receiverWilayaId'] ??=
+          selection['receiver_wilaya_id'] ?? selection['wilayaCode'] ?? selection['wilaya_id'];
+      selection['receiverCommuneId'] ??=
+          selection['receiver_commune_id'] ?? selection['commune_id'];
       selection['phone_main'] ??= selection['phone'];
       selection['contact_phone'] ??= selection['phone_main'];
+      final isZrSelection = isZrExpressCourier(
+        courierId: selection['courierId']?.toString(),
+        courierName: selection['courierName']?.toString(),
+      );
+      // Ensure E.164 phone is available for couriers that require it (ZR Express).
+      if (selection['phone_e164'] == null) {
+        final e164 = isZrSelection
+            ? PhoneFormatter.normalizeDzE164ForZr(
+                selection['phone_main'] ?? selection['phone'] ?? '',
+              )
+            : PhoneFormatter.normalizeDzE164(
+                selection['phone_main'] ?? selection['phone'] ?? '',
+              );
+        if (e164.isNotEmpty) {
+          selection['phone_e164'] = e164;
+        }
+      }
+      if (selection['phone2_e164'] == null) {
+        final e164Secondary = isZrSelection
+            ? PhoneFormatter.normalizeDzE164ForZr(
+                selection['phone2'] ?? selection['phone_secondary'] ?? '',
+              )
+            : PhoneFormatter.normalizeDzE164(
+                selection['phone2'] ?? selection['phone_secondary'] ?? '',
+              );
+        if (e164Secondary.isNotEmpty) {
+          selection['phone2_e164'] = e164Secondary;
+        }
+      }
       selection['productList'] ??= selection['product_list'];
       selection['declared_value'] ??= selection['declaredValue'];
       selection['is_stopdesk'] ??=
@@ -541,6 +627,9 @@ class ShippingService {
       return '24-48h';
     }
     if (name.contains('ecotrack') || id.contains('ecotrack')) {
+      return '24-72h';
+    }
+    if (isZrExpressCourier(courierId: courierId, courierName: courierName)) {
       return '24-72h';
     }
     if (name.contains('ems') || id.contains('ems')) {
@@ -754,16 +843,18 @@ class ShippingService {
       }).eq('id', safeOrderId),
     );
 
-    await MessageService().sendMessage(
-      roomId: 'order:$safeOrderId',
-      content: L10n.trLocale(locale, 'shipments.label_ready'),
-      type: MessageType.label,
-      payload: {
-        'label_url': signedUrl,
-        'tracking_number': trackingNumber,
-        'carrier': 'Yalidine Express',
-      },
-    );
+      final labelKey = 'order.system.shipped';
+      await _postOrderSystemMessage(
+        orderId: safeOrderId,
+        text: L10n.trLocale(locale, labelKey),
+        i18nKey: labelKey,
+        status: 'shipped',
+        statusI18n: 'order.status.shipped',
+        trackingNumber: trackingNumber?.toString(),
+        labelUrl: signedUrl,
+        courierName: 'Yalidine Express',
+        dedupeKey: 'order:$safeOrderId:shipped',
+      );
   }
 
   Future<Map<String, dynamic>> generateYalidineParcelAndAttachLabelFromImport({
@@ -830,16 +921,18 @@ class ShippingService {
       }).eq('id', model.orderId),
     );
 
-    await MessageService().sendMessage(
-      roomId: 'order:${model.orderId}',
-      content: L10n.trLocale(locale, 'shipments.label_ready'),
-      type: MessageType.label,
-      payload: {
-        'label_url': signedUrl,
-        'tracking_number': trackingNumber,
-        'carrier': 'Yalidine Express',
-      },
-    );
+      final labelKey = 'order.system.shipped';
+      await _postOrderSystemMessage(
+        orderId: model.orderId,
+        text: L10n.trLocale(locale, labelKey),
+        i18nKey: labelKey,
+        status: 'shipped',
+        statusI18n: 'order.status.shipped',
+        trackingNumber: trackingNumber?.toString(),
+        labelUrl: signedUrl,
+        courierName: 'Yalidine Express',
+        dedupeKey: 'order:${model.orderId}:shipped',
+      );
     return {
       'delivery_fee': result['delivery_fee'],
       'taxe_percentage': result['taxe_percentage'],
@@ -970,17 +1063,17 @@ class ShippingService {
           .eq('id', safeOrderId),
     );
 
-    final msg = MessageService();
-    final roomId = 'order:$safeOrderId';
-    await msg.sendMessage(
-      roomId: roomId,
-      content: L10n.trLocale(
-        locale,
-        'shipments.status_message',
-        params: {'status': statusLabel},
-      ),
-      type: MessageType.text,
-      payload: {'type': 'delivery_status', 'status': safeStatus},
+    final statusText = L10n.trLocale(
+      locale,
+      'shipments.status_message',
+      params: {'status': statusLabel},
+    );
+    await _postOrderSystemMessage(
+      orderId: safeOrderId,
+      text: statusText,
+      status: safeStatus,
+      statusI18n: 'order.status.$safeStatus',
+      dedupeKey: 'order:$safeOrderId:status:$safeStatus',
     );
     NotificationService.instance.notifyLocal(
       L10n.trLocale(locale, 'shipments.status_notification_title'),
@@ -1074,14 +1167,15 @@ class ShippingService {
       return {'ok': false, 'message': 'Secret manquant'};
     }
     try {
-      if (name.contains('yalidine') || name.contains('ecotrack')) {
-        final tokenLength = name.contains('ecotrack') ? 200 : 120;
+      final isZr = isZrExpressCourier(courierName: name);
+      if (name.contains('yalidine') || name.contains('ecotrack') || isZr) {
+        final tokenLength = name.contains('ecotrack') || isZr ? 200 : 120;
         final edge = await _validateViaEdgeDetailed(
           courierName: courierName,
           apiKey: InputSanitizer.sanitizeText(apiKey, maxLength: tokenLength),
           apiSecret: apiSecret == null || apiSecret.trim().isEmpty
               ? ''
-              : InputSanitizer.sanitizeText(apiSecret, maxLength: 120),
+              : InputSanitizer.sanitizeText(apiSecret, maxLength: 200),
         );
         if (edge != null) return edge;
         if (name.contains('yalidine') && !kIsWeb) {
@@ -1183,13 +1277,22 @@ class ShippingService {
   Future<List<Map<String, String>>> fetchCourierWilayas({
     required String courierId,
     Map<String, dynamic>? settings,
+    String? sellerId,
   }) async {
     final safeCourierId =
         InputSanitizer.sanitizeText(courierId, maxLength: 40).toLowerCase();
+    final isZrExpress = isZrExpressCourier(courierId: safeCourierId);
     final apiKey = settings?['api_key']?.toString() ?? '';
     final apiSecret = settings?['api_secret']?.toString() ?? '';
     if (safeCourierId.contains('yalidine')) {
       if (apiKey.isEmpty || apiSecret.isEmpty) {
+        if (sellerId != null && sellerId.isNotEmpty) {
+          final edge = await _fetchCourierWilayasViaEdge(
+            sellerId: sellerId,
+            courierId: safeCourierId,
+          );
+          if (edge.isNotEmpty) return edge;
+        }
         return _fetchDbWilayas();
       }
       final list = await _fetchYalidineWilayas(
@@ -1199,6 +1302,13 @@ class ShippingService {
       return list.isEmpty ? _fetchDbWilayas() : list;
     } else if (safeCourierId.contains('ecotrack')) {
       if (apiKey.isEmpty) {
+        if (sellerId != null && sellerId.isNotEmpty) {
+          final edge = await _fetchCourierWilayasViaEdge(
+            sellerId: sellerId,
+            courierId: safeCourierId,
+          );
+          if (edge.isNotEmpty) return edge;
+        }
         return _fetchDbWilayas();
       }
       final list = await _fetchEcotrackWilayas(
@@ -1206,21 +1316,85 @@ class ShippingService {
       );
       return list.isEmpty ? _fetchDbWilayas() : list;
     }
+    if (isZrExpress) {
+      if (sellerId != null && sellerId.isNotEmpty) {
+        return _fetchCourierWilayasViaEdge(
+          sellerId: sellerId,
+          courierId: safeCourierId,
+        );
+      }
+      return const [];
+    }
+    if (sellerId != null && sellerId.isNotEmpty) {
+      final edge = await _fetchCourierWilayasViaEdge(
+        sellerId: sellerId,
+        courierId: safeCourierId,
+      );
+      if (edge.isNotEmpty) return edge;
+    }
     return _fetchDbWilayas();
+  }
+
+  Future<List<Map<String, String>>> _fetchCourierWilayasViaEdge({
+    required String sellerId,
+    required String courierId,
+  }) async {
+    try {
+      final response = await RateLimiter.instance.run(
+        'courier.wilayas.edge',
+        () => supabase.functions.invoke(
+          'courier-locations',
+          body: {
+            'seller_id': sellerId,
+            'courier_id': courierId,
+            'type': 'wilayas',
+          },
+        ),
+      );
+      final data = response.data;
+      final rows = data is Map ? data['data'] : null;
+      if (rows is List) {
+        return rows
+            .whereType<Map>()
+            .map(
+              (r) => {
+                'id': r['id']?.toString() ?? '',
+                'code': r['code']?.toString() ?? '',
+                'name': r['name']?.toString() ?? '',
+              },
+            )
+            .where((m) => m['name']!.isNotEmpty)
+            .toList();
+      }
+    } catch (_) {}
+    return const [];
   }
 
   Future<List<Map<String, String>>> fetchCourierCommunes({
     required String courierId,
     Map<String, dynamic>? settings,
     required String wilayaCode,
+    String? sellerId,
   }) async {
     final safeCourierId =
         InputSanitizer.sanitizeText(courierId, maxLength: 40).toLowerCase();
-    final safeWilayaCode = InputSanitizer.sanitizeText(wilayaCode, maxLength: 8);
+    final isZrExpress = isZrExpressCourier(courierId: safeCourierId);
+    final safeWilayaCode = InputSanitizer.sanitizeText(
+      wilayaCode,
+      maxLength: isZrExpress ? 64 : 8,
+    );
     final apiKey = settings?['api_key']?.toString() ?? '';
     final apiSecret = settings?['api_secret']?.toString() ?? '';
     if (safeCourierId.contains('yalidine')) {
       if (apiKey.isEmpty || apiSecret.isEmpty) {
+        if (sellerId != null && sellerId.isNotEmpty) {
+          final edge = await _fetchCourierCommunesViaEdge(
+            sellerId: sellerId,
+            courierId: safeCourierId,
+            wilayaCode: safeWilayaCode,
+          );
+          if (edge.isNotEmpty) return edge;
+        }
         return _fetchDbCommunes(safeWilayaCode);
       }
       final list = await _fetchYalidineCommunes(
@@ -1231,6 +1405,14 @@ class ShippingService {
       return list.isEmpty ? _fetchDbCommunes(safeWilayaCode) : list;
     } else if (safeCourierId.contains('ecotrack')) {
       if (apiKey.isEmpty) {
+        if (sellerId != null && sellerId.isNotEmpty) {
+          final edge = await _fetchCourierCommunesViaEdge(
+            sellerId: sellerId,
+            courierId: safeCourierId,
+            wilayaCode: safeWilayaCode,
+          );
+          if (edge.isNotEmpty) return edge;
+        }
         return _fetchDbCommunes(safeWilayaCode);
       }
       final list = await _fetchEcotrackCommunes(
@@ -1239,7 +1421,63 @@ class ShippingService {
       );
       return list.isEmpty ? _fetchDbCommunes(safeWilayaCode) : list;
     }
+    if (isZrExpress) {
+      if (sellerId != null && sellerId.isNotEmpty) {
+        return _fetchCourierCommunesViaEdge(
+          sellerId: sellerId,
+          courierId: safeCourierId,
+          wilayaCode: safeWilayaCode,
+        );
+      }
+      return const [];
+    }
+    if (sellerId != null && sellerId.isNotEmpty) {
+      final edge = await _fetchCourierCommunesViaEdge(
+        sellerId: sellerId,
+        courierId: safeCourierId,
+        wilayaCode: safeWilayaCode,
+      );
+      if (edge.isNotEmpty) return edge;
+    }
     return _fetchDbCommunes(safeWilayaCode);
+  }
+
+  Future<List<Map<String, String>>> _fetchCourierCommunesViaEdge({
+    required String sellerId,
+    required String courierId,
+    required String wilayaCode,
+  }) async {
+    try {
+      final response = await RateLimiter.instance.run(
+        'courier.locations.edge',
+        () => supabase.functions.invoke(
+          'courier-locations',
+          body: {
+            'seller_id': sellerId,
+            'courier_id': courierId,
+            'wilaya_code': wilayaCode,
+          },
+        ),
+      );
+      final data = response.data;
+      final rows = data is Map ? data['data'] : null;
+      if (rows is List) {
+        return rows
+            .whereType<Map>()
+            .map(
+              (r) => {
+                'id': r['id']?.toString() ?? '',
+                'name': r['name']?.toString() ?? '',
+                'wilaya_id': r['wilaya_id']?.toString() ?? '',
+                'has_stop_desk': r['has_stop_desk']?.toString() ?? '',
+                'stopdesk_id': r['stopdesk_id']?.toString() ?? '',
+              },
+            )
+            .where((m) => m['name']!.isNotEmpty)
+            .toList();
+      }
+    } catch (_) {}
+    return const [];
   }
 
   Future<Map<String, dynamic>> fetchEcotrackFees({
@@ -1273,12 +1511,15 @@ class ShippingService {
 
   Future<List<Map<String, String>>> _fetchDbCommunes(String wilayaCode) async {
     try {
+      final trimmed = wilayaCode.trim();
+      final padded = trimmed.length == 1 ? trimmed.padLeft(2, '0') : trimmed;
+      final codes = <String>{trimmed, padded}.where((v) => v.isNotEmpty).toList();
       final rows = await RateLimiter.instance.run(
         'communes.db',
         () => supabase
             .from(SupabaseTables.communes)
             .select('name_fr, name_ar')
-            .eq('wilaya_code', wilayaCode)
+            .inFilter('wilaya_code', codes)
             .order('name_fr'),
       );
       return rows
@@ -1748,15 +1989,17 @@ class ShippingService {
       }).eq('id', safeOrderId),
     );
 
-    await MessageService().sendMessage(
-      roomId: 'order:$safeOrderId',
-      content: L10n.trLocale(locale, 'shipments.label_ready'),
-      type: MessageType.label,
-      payload: {
-        'label_url': labelUrl,
-        'tracking_number': tracking,
-        'carrier': 'Ecotrack',
-      },
+    final labelKey = 'order.system.shipped';
+    await _postOrderSystemMessage(
+      orderId: safeOrderId,
+      text: L10n.trLocale(locale, labelKey),
+      i18nKey: labelKey,
+      status: 'shipped',
+      statusI18n: 'order.status.shipped',
+      trackingNumber: tracking,
+      labelUrl: labelUrl,
+      courierName: 'Ecotrack',
+      dedupeKey: 'order:$safeOrderId:shipped',
     );
 
     return {
@@ -1941,14 +2184,16 @@ class ShippingService {
   }) async {
     final safeCourierName =
         InputSanitizer.sanitizeText(courierName, maxLength: 80);
-    final isEcotrack = safeCourierName.toLowerCase().contains('ecotrack');
+    final lowerName = safeCourierName.toLowerCase();
+    final isEcotrack = lowerName.contains('ecotrack');
+    final isZrExpress = isZrExpressCourier(courierName: lowerName);
     final safeApiKey = InputSanitizer.sanitizeText(
       apiKey,
-      maxLength: isEcotrack ? 200 : 120,
+      maxLength: (isEcotrack || isZrExpress) ? 200 : 120,
     );
     final safeApiSecret = isEcotrack || apiSecret.trim().isEmpty
         ? ''
-        : InputSanitizer.sanitizeText(apiSecret, maxLength: 120);
+        : InputSanitizer.sanitizeText(apiSecret, maxLength: isZrExpress ? 200 : 120);
     final safeSenderId =
         InputSanitizer.sanitizeOptionalText(senderId, maxLength: 80);
     // Find the courier by name to get its ID

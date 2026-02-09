@@ -165,6 +165,37 @@ serve(async (req) => {
     );
   }
 
+  if (courierName.includes("zrexpress") ||
+      courierName.includes("zr express") ||
+      courierName.includes("zr-express")) {
+    const url = "https://api.zrexpress.app/api/v1/users/profile";
+    const headers = {
+      "X-Api-Key": apiKey,
+      "X-Tenant": apiSecret,
+      Accept: "application/json",
+    };
+    const resp = await fetch(url, { headers });
+    if (resp.ok) {
+      return new Response(JSON.stringify({ ok: true, message: "OK" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const bodyText = await resp.text();
+    let message = bodyText.trim();
+    try {
+      const parsed = JSON.parse(bodyText);
+      if (parsed && typeof parsed.message === "string") {
+        message = parsed.message;
+      }
+    } catch {
+      // keep raw text
+    }
+    return new Response(
+      JSON.stringify({ ok: false, message: message || "Token invalide" }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
   return new Response(
     JSON.stringify({ ok: false, message: "Validation non supportee" }),
     { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },

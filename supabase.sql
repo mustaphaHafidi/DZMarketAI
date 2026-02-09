@@ -1163,9 +1163,9 @@ ALTER TABLE public.messages
   ADD COLUMN IF NOT EXISTS type text default 'text',
   ADD COLUMN IF NOT EXISTS payload jsonb,
   ADD COLUMN IF NOT EXISTS dedupe_key text;
+DROP INDEX IF EXISTS public.messages_dedupe_uniq;
 CREATE UNIQUE INDEX IF NOT EXISTS messages_dedupe_uniq
-  ON public.messages(conversation_id, dedupe_key)
-  WHERE dedupe_key IS NOT NULL;
+  ON public.messages(conversation_id, dedupe_key);
 
 -- Keep conversation ordering stable on any message insert (fallback safety).
 CREATE OR REPLACE FUNCTION public.update_conversation_last_message()
@@ -1275,26 +1275,15 @@ $$;
     RAISE EXCEPTION 'Forbidden' USING errcode = '42501';
   END IF;
 
-  SELECT *
-    INTO conv
+  -- Always keep a dedicated conversation per order.
+  SELECT * INTO conv
   FROM public.conversations c
-  WHERE c.product_id = ord.product_id
-    AND c.buyer_id = ord.buyer_id
-    AND c.seller_id = ord.seller_id
+  WHERE c.order_id = p_order_id
   LIMIT 1;
 
-      IF conv.id IS NOT NULL THEN
-        IF conv.order_id IS NULL THEN
-          UPDATE public.conversations
-          SET order_id = p_order_id,
-              buyer_hidden_at = NULL,
-              seller_hidden_at = NULL,
-              updated_at = now()
-          WHERE id = conv.id
-          RETURNING * INTO conv;
-        END IF;
-        RETURN conv;
-      END IF;
+  IF conv.id IS NOT NULL THEN
+    RETURN conv;
+  END IF;
 
     INSERT INTO public.conversations (
       order_id,
@@ -1431,6 +1420,13 @@ BEGIN
   RETURN msg;
 END;
 $$;
+
+revoke all on function public.ensure_order_conversation(bigint) from public;
+grant execute on function public.ensure_order_conversation(bigint) to authenticated;
+revoke all on function public.post_order_event(bigint, text, jsonb, text) from public;
+grant execute on function public.post_order_event(bigint, text, jsonb, text) to authenticated, service_role;
+revoke all on function public.send_message(uuid, text, text, jsonb, text) from public;
+grant execute on function public.send_message(uuid, text, text, jsonb, text) to authenticated;
 
 -- RPC: delete_conversation (soft delete per user)
 CREATE OR REPLACE FUNCTION public.delete_conversation(p_conversation_id uuid)
@@ -2205,6 +2201,26 @@ end;
 $$;
 revoke all on function public.reencrypt_seller_secrets(text, text) from public;
 grant execute on function public.reencrypt_seller_secrets(text, text) to service_role;
+
+-- Seed courier ZR Express if couriers table exists --------------------------
+do $$
+begin
+  if exists (
+    select 1 from information_schema.tables
+    where table_schema = 'public' and table_name = 'couriers'
+  ) then
+    begin
+      insert into public.couriers (code, name, contact, coverage)
+      values ('zrexpress', 'ZR Express', 'support@zrexpress.app', 'National')
+      on conflict (code) do update set name = excluded.name;
+    exception when undefined_column then
+      insert into public.couriers (code, name)
+      values ('zrexpress', 'ZR Express')
+      on conflict (code) do update set name = excluded.name;
+    end;
+  end if;
+end;
+$$;
 
 
 

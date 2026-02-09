@@ -14,10 +14,12 @@ class ChatRoomPage extends StatefulWidget {
     super.key,
     required this.conversationId,
     this.productId,
+    this.orderId,
   });
 
   final String conversationId;
   final String? productId;
+  final String? orderId;
 
   @override
   State<ChatRoomPage> createState() => _ChatRoomPageState();
@@ -51,13 +53,30 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     try {
       final conv = await supabase
           .from('conversations')
-          .select('product_id,seller_id,buyer_id')
+          .select('product_id,seller_id,buyer_id,order_id')
           .eq('id', widget.conversationId)
           .maybeSingle();
       if (conv == null) return;
+      var resolvedProductId = conv['product_id']?.toString();
+      final orderId = widget.orderId ?? conv['order_id']?.toString();
+      if (orderId != null && orderId.isNotEmpty) {
+        try {
+          final order = await supabase
+              .from('orders')
+              .select('product_id')
+              .eq('id', orderId)
+              .maybeSingle();
+          if (order != null) {
+            final orderProductId = order['product_id']?.toString();
+            if (orderProductId != null && orderProductId.isNotEmpty) {
+              resolvedProductId = orderProductId;
+            }
+          }
+        } catch (_) {}
+      }
       if (!mounted) return;
       setState(() {
-        _productId = conv['product_id']?.toString();
+        _productId = resolvedProductId;
         _sellerId = conv['seller_id']?.toString();
         _buyerId = conv['buyer_id']?.toString();
       });
@@ -66,7 +85,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
 
   Future<_ProductHeaderData?> _loadHeader() async {
     try {
-      var productId = widget.productId ?? _productId;
+      var productId = _productId ?? widget.productId;
       if (productId == null || productId.isEmpty) return null;
 
       final product = await supabase
@@ -251,19 +270,34 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                     children: [
                       ClipRRect(
                         borderRadius: BorderRadius.circular(12),
-                        child: data.imageUrl != null
-                            ? Image.network(
-                                data.imageUrl!,
-                                width: 56,
-                                height: 56,
-                                fit: BoxFit.cover,
-                              )
-                            : Container(
+                        child: (() {
+                          final imageUrl = data.imageUrl;
+                          final lowerUrl = imageUrl?.toLowerCase() ?? '';
+                          final isHeic = lowerUrl.contains('.heic');
+                          final isHeif = lowerUrl.contains('.heif');
+                          if (imageUrl == null || imageUrl.isEmpty || isHeic || isHeif) {
+                            return Container(
+                              width: 56,
+                              height: 56,
+                              color: Colors.grey.shade300,
+                              child: const Icon(Icons.image_not_supported),
+                            );
+                          }
+                          return Image.network(
+                            imageUrl,
+                            width: 56,
+                            height: 56,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
                                 width: 56,
                                 height: 56,
                                 color: Colors.grey.shade300,
                                 child: const Icon(Icons.image_not_supported),
-                              ),
+                              );
+                            },
+                          );
+                        })(),
                       ),
                       const SizedBox(width: 12),
                       Expanded(

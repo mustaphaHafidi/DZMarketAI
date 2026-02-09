@@ -1,12 +1,10 @@
 import 'package:dzmarket/src/config/supabase_options.dart';
 import 'package:dzmarket/src/models/order.dart';
+import 'package:dzmarket/src/services/chat_repository.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/rate_limiter.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:rxdart/rxdart.dart';
-import 'package:dzmarket/src/services/chat_repository.dart';
-import 'package:dzmarket/src/services/i18n.dart';
-import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class OrderService {
@@ -121,6 +119,7 @@ class OrderService {
       if (shippingSelection != null) 'p_shipping_selection': shippingSelection,
     };
     dynamic response;
+    var usedFallback = false;
     try {
       response = await RateLimiter.instance.run(
         'orders.create.rpc',
@@ -143,43 +142,38 @@ class OrderService {
             params: fallback,
           ),
         );
+        usedFallback = true;
       } else {
         rethrow;
       }
     }
     if (response == null) return null;
     final orderId = response.toString();
-    final localeCode =
-        LocaleService.instance.locale.value?.languageCode ?? 'fr';
-    final messageText = L10n.trLocale(localeCode, 'order.system.created');
-    final payload = {
-      'text': messageText,
-      'i18n_key': 'order.system.created',
-      'status': 'pending',
-      'status_i18n': 'order.status.pending',
-    };
-    try {
-      await supabase.rpc(
-        'post_order_event',
-        params: {
-          'p_order_id': orderId,
-          'p_event': 'order_created',
-          'p_payload': payload,
-          'p_dedupe_key': 'order:$orderId:created',
-        },
-      );
-    } catch (_) {
-      // Do not fail order creation if chat event fails.
-    }
+    // Order creation already emits a server-side event in create_order.
+    // Best-effort client fallback to ensure the system message exists for all couriers.
     try {
       await ChatRepository().postOrderSystemMessage(
         orderId: orderId,
-        text: messageText,
-        payload: payload,
+        text: 'order.system.created',
+        payload: {
+          'i18n_key': 'order.system.created',
+          'status': 'pending',
+          'status_i18n': 'order.status.pending',
+        },
         dedupeKey: 'order:$orderId:created',
       );
     } catch (_) {
-      // Best-effort fallback; ignore if not possible.
+      // Do not block order creation if chat event fails.
+    }
+    if (usedFallback && shippingSelection != null) {
+      try {
+        await supabase
+            .from(SupabaseTables.orders)
+            .update({'shipping_selection': shippingSelection})
+            .eq('id', orderId);
+      } catch (_) {
+        // Best-effort: do not fail order creation if selection update fails.
+      }
     }
     return orderId;
   }

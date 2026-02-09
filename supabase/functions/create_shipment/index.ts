@@ -86,6 +86,16 @@ const uploadLabel = async (
   return data?.signedUrl ?? "";
 };
 
+const isPdfBytes = (bytes: Uint8Array) =>
+  bytes.length > 4 &&
+  bytes[0] === 0x25 &&
+  bytes[1] === 0x50 &&
+  bytes[2] === 0x44 &&
+  bytes[3] === 0x46;
+
+const decodeBytes = (bytes: Uint8Array) =>
+  new TextDecoder().decode(bytes).trim();
+
 const ecotrackBaseUrls = () => {
   const envValue = (Deno.env.get("ECOTRACK_BASE_URL") ?? "").trim();
   const candidates = [envValue, "https://api.ecotrack.dz", "https://ovred.ecotrack.dz"];
@@ -258,9 +268,12 @@ serve(async (req) => {
     return jsonResponse({ ok: false, message: "Missing courier settings" }, 400);
   }
 
-  const lowerCourier = `${courierId} ${courierName}`.toLowerCase();
-  const isYalidine = lowerCourier.includes("yalidine");
-  const isEcotrack = lowerCourier.includes("ecotrack");
+  const normalizeCourier = (value: string) =>
+    value.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const normalizedCourier = normalizeCourier(`${courierId} ${courierName}`);
+  const isYalidine = normalizedCourier.includes("yalidine");
+  const isEcotrack = normalizedCourier.includes("ecotrack");
+  const isZrExpress = normalizedCourier.includes("zrexpress");
 
   let trackingNumber = textValue(order.tracking_number);
   let labelUrl = textValue(order.label_url);
@@ -495,6 +508,413 @@ serve(async (req) => {
     } else {
       labelUrl = "";
     }
+  } else if (isZrExpress) {
+    if (!selection) {
+      return jsonResponse({ ok: false, message: "Missing shipment selection" }, 400);
+    }
+    if (!settingsRow.api_secret) {
+      return jsonResponse({ ok: false, message: "Missing courier tenant" }, 400);
+    }
+
+    const normalizePhone = (value: string) => {
+      const raw = value.trim();
+      if (!raw) return "";
+      let cleaned = raw.replace(/[^\d+]/g, "");
+      if (cleaned.startsWith("00")) {
+        cleaned = `+${cleaned.slice(2)}`;
+      }
+      if (cleaned.startsWith("+")) {
+        const digits = cleaned.slice(1).replace(/\D/g, "");
+        if (digits.startsWith("2130")) {
+          const fixed = `213${digits.slice(4)}`;
+          if (fixed.length < 8) return "";
+          return `+${fixed}`;
+        }
+        if (digits.length < 8) return "";
+        return `+${digits}`;
+      }
+      let digits = cleaned.replace(/\D/g, "");
+      if (!digits) return "";
+      if (digits.startsWith("213")) {
+        digits = digits.slice(3);
+      }
+      if (digits.startsWith("0")) {
+        digits = digits.slice(1);
+      }
+      if (digits.length < 8) return "";
+      if (digits.length > 9) {
+        digits = digits.slice(-9);
+      }
+      return `+213${digits}`;
+    };
+
+    const isUuid = (value: string) =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+        .test(value);
+
+    const receiverWilayaId =
+      textValue(pick(selection, "receiverWilayaId")) ||
+      textValue(pick(selection, "wilayaCode"));
+    const receiverCommuneId =
+      textValue(pick(selection, "receiverCommuneId")) ||
+      textValue(pick(selection, "commune_id")) ||
+      textValue(pick(selection, "receiver_commune_id"));
+    const isStopdesk =
+      pick(selection, "deliveryType") === "stopdesk" ||
+      pick(selection, "is_stopdesk") === true;
+    const hubId =
+      textValue(pick(selection, "stopdesk_id")) ||
+      textValue(pick(selection, "stopdeskId")) ||
+      textValue(pick(selection, "hubId"));
+
+    const phoneRaw =
+      textValue(pick(selection, "phone_e164")) ||
+      textValue(pick(selection, "phone_main")) ||
+      textValue(pick(selection, "contact_phone")) ||
+      textValue(pick(selection, "phone"));
+    const primaryPhone =
+      phoneRaw.split(/[,;/\s]+/).filter(Boolean)[0] ?? phoneRaw;
+    const normalizedPhone = normalizePhone(primaryPhone);
+    const phone2Raw =
+      textValue(pick(selection, "phone2_e164")) ||
+      textValue(pick(selection, "phone_secondary")) ||
+      textValue(pick(selection, "phone2"));
+    const normalizedPhone2 = phone2Raw ? normalizePhone(phone2Raw) : "";
+    const customerName = `${textValue(pick(selection, "familyname"))} ${textValue(
+      pick(selection, "firstname"),
+    )}`.trim();
+    const address = textValue(pick(selection, "address"));
+    const productList = textValue(pick(selection, "productList"));
+    const price = numberValue(pick(selection, "price"), 0);
+    const weight = numberValue(pick(selection, "weight"), 0);
+    const height = numberValue(pick(selection, "height"), 0);
+    const width = numberValue(pick(selection, "width"), 0);
+    const length = numberValue(pick(selection, "length"), 0);
+
+    if (
+      !receiverWilayaId ||
+      !receiverCommuneId ||
+      !customerName ||
+      !normalizedPhone ||
+      !address
+    ) {
+      return jsonResponse({ ok: false, message: "Missing receiver data" }, 400);
+    }
+    if (!normalizedPhone) {
+      return jsonResponse({ ok: false, message: "Invalid phone format" }, 400);
+    }
+    if (phone2Raw && !normalizedPhone2) {
+      return jsonResponse({ ok: false, message: "Invalid phone2 format" }, 400);
+    }
+    const dzNational = (value: string) =>
+      value.replace(/^\+?213/, "");
+    const isZrMobile = (value: string) => {
+      const national = dzNational(value);
+      return national.startsWith("5") || national.startsWith("6");
+    };
+    if (!isZrMobile(normalizedPhone)) {
+      return jsonResponse({ ok: false, message: "zr_phone_invalid" }, 400);
+    }
+    if (normalizedPhone2 && !isZrMobile(normalizedPhone2)) {
+      return jsonResponse({ ok: false, message: "zr_phone_invalid" }, 400);
+    }
+    if (!isUuid(receiverWilayaId) || !isUuid(receiverCommuneId)) {
+      return jsonResponse({ ok: false, message: "invalid_territory_id" }, 400);
+    }
+    if (isStopdesk && !hubId) {
+      return jsonResponse({ ok: false, message: "Missing pickup point" }, 400);
+    }
+
+    const headers = {
+      "X-Api-Key": textValue(settingsRow.api_key),
+      "X-Tenant": textValue(settingsRow.api_secret),
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    };
+
+    const productGuid = crypto.randomUUID();
+    const productSku = textValue(selection.product_sku ?? selection.productSku ?? orderId);
+    const cityName =
+      textValue(pick(selection, "receiverWilaya")) ||
+      textValue(pick(selection, "to_wilaya_name"));
+    const districtName =
+      textValue(pick(selection, "receiverCommune")) ||
+      textValue(pick(selection, "to_commune_name"));
+    const postalCode = textValue(pick(selection, "zip"));
+    const orderedProduct: Record<string, unknown> = {
+      productId: productGuid,
+      productSku: productSku || `SKU-${orderId}`,
+      productName: productList || `Order ${orderId}`,
+      unitPrice: Math.round(price),
+      quantity: 1,
+      stockType: "local",
+    };
+    if (length > 0) orderedProduct.length = Math.round(length);
+    if (width > 0) orderedProduct.width = Math.round(width);
+    if (height > 0) orderedProduct.height = Math.round(height);
+    if (weight > 0) orderedProduct.weight = Math.round(weight);
+
+    const phonePayload: Record<string, unknown> = {
+      number1: normalizedPhone,
+      number2: normalizedPhone2 || normalizedPhone,
+    };
+
+    const payloadZr: Record<string, unknown> = {
+      customer: {
+        customerId: textValue(order.buyer_id) || orderId,
+        name: customerName,
+        phone: phonePayload,
+      },
+      deliveryAddress: {
+        street: address,
+        city: cityName,
+        district: districtName,
+        postalCode: postalCode,
+        country: "algeria",
+        cityTerritoryId: receiverWilayaId,
+        districtTerritoryId: receiverCommuneId,
+      },
+      orderedProducts: [orderedProduct],
+      amount: Math.round(price),
+      description: productList || `Order ${orderId}`,
+      deliveryType: isStopdesk ? "pickup-point" : "home",
+    };
+    if (isStopdesk && hubId) {
+      payloadZr.hubId = hubId;
+    }
+
+    const resp = await fetch("https://api.zrexpress.app/api/v1/parcels", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payloadZr),
+    });
+    if (!resp.ok) {
+      let bodyText = "";
+      try {
+        bodyText = await resp.text();
+      } catch {
+        bodyText = "";
+      }
+      return jsonResponse(
+        { ok: false, message: `ZrExpress ${resp.status}: ${bodyText}` },
+        502,
+      );
+    }
+    const decoded = await resp.json();
+    const parcel =
+      decoded?.data ??
+      decoded?.item ??
+      decoded?.result ??
+      decoded?.parcel ??
+      decoded;
+    const createdId = textValue(
+      parcel?.id ??
+        parcel?.parcelId ??
+        parcel?.parcel_id ??
+        parcel?.code ??
+        parcel?.barcode,
+    );
+    trackingNumber = textValue(
+      parcel?.trackingNumber ??
+        parcel?.tracking ??
+        parcel?.tracking_number ??
+        parcel?.barcode ??
+        parcel?.code,
+    );
+    if (!trackingNumber && createdId) {
+      const detailResp = await fetch(
+        `https://api.zrexpress.app/api/v1/parcels/${createdId}`,
+        { headers },
+      );
+      if (detailResp.ok) {
+        const detail = await detailResp.json();
+        trackingNumber = textValue(
+          detail?.trackingNumber ??
+            detail?.tracking ??
+            detail?.tracking_number ??
+            detail?.barcode ??
+            detail?.code,
+        );
+      }
+    }
+    if (!trackingNumber) {
+      return jsonResponse({ ok: false, message: "Tracking missing" }, 500);
+    }
+
+    const labelResp = await fetch(
+      "https://api.zrexpress.app/api/v1/parcels/labels/individual/pdf",
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ trackingNumbers: [trackingNumber] }),
+      },
+    );
+    if (!labelResp.ok) {
+      const bodyText = await labelResp.text();
+      return jsonResponse(
+        { ok: false, message: `Label ${labelResp.status}: ${bodyText}` },
+        502,
+      );
+    }
+    const extractLabelSource = (value: unknown) => textValue(value ?? "");
+    const looksLikeLabel = (value: string) => {
+      const trimmed = value.trim();
+      if (!trimmed) return false;
+      if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return true;
+      if (/^data:.*;base64,/i.test(trimmed)) return true;
+      if (/^[A-Za-z0-9+/=]+$/.test(trimmed) && trimmed.length > 200) return true;
+      return false;
+    };
+    const pickLabelValue = (obj: Record<string, unknown> | undefined) => {
+      if (!obj) return "";
+      return extractLabelSource(
+        obj.url ??
+          obj.labelUrl ??
+          obj.label_url ??
+          obj.pdfUrl ??
+          obj.pdf_url ??
+          obj.fileUrl ??
+          obj.file_url ??
+          obj.downloadUrl ??
+          obj.download_url ??
+          obj.link ??
+          obj.label ??
+          obj.file ??
+          obj.pdf ??
+          obj.base64 ??
+          obj.content ??
+          obj.fileBase64 ??
+          obj.file_base64 ??
+          obj.contentBase64 ??
+          obj.content_base64 ??
+          obj.pdfBase64 ??
+          obj.pdf_base64,
+      );
+    };
+    const deepFindLabel = (value: unknown): string => {
+      if (value == null) return "";
+      if (typeof value === "string") {
+        return looksLikeLabel(value) ? value : "";
+      }
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          const found = deepFindLabel(item);
+          if (found) return found;
+        }
+        return "";
+      }
+      if (typeof value === "object") {
+        const obj = value as Record<string, unknown>;
+        const direct = pickLabelValue(obj);
+        if (looksLikeLabel(direct)) return direct;
+        for (const [key, val] of Object.entries(obj)) {
+          const keyLower = key.toLowerCase();
+          if (
+            keyLower.includes("label") ||
+            keyLower.includes("pdf") ||
+            keyLower.includes("url") ||
+            keyLower.includes("file") ||
+            keyLower.includes("download") ||
+            keyLower.includes("link")
+          ) {
+            const candidate = deepFindLabel(val);
+            if (candidate) return candidate;
+          }
+        }
+        for (const val of Object.values(obj)) {
+          const candidate = deepFindLabel(val);
+          if (candidate) return candidate;
+        }
+      }
+      return "";
+    };
+    const parseLabelResponse = async (resp: Response) => {
+      const bytes = new Uint8Array(await resp.arrayBuffer());
+      if (isPdfBytes(bytes)) {
+        return { labelBytes: bytes, labelUrl: "" };
+      }
+      const bodyText = decodeBytes(bytes);
+      let labelSource = "";
+      if (!bodyText) return { labelBytes: null, labelUrl: "" };
+      try {
+        const labelDecoded = JSON.parse(bodyText);
+        const labelData =
+          labelDecoded?.data ??
+          labelDecoded?.items ??
+          labelDecoded?.results ??
+          labelDecoded?.labels ??
+          labelDecoded?.successes ??
+          labelDecoded;
+        if (Array.isArray(labelData)) {
+          const match = labelData.find((m) =>
+            textValue(m?.trackingNumber ?? m?.tracking ?? m?.number) === trackingNumber
+          );
+          labelSource =
+            deepFindLabel(match) ||
+            deepFindLabel(labelData) ||
+            deepFindLabel(labelDecoded);
+        } else if (labelData && typeof labelData === "object") {
+          labelSource = deepFindLabel(labelData as Record<string, unknown>);
+        } else {
+          labelSource = deepFindLabel(labelDecoded);
+        }
+      } catch {
+        labelSource = deepFindLabel(bodyText) || extractLabelSource(bodyText);
+      }
+      if (!labelSource) return { labelBytes: null, labelUrl: "" };
+      if (labelSource.startsWith("http://") || labelSource.startsWith("https://")) {
+        return { labelBytes: null, labelUrl: labelSource };
+      }
+      const labelBytes = await loadLabelBytes(labelSource);
+      return { labelBytes, labelUrl: "" };
+    };
+
+    let labelBytes: Uint8Array | null = null;
+    let labelLink = "";
+    {
+      const parsed = await parseLabelResponse(labelResp);
+      labelBytes = parsed.labelBytes;
+      labelLink = parsed.labelUrl;
+    }
+    if (!labelBytes && !labelLink) {
+      const htmlResp = await fetch(
+        "https://api.zrexpress.app/api/v1/parcels/labels/individual",
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ trackingNumbers: [trackingNumber] }),
+        },
+      );
+      if (htmlResp.ok) {
+        const parsed = await parseLabelResponse(htmlResp);
+        labelBytes = parsed.labelBytes;
+        labelLink = parsed.labelUrl;
+      } else {
+        const bodyText = await htmlResp.text();
+        return jsonResponse(
+          { ok: false, message: `Label ${htmlResp.status}: ${bodyText}` },
+          502,
+        );
+      }
+    }
+    if (!labelBytes && !labelLink) {
+      return jsonResponse({ ok: false, message: "Label missing" }, 502);
+    }
+    if (labelBytes) {
+      labelUrl = await uploadLabel(
+        supabaseAdmin,
+        userId,
+        `zrexpress-${trackingNumber}.pdf`,
+        labelBytes,
+      );
+    } else {
+      labelUrl = labelLink;
+    }
+    summary = {
+      price: price,
+      tracking: trackingNumber,
+      label_url: labelUrl,
+    };
   }
 
   const shipmentPayload: Record<string, unknown> = {
@@ -502,22 +922,34 @@ serve(async (req) => {
     tracking_number: trackingNumber || null,
     label_url: labelUrl || null,
     status: labelUrl ? "shipped" : "pending",
-    carrier: courierName || courierId,
-    option: shippingOption || null,
-    delivery_mode: deliveryMode || null,
-    shipping_cost: shippingCost || null,
-    events: labelUrl
-      ? [
-          {
-            title: "Label generated",
-            description: "Ready for carrier pickup",
-            at: new Date().toISOString(),
-          },
-        ]
-      : [],
   };
 
-  await supabaseUser.from("shipments").upsert(shipmentPayload);
+  let shipmentError: { message?: string; code?: string } | null = null;
+  let shipmentPayloadCurrent = { ...shipmentPayload };
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await supabaseAdmin
+      .from("shipments")
+      .upsert(shipmentPayloadCurrent, { onConflict: "order_id" });
+    shipmentError = res.error ?? null;
+    if (!shipmentError) break;
+    const message = shipmentError.message ?? "";
+    const match = message.match(/Could not find the '([^']+)' column/);
+    if (match?.[1]) {
+      delete shipmentPayloadCurrent[match[1]];
+      continue;
+    }
+    if (shipmentError.code === "42703") {
+      delete shipmentPayloadCurrent.carrier;
+      continue;
+    }
+    break;
+  }
+  if (shipmentError) {
+    return jsonResponse(
+      { ok: false, message: shipmentError.message },
+      500,
+    );
+  }
   const orderUpdate: Record<string, unknown> = {
     courier_id: courierId || order.courier_id,
     courier_name: courierName || order.courier_name,
@@ -529,7 +961,16 @@ serve(async (req) => {
   if (labelUrl) {
     orderUpdate.status = "shipped";
   }
-  await supabaseUser.from("orders").update(orderUpdate).eq("id", orderId);
+  const { error: orderUpdateError } = await supabaseAdmin
+    .from("orders")
+    .update(orderUpdate)
+    .eq("id", orderId);
+  if (orderUpdateError) {
+    return jsonResponse(
+      { ok: false, message: orderUpdateError.message },
+      500,
+    );
+  }
 
   const statusValue = labelUrl ? "shipped" : "validated";
   const i18nKey = labelUrl

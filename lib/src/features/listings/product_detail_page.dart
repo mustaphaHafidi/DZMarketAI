@@ -14,6 +14,7 @@ import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/offer_service.dart';
 import 'package:dzmarket/src/services/order_service.dart';
 import 'package:dzmarket/src/services/payment_labels.dart';
+import 'package:dzmarket/src/services/phone_formatter.dart';
 import 'package:dzmarket/src/services/rate_limiter.dart';
 import 'package:dzmarket/src/services/review_service.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
@@ -185,7 +186,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         'phone2': selection['phone2'],
         'address': selection['address'],
         'receiverWilaya': selection['receiverWilaya'],
+        'receiverWilayaId': selection['receiverWilayaId'],
         'receiverCommune': selection['receiverCommune'],
+        'receiverCommuneId': selection['receiverCommuneId'],
         'wilayaCode': selection['wilayaCode'],
         'zip': selection['zip'],
         'weight': selection['weight'],
@@ -422,10 +425,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         courierName?.toLowerCase().contains('yalidine') == true;
     final isEcotrack = courierId?.toLowerCase().contains('ecotrack') == true ||
         courierName?.toLowerCase().contains('ecotrack') == true;
+    final isZrExpress = ShippingService.isZrExpressCourier(
+      courierId: courierId,
+      courierName: courierName,
+    );
     final shippingOption = courierName;
     final paymentMethod = 'cod';
     final deliveryMode = courierName;
-    final shippingCost = isYalidine || isEcotrack
+    final shippingCost = isYalidine || isEcotrack || isZrExpress
         ? selection['estimatedFee'] as double?
         : shippingService.estimateCost(
             buyerWilaya: _buyerWilaya,
@@ -435,6 +442,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         ? L10n.tr(context, 'checkout.eta_yalidine')
         : isEcotrack
             ? L10n.tr(context, 'checkout.eta_ecotrack')
+            : isZrExpress
+                ? L10n.tr(context, 'checkout.eta_zrexpress')
             : shippingService.estimateEtaLabel(
                 courierName: courierName,
                 courierId: courierId,
@@ -506,20 +515,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   Future<void> _openOrderChat(String orderId) async {
-    try {
-      await ChatRepository().postOrderSystemMessage(
-        orderId: orderId,
-        text: L10n.tr(context, 'order.system.created'),
-        payload: const {
-          'i18n_key': 'order.system.created',
-          'status': 'pending',
-          'status_i18n': 'order.status.pending',
-        },
-        dedupeKey: 'order:$orderId:created',
-      );
-    } catch (_) {
-      // Best-effort only; chat room can still be opened even if this fails.
-    }
     if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -1130,6 +1125,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
   String? _senderWilayaName;
   String? _receiverWilayaId;
   String? _receiverWilayaName;
+  String? _receiverCommuneId;
   String? _receiverCommuneName;
   String? _stopdeskCommuneName;
   String? _stopdeskId;
@@ -1138,6 +1134,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
   bool _acceptTerms = false;
   bool _exchangeAfterDelivery = false;
   bool _isEcotrack = false;
+  bool _isZrExpress = false;
   bool _supportsStopdeskList = true;
   double? _estimatedFee;
   Map<String, dynamic>? _fees;
@@ -1147,6 +1144,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
   late TextEditingController _phoneCtrl;
   late TextEditingController _phone2Ctrl;
   late TextEditingController _addressCtrl;
+  late TextEditingController _dairaCtrl;
   late TextEditingController _zipCtrl;
   late TextEditingController _productListCtrl;
   late TextEditingController _orderNumberCtrl;
@@ -1162,6 +1160,10 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
     super.initState();
     _isEcotrack = widget.courierId.toLowerCase().contains('ecotrack') ||
         widget.courierName.toLowerCase().contains('ecotrack');
+    _isZrExpress = ShippingService.isZrExpressCourier(
+      courierId: widget.courierId,
+      courierName: widget.courierName,
+    );
     _supportsStopdeskList = !_isEcotrack;
     final fullName = widget.buyerProfile?['full_name']?.toString() ?? '';
     final nameParts =
@@ -1187,6 +1189,11 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
     );
     _addressCtrl = TextEditingController(
       text: widget.lastCheckout?['address']?.toString() ?? '',
+    );
+    _dairaCtrl = TextEditingController(
+      text: widget.lastCheckout?['receiverDaira']?.toString() ??
+          widget.buyerProfile?['daira']?.toString() ??
+          '',
     );
     _zipCtrl = TextEditingController(
       text: widget.lastCheckout?['zip']?.toString() ?? '',
@@ -1227,6 +1234,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
     _phoneCtrl.dispose();
     _phone2Ctrl.dispose();
     _addressCtrl.dispose();
+    _dairaCtrl.dispose();
     _zipCtrl.dispose();
     _productListCtrl.dispose();
     _orderNumberCtrl.dispose();
@@ -1243,8 +1251,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
   String _wilayaId(Map<String, String> w) => w['id'] ?? w['code'] ?? '';
   String _communeName(Map<String, String> c) => c['name'] ?? '';
   bool _communeHasStopdesk(Map<String, String> c) =>
-      _supportsStopdeskList &&
-      (c['has_stop_desk'] == 'true' || c['has_stop_desk'] == '1');
+      c['has_stop_desk'] == 'true' || c['has_stop_desk'] == '1';
 
   Future<void> _loadWilayas() async {
     if (!mounted) return;
@@ -1252,15 +1259,20 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
       _loadingWilayas = true;
       _loadError = null;
     });
-    try {
-      _wilayas = await _shippingService.fetchCourierWilayas(
-        courierId: widget.courierId,
-      );
-      if (_wilayas.isEmpty) {
-        _loadError = L10n.tr(context, 'location.error_no_wilayas');
+      try {
+        _wilayas = await _shippingService.fetchCourierWilayas(
+          courierId: widget.courierId,
+          sellerId: widget.sellerId,
+        );
+        if (_wilayas.isEmpty) {
+          _loadError = _isZrExpress
+              ? L10n.tr(context, 'location.error_zr_locations')
+              : L10n.tr(context, 'location.error_no_wilayas');
       }
     } catch (_) {
-      _loadError = L10n.tr(context, 'location.error_wilayas_load');
+      _loadError = _isZrExpress
+          ? L10n.tr(context, 'location.error_zr_locations')
+          : L10n.tr(context, 'location.error_wilayas_load');
     } finally {
       if (mounted) {
         setState(() {
@@ -1283,13 +1295,23 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
       }
     }
 
+    final receiverPrefId = widget.lastCheckout?['receiverWilayaId']?.toString();
     final receiverPref = widget.lastCheckout?['receiverWilaya']?.toString() ??
         widget.buyerProfile?['wilaya']?.toString();
-    if (receiverPref != null && _wilayas.isNotEmpty) {
-      final match = _wilayas.firstWhere(
-        (w) => _wilayaName(w).toLowerCase() == receiverPref.toLowerCase(),
-        orElse: () => {},
-      );
+    if (_wilayas.isNotEmpty) {
+      Map<String, String> match = {};
+      if (receiverPrefId != null && receiverPrefId.isNotEmpty) {
+        match = _wilayas.firstWhere(
+          (w) => _wilayaId(w) == receiverPrefId,
+          orElse: () => {},
+        );
+      }
+      if (match.isEmpty && receiverPref != null) {
+        match = _wilayas.firstWhere(
+          (w) => _wilayaName(w).toLowerCase() == receiverPref.toLowerCase(),
+          orElse: () => {},
+        );
+      }
       if (match.isNotEmpty) {
         _receiverWilayaId = _wilayaId(match);
         _receiverWilayaName = _wilayaName(match);
@@ -1311,6 +1333,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
       _communes = [];
       _stopdeskCommunes = [];
       _receiverCommuneName = null;
+      _receiverCommuneId = null;
       _stopdeskCommuneName = null;
       _stopdeskId = null;
     });
@@ -1318,15 +1341,20 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
       _communes = await _shippingService.fetchCourierCommunes(
         courierId: widget.courierId,
         wilayaCode: wilayaId,
+        sellerId: widget.sellerId,
       );
       _stopdeskCommunes = _supportsStopdeskList
           ? _communes.where(_communeHasStopdesk).toList(growable: false)
-          : const [];
+          : _communes;
       if (_communes.isEmpty) {
-        _loadError = L10n.tr(context, 'location.error_no_communes');
+        _loadError = _isZrExpress
+            ? L10n.tr(context, 'location.error_zr_locations')
+            : L10n.tr(context, 'location.error_no_communes');
       }
     } catch (_) {
-      _loadError = L10n.tr(context, 'location.error_communes_load');
+      _loadError = _isZrExpress
+          ? L10n.tr(context, 'location.error_zr_locations')
+          : L10n.tr(context, 'location.error_communes_load');
     } finally {
       if (mounted) {
         setState(() {
@@ -1337,15 +1365,31 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
       }
     }
 
-    final preferredCommune =
+    final preferredCommuneId =
+        widget.lastCheckout?['receiverCommuneId']?.toString();
+    final preferredCommuneName =
         widget.lastCheckout?['receiverCommune']?.toString();
-    if (preferredCommune != null && _communes.isNotEmpty) {
-      final match = _communes.firstWhere(
-        (c) => _communeName(c).toLowerCase() == preferredCommune.toLowerCase(),
-        orElse: () => {},
-      );
+    if (_communes.isNotEmpty) {
+      Map<String, String> match = {};
+      if (preferredCommuneId != null && preferredCommuneId.isNotEmpty) {
+        match = _communes.firstWhere(
+          (c) => (c['id']?.toString() ?? '') == preferredCommuneId,
+          orElse: () => {},
+        );
+      }
+      if (match.isEmpty &&
+          preferredCommuneName != null &&
+          preferredCommuneName.isNotEmpty) {
+        match = _communes.firstWhere(
+          (c) =>
+              _communeName(c).toLowerCase() ==
+              preferredCommuneName.toLowerCase(),
+          orElse: () => {},
+        );
+      }
       if (match.isNotEmpty) {
         _receiverCommuneName = _communeName(match);
+        _receiverCommuneId = match['id']?.toString();
       }
     }
     _updateEstimatedFee();
@@ -1395,15 +1439,19 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
   }
 
   bool get _canSubmit {
+    final phoneOk = _isZrExpress
+        ? PhoneFormatter.isZrExpressCompatible(_phoneCtrl.text)
+        : _isPhoneValid(_phoneCtrl.text);
     final baseValid = !_loadingWilayas &&
         !_loadingCommunes &&
         _loadError == null &&
         _senderWilayaName != null &&
         _receiverWilayaName != null &&
-        _receiverCommuneName != null &&
-        _firstNameCtrl.text.trim().isNotEmpty &&
-        _familyNameCtrl.text.trim().isNotEmpty &&
-        _isPhoneValid(_phoneCtrl.text) &&
+      _receiverCommuneName != null &&
+      _dairaCtrl.text.trim().isNotEmpty &&
+      _firstNameCtrl.text.trim().isNotEmpty &&
+      _familyNameCtrl.text.trim().isNotEmpty &&
+      phoneOk &&
         _addressCtrl.text.trim().isNotEmpty &&
         _productListCtrl.text.trim().isNotEmpty &&
         _priceCtrl.text.trim().isNotEmpty &&
@@ -1417,7 +1465,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
       if (_supportsStopdeskList) {
         return _stopdeskId != null && _stopdeskCommuneName != null;
       }
-      return true;
+      return _stopdeskCommuneName != null;
     }
     return true;
   }
@@ -1431,25 +1479,36 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
     final length = int.tryParse(_lengthCtrl.text.trim()) ?? 0;
     if (price == null || weight == null) return;
 
+    final phoneMain = _phoneCtrl.text.trim();
     final phone2 = _phone2Ctrl.text.trim();
-    final phoneCombined = phone2.isEmpty
-        ? _phoneCtrl.text.trim()
-        : '${_phoneCtrl.text.trim()},$phone2';
+    final phoneE164 =
+        _isZrExpress ? PhoneFormatter.normalizeDzE164ForZr(phoneMain) : '';
+    final phone2E164 = _isZrExpress && phone2.isNotEmpty
+        ? PhoneFormatter.normalizeDzE164ForZr(phone2)
+        : '';
+    final phoneCombined = _isZrExpress
+        ? phoneE164
+        : (phone2.isEmpty ? phoneMain : '$phoneMain,$phone2');
 
-    final selection = {
-      'courierId': widget.courierId,
-      'courierName': widget.courierName,
-      'deliveryType': _deliveryType,
-      'senderWilaya': _senderWilayaName,
-      'receiverWilaya': _receiverWilayaName,
-      'receiverCommune': _receiverCommuneName,
-      'wilayaCode': _receiverWilayaId,
+      final selection = {
+        'courierId': widget.courierId,
+        'courierName': widget.courierName,
+        'deliveryType': _deliveryType,
+        'senderWilaya': _senderWilayaName,
+        'receiverWilaya': _receiverWilayaName,
+        'receiverWilayaId': _receiverWilayaId,
+        'receiverDaira': _dairaCtrl.text.trim(),
+        'receiverCommune': _receiverCommuneName,
+        'receiverCommuneId': _receiverCommuneId,
+        'wilayaCode': _receiverWilayaId,
       'stopdeskId': _stopdeskId,
       'stopdeskCommune': _stopdeskCommuneName,
       'firstname': _firstNameCtrl.text.trim(),
       'familyname': _familyNameCtrl.text.trim(),
       'phone': phoneCombined,
-      'phone_main': _phoneCtrl.text.trim(),
+      'phone_main': phoneMain,
+      if (_isZrExpress && phoneE164.isNotEmpty) 'phone_e164': phoneE164,
+      if (_isZrExpress && phone2E164.isNotEmpty) 'phone2_e164': phone2E164,
       'phone_secondary': phone2,
       'phone2': phone2,
       'address': _addressCtrl.text.trim(),
@@ -1561,15 +1620,18 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                   labelText: L10n.tr(context, 'checkout.last_name'),
                 ),
                 onChanged: (_) => setState(() {}),
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'Prenom requis' : null,
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? L10n.tr(context, 'checkout.error_name_required')
+                    : null,
               ),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _phoneCtrl,
                 decoration: InputDecoration(
                   labelText: L10n.tr(context, 'checkout.phone1'),
-                  helperText: 'Ex: 0661452684',
+                  helperText: _isZrExpress
+                      ? L10n.tr(context, 'checkout.zr_phone_hint')
+                      : L10n.tr(context, 'checkout.phone_example'),
                 ),
                 keyboardType: TextInputType.phone,
                 inputFormatters: [
@@ -1579,11 +1641,37 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                 onChanged: (_) => setState(() {}),
                 validator: (v) {
                   final value = v?.trim() ?? '';
-                  if (value.isEmpty) return 'Telephone requis';
+                  if (value.isEmpty) {
+                    return L10n.tr(context, 'checkout.error_phone_required');
+                  }
                   final ok = RegExp(r'^(05|06|07)\d{8}$').hasMatch(value);
-                  return ok ? null : 'Numero invalide (05/06/07 + 8 chiffres)';
+                  if (!ok) {
+                    return L10n.tr(context, 'checkout.error_phone_invalid');
+                  }
+                  if (_isZrExpress &&
+                      PhoneFormatter.normalizeDzE164ForZr(value).isEmpty) {
+                    return L10n.tr(context, 'checkout.error_zr_phone');
+                  }
+                  return null;
                 },
               ),
+              if (_isZrExpress)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    PhoneFormatter.normalizeDzE164(_phoneCtrl.text).isNotEmpty
+                        ? L10n.tr(
+                            context,
+                            'checkout.zr_phone_preview',
+                            params: {
+                              'value':
+                                  PhoneFormatter.normalizeDzE164(_phoneCtrl.text),
+                            },
+                          )
+                        : L10n.tr(context, 'checkout.zrexpress_notice'),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _phone2Ctrl,
@@ -1596,6 +1684,13 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(10),
                 ],
+                validator: (v) {
+                  final value = v?.trim() ?? '';
+                  if (value.isEmpty || !_isZrExpress) return null;
+                  return PhoneFormatter.normalizeDzE164ForZr(value).isNotEmpty
+                      ? null
+                      : L10n.tr(context, 'checkout.error_zr_phone');
+                },
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
@@ -1620,6 +1715,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                     _receiverWilayaId = v;
                     _receiverWilayaName = _wilayaName(match);
                     _receiverCommuneName = null;
+                    _receiverCommuneId = null;
                     _stopdeskCommuneName = null;
                     _stopdeskId = null;
                   });
@@ -1629,25 +1725,45 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                 },
                 validator: (_) => _receiverWilayaId == null ? L10n.tr(context, 'checkout.error_wilaya_required') : null,
               ),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: _receiverCommuneName,
-                decoration: InputDecoration(
-                  labelText: L10n.tr(context, 'checkout.receiver_commune'),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _dairaCtrl,
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'checkout.receiver_daira'),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? L10n.tr(context, 'checkout.error_daira_required')
+                      : null,
                 ),
-                items: _communes
-                    .map(
-                      (c) => DropdownMenuItem(
-                        value: _communeName(c),
-                        child: Text(_communeName(c)),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (v) => setState(() => _receiverCommuneName = v),
-                validator: (_) =>
-                    _receiverCommuneName == null ? L10n.tr(context, 'checkout.error_commune_required') : null,
-              ),
-              if (_deliveryType == 'stopdesk' && _supportsStopdeskList) ...[
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: _receiverCommuneName,
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'checkout.receiver_commune'),
+                  ),
+                  items: _communes
+                      .map(
+                        (c) => DropdownMenuItem(
+                          value: _communeName(c),
+                          child: Text(_communeName(c)),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) {
+                    final match = _communes.firstWhere(
+                      (c) => _communeName(c) == v,
+                      orElse: () => {},
+                    );
+                    setState(() {
+                      _receiverCommuneName = v;
+                      _receiverCommuneId = match['id']?.toString();
+                    });
+                  },
+                  validator: (_) =>
+                      _receiverCommuneName == null ? L10n.tr(context, 'checkout.error_commune_required') : null,
+                ),
+              if (_deliveryType == 'stopdesk') ...[
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   value: _stopdeskCommuneName,
@@ -1663,16 +1779,22 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                         ),
                       )
                       .toList(),
-                  onChanged: (v) {
-                    final match = _stopdeskCommunes.firstWhere(
-                      (c) => _communeName(c) == v,
-                      orElse: () => {},
-                    );
-                    setState(() {
-                      _stopdeskCommuneName = v;
-                      _stopdeskId = match['stopdesk_id']?.toString();
-                    });
-                  },
+                    onChanged: (v) {
+                      final match = _stopdeskCommunes.firstWhere(
+                        (c) => _communeName(c) == v,
+                        orElse: () => {},
+                      );
+                      setState(() {
+                        _stopdeskCommuneName = v;
+                        _stopdeskId = _supportsStopdeskList
+                            ? match['stopdesk_id']?.toString()
+                            : null;
+                        if (v != null && v.isNotEmpty) {
+                          _receiverCommuneName = v;
+                          _receiverCommuneId = match['id']?.toString();
+                        }
+                      });
+                    },
                   validator: (_) => _stopdeskCommuneName == null
                       ? L10n.tr(context, 'checkout.error_agency_required')
                       : null,

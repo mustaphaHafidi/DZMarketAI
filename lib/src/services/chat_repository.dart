@@ -180,31 +180,68 @@ class ChatRepository {
     String? dedupeKey,
   }) async {
     final conv = await ensureOrderConversation(orderId);
+    final payloadWithText = <String, dynamic>{
+      if (payload != null) ...payload,
+      if ((payload?['text'] as String?)?.isNotEmpty != true) 'text': text,
+    };
+
+    if (dedupeKey != null && dedupeKey.isNotEmpty) {
+      try {
+        final existing = await _client
+            .from(SupabaseTables.messages)
+            .select('id')
+            .eq('conversation_id', conv.id)
+            .eq('dedupe_key', dedupeKey)
+            .maybeSingle();
+        if (existing != null) return;
+      } catch (_) {
+        // Ignore lookup errors; best-effort only.
+      }
+    }
+
+    try {
+      await _client.rpc(
+        'post_order_event',
+        params: {
+          'p_order_id': orderId,
+          'p_event': 'client_event',
+          'p_payload': payloadWithText,
+          'p_dedupe_key': dedupeKey ?? '',
+        },
+      );
+      return;
+    } on PostgrestException catch (e) {
+      final missingFn =
+          e.code == 'PGRST202' || e.code == '42883' || e.message.contains('post_order_event');
+      if (!missingFn) {
+        // RPC exists but failed; fall back to send_message with dedupe.
+      }
+    } catch (_) {
+      // Ignore and fall back.
+    }
+
     try {
       await sendMessage(
         conv.id,
         text,
         type: 'system',
-        payload: payload,
+        payload: payloadWithText,
         dedupeKey: dedupeKey,
       );
       return;
+    } on PostgrestException catch (e) {
+      final missingUnique = e.code == '42P10' ||
+          e.message.contains('no unique or exclusion constraint');
+      if (!missingUnique && dedupeKey != null && dedupeKey.isNotEmpty) {
+        return;
+      }
     } catch (_) {
-      // Fallback to direct insert if RPC fails.
+      // If we have a dedupe key, avoid inserting duplicates without it.
+      if (dedupeKey != null && dedupeKey.isNotEmpty) return;
     }
 
     final senderId = _client.auth.currentUser?.id;
     if (senderId == null) return;
-
-    if (dedupeKey != null && dedupeKey.isNotEmpty) {
-      final existing = await _client
-          .from(SupabaseTables.messages)
-          .select('id')
-          .eq('conversation_id', conv.id)
-          .eq('dedupe_key', dedupeKey)
-          .maybeSingle();
-      if (existing != null) return;
-    }
 
     try {
       await _client.from(SupabaseTables.messages).insert({
@@ -212,16 +249,10 @@ class ChatRepository {
         'sender_id': senderId,
         'text': text,
         'type': 'system',
-        if (payload != null) 'payload': payload,
-        if (dedupeKey != null) 'dedupe_key': dedupeKey,
+        if (payloadWithText.isNotEmpty) 'payload': payloadWithText,
       });
     } catch (_) {
-      // Fallback without extended columns.
-      await _client.from(SupabaseTables.messages).insert({
-        'conversation_id': conv.id,
-        'sender_id': senderId,
-        'text': text,
-      });
+      // Best-effort: do not block.
     }
 
     try {

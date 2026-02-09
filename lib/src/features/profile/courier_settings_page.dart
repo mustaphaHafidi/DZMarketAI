@@ -89,14 +89,21 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
     String apiSecret;
     String? sender;
     try {
-      final isEcotrack = _selectedCourierName.toLowerCase().contains('ecotrack');
+      final lower = _selectedCourierName.toLowerCase();
+      final isEcotrack = lower.contains('ecotrack');
+      final isZrExpress = ShippingService.isZrExpressCourier(
+        courierName: _selectedCourierName,
+      );
       apiKey = InputSanitizer.sanitizeText(
         _apiKeyCtrl.text,
-        maxLength: isEcotrack ? 200 : 120,
+        maxLength: (isEcotrack || isZrExpress) ? 200 : 120,
       );
       apiSecret = isEcotrack
           ? InputSanitizer.sanitizeOptionalText(_apiSecretCtrl.text, maxLength: 120) ?? ''
-          : InputSanitizer.sanitizeText(_apiSecretCtrl.text, maxLength: 120);
+          : InputSanitizer.sanitizeText(
+              _apiSecretCtrl.text,
+              maxLength: isZrExpress ? 200 : 120,
+            );
       sender = InputSanitizer.sanitizeOptionalText(_senderCtrl.text, maxLength: 80);
     } on FormatException catch (e) {
       setState(() => _error = e.message);
@@ -195,7 +202,11 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isEcotrack = _selectedCourierName.toLowerCase().contains('ecotrack');
+    final lower = _selectedCourierName.toLowerCase();
+    final isEcotrack = lower.contains('ecotrack');
+    final isZrExpress = ShippingService.isZrExpressCourier(
+      courierName: _selectedCourierName,
+    );
     return Scaffold(
       appBar: AppBar(title: Text(L10n.tr(context, 'courier_settings.title'))),
       body: _loading
@@ -240,7 +251,9 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
                     decoration: InputDecoration(
                       labelText: isEcotrack
                           ? L10n.tr(context, 'courier_settings.token_label')
-                          : L10n.tr(context, 'courier_settings.api_key_label'),
+                          : isZrExpress
+                              ? L10n.tr(context, 'courier_settings.zrexpress_key_label')
+                              : L10n.tr(context, 'courier_settings.api_key_label'),
                       prefixIcon: const Icon(Icons.vpn_key_outlined),
                     ),
                   ),
@@ -249,7 +262,9 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
                     TextField(
                       controller: _apiSecretCtrl,
                       decoration: InputDecoration(
-                        labelText: L10n.tr(context, 'courier_settings.secret_label'),
+                        labelText: isZrExpress
+                            ? L10n.tr(context, 'courier_settings.zrexpress_tenant_label')
+                            : L10n.tr(context, 'courier_settings.secret_label'),
                         prefixIcon: const Icon(Icons.lock_outline),
                       ),
                     ),

@@ -68,6 +68,7 @@ class _OrderChatGatePageState extends State<OrderChatGatePage> {
         return ChatRoomPage(
           conversationId: data.conversationId,
           productId: data.productId,
+          orderId: widget.orderId,
         );
       },
     );
