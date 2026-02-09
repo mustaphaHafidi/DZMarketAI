@@ -53,8 +53,9 @@ Résultats attendus
 1. HTTP 200, body `{ ok: true, tracking_number: "...", label_url: "https://..." }`.
 2. Table `shipments` contient `order_id=<ORDER_ID>`, tracking_number, label_url (non null), status=shipped.
 3. Table `orders` mise à jour (tracking_number, label_url, status éventuellement `shipped`).
-4. Message automatique ajouté dans `messages` avec `room_id=order:<ORDER_ID>`, type=label.
-5. Le label est téléchargeable (signed URL) et s’ouvre en PDF.
+4. Message automatique ajouté dans `messages` (type=system) avec `i18n_key=order.system.shipped`.
+5. Côté vendeur, le bouton label est visible; côté buyer, seul le status/tracking s’affiche.
+6. Le label est téléchargeable (signed URL) et s’ouvre en PDF.
 
 Erreurs à surveiller
 - `Missing courier settings` : la fonction n’a pas pu lire les credentials (vérifier déploiement, seller_delivery_settings).

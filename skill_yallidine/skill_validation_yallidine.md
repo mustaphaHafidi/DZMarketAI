@@ -95,6 +95,7 @@ Invoke-RestMethod -Method Post -Uri 'https://api.yalidine.app/v1/parcels/' `
 - HTTP 200 ou 201, avec `tracking` non vide.
 - Label présent ou au moins tracking (label_url peut être vide).
 - `shipments` et `orders` mis à jour, message “Bordereau disponible” publié si label dispo.
+- Côté buyer, le label n’est pas visible (status/tracking uniquement).
 
 ## 9) Rappel UX / droits
 - Seul le vendeur (`seller_id` de la commande) peut appeler `create_shipment` (RLS). Un acheteur reçoit 403.

@@ -1,11 +1,11 @@
----
+﻿---
 name: zrexpress-api
-description: Guide d'integration ZR Express pour DZMarketAI (livraison Algerie) : auth, wilayas/communes, points relais, creation colis, labels PDF, tracking, et regles de securite.
+description: Guide d'integration ZR Express pour DZMarketAI (livraison Algerie): auth, territoires, points relais, creation colis, labels PDF, tracking, securite.
 ---
 
-# ZR Express API (docs ReadMe + portail ZR Express)
+# ZR Express API
 
-Source consultee via ZR Express Portal + docs publiques ReadMe :
+Sources:
 - https://docs.zrexpress.app/docs/authentication
 - https://docs.zrexpress.app/reference/createparcelendpoint
 - https://docs.zrexpress.app/reference/searchterritoriesendpoint
@@ -15,82 +15,56 @@ Source consultee via ZR Express Portal + docs publiques ReadMe :
 - https://docs.zrexpress.app/reference/rates
 
 ## 1) Auth & base
-- Base URL : `https://api.zrexpress.app`
-- Headers requis sur tous les endpoints :
-  - `X-Tenant` (tenant id)
-  - `X-Api-Key` (token/secret key)
-- Generation des tokens : portail ZR Express > API Rest > Token API.
-  - Le token n'est affiche qu'une seule fois, a sauvegarder immediatement.
-- Exemple auth simple (docs) : `GET /api/v1/users/profile` avec `X-Api-Key`.
+- Base URL: https://api.zrexpress.app
+- Headers requis:
+  - X-Tenant (tenant id)
+  - X-Api-Key (token/secret key)
+- Token genere via portail ZR Express (affiche une seule fois).
 
-## 2) Endpoints utiles DZMarketAI
+## 2) Territoires (wilayas/communes)
+POST /api/v{version}/territories/search
+- Champs utiles: id, code, name, level (wilaya/commune), parentId
+- Filtrage: level, parentId
+- DeliveryCapability permet de filtrer home/pickup.
 
-### 2.1 Territoires (wilayas/communes)
-`POST /api/v{version}/territories/search`
-- But : recuperer la liste des territoires (wilayas/communes) + capacites livraison.
-- Champs utiles : `id`, `code`, `name`, `level` (wilaya/commune), `parentId`.
-- `DeliveryCapability.HasHomeDelivery` et `DeliveryCapability.HasPickupPoint` permettent de filtrer par mode.
-- Requete type :
-  - `pageSize` (ex: 5000)
-  - `orderBy` (ex: `["code asc"]`)
-  - `advancedFilter` pour filtrer par `level` ou `parentId`.
+## 3) Hubs / points relais
+POST /api/v{version}/hubs/search
+- Filtrer IsPickupPoint == true
+- Filtrer par cityTerritoryId/districtTerritoryId
 
-### 2.2 Hubs / points relais
-`POST /api/v{version}/hubs/search`
-- But : recuperer les points relais (pickup points).
-- Champs utiles : `IsPickupPoint`, `address.cityTerritoryId`, `address.districtTerritoryId`, `name`, `openingHours`.
-- Filtrage conseille :
-  - `IsPickupPoint == true`
-  - `cityTerritoryId` = wilaya selectionnee
-  - `districtTerritoryId` = commune selectionnee
+## 4) Creation colis
+POST /api/v{version}/parcels
+- deliveryType: home | pickup-point | return
+- hubId requis si pickup-point
+- deliveryAddress.cityTerritoryId (wilaya UUID) + districtTerritoryId (commune UUID)
+- customer + orderedProducts obligatoires
+- amount <= 150000 DZD
 
-### 2.3 Creation colis (shipping)
-`POST /api/v{version}/parcels`
-- `deliveryType` : `home` | `pickup-point` | `return`
-- `hubId` requis si `deliveryType == pickup-point`
-- `deliveryAddress.cityTerritoryId` (wilaya id) et `deliveryAddress.districtTerritoryId` (commune id) requis.
-- `customer` obligatoire (name + phone).
-- `orderedProducts` obligatoire (au moins 1 produit).
-- `amount` max 150000 DZD (incluant frais).
-- Si `stateId` absent, le colis est cree avec le statut `OrderReceived`.
+### Telephone (important)
+- ZR Express exige un format international E.164.
+- DZMarket normalise automatiquement: 05/06/07xxxxxxx -> +2135/6/7xxxxxxx.
+- Validation stricte cote Edge (number1 et number2).
 
-### 2.4 Labels (bordereaux)
-`POST /api/v{version}/parcels/labels/individual/pdf`
-- Corps : `trackingNumbers` (array)
-- Retour : URLs PDF par tracking + liste des echecs.
-- Max 100 colis par requete.
+## 5) Labels
+POST /api/v{version}/parcels/labels/individual/pdf
+- Corps: trackingNumbers[]
+- Retour: URL ou base64.
 
-### 2.5 Tracking
-`GET /api/v{version}/parcels/{trackingNumber}`
-- Retourne detail d'un colis par tracking.
+## 6) Tracking
+GET /api/v{version}/parcels/{trackingNumber}
 
-### 2.6 Tarifs
-`GET /api/v1/delivery-pricing/rates/{toTerritoryId}`
-`GET /api/v1/delivery-pricing/rates`
-- Permet de recuperer les tarifs (home / pickup-point / return) par territoire.
+## 7) Tarifs
+GET /api/v1/delivery-pricing/rates/{toTerritoryId}
+GET /api/v1/delivery-pricing/rates
 
-## 3) Mapping DZMarketAI (regles)
-- Les credentials ZR Express (X-Tenant, X-Api-Key) sont stockes dans `seller_delivery_settings`.
-- Jamais d'appel ZR Express depuis le client : tout passe par Edge Functions (service_role).
-- L'acheteur choisit la societe de livraison parmi celles configurees par le vendeur.
-- Pour le stopdesk (pickup point) :
-  1) Charger wilayas via `territories/search`.
-  2) Charger communes via `territories/search` avec `parentId = wilayaId`.
-  3) Charger hubs via `hubs/search`, filtre `IsPickupPoint == true` et `districtTerritoryId` correspondant.
-- Le bordereau est genere cote vendeur uniquement (UI Mes ventes).
-- Le tracking + label_url sont stockes dans `shipments` (source of truth).
+## 8) Mapping DZMarketAI
+- Credentials ZR Express stockes dans seller_delivery_settings (api_key = secretKey, api_secret = tenantId).
+- validate-courier verifie les tokens avant save/update.
+- courier-locations fournit wilayas/communes/hubs au buyer.
+- create_shipment (Edge, service_role) cree le colis et poste message systeme.
+- shipments = source of truth (tracking/label); label visible vendeur uniquement dans chat.
 
-## 4) i18n DZMarketAI (FR/AR)
-- Chaque nouveau texte UI doit utiliser une cle i18n (pas de texte hardcode).
-- Ajouter la cle dans `assets/i18n/fr.json` et `assets/i18n/ar.json`.
-- Toujours fournir FR + AR + fallback.
-
-## 5) Erreurs courantes
-- 400 : validation (deliveryType invalide, champs manquants, amount > 150000).
-- 403 : permissions/role insuffisant.
-- 404 : territoire/hub/parcel introuvable.
-
-## 6) Exemple de payload (creation colis)
+## 9) Exemple de payload (create parcel)
 ```json
 {
   "customer": {
@@ -105,6 +79,8 @@ Source consultee via ZR Express Portal + docs publiques ReadMe :
   },
   "orderedProducts": [
     {
+      "productId": "UUID",
+      "productSku": "SKU-123",
       "productName": "Produit",
       "unitPrice": 300,
       "quantity": 1,
@@ -117,12 +93,6 @@ Source consultee via ZR Express Portal + docs publiques ReadMe :
 }
 ```
 
-## 7) Tests manuels rapides
-- Verifier wilayas/communes via `territories/search`.
-- Si pickup : hubs via `hubs/search` (IsPickupPoint).
-- Creer un colis, recuperer tracking, generer label PDF.
-- Verifier tracking via `GET /parcels/{trackingNumber}`.
-
-## 8) Notes securite
-- Ne jamais loguer `X-Api-Key` ou `X-Tenant`.
-- Stocker les secrets chiffrés (enc_key) et utiliser uniquement le service_role en Edge.
+## 10) Notes securite
+- Ne jamais loguer X-Api-Key / X-Tenant.
+- Secrets chiffres via enc_key; appels sortants uniquement via service_role.

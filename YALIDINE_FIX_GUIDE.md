@@ -1,42 +1,42 @@
-# Yalidine API Request Troubleshooting Guide
+﻿# Yalidine API Request Troubleshooting Guide
 
 ## The Issue
-You've confirmed that your curl request works:
+You confirmed that your curl request works, but the same request fails in the Flutter app.
+
+Example (placeholders only):
 ```bash
 curl "https://api.yalidine.app/v1/wilayas/" \
-  -H "X-API-ID: 50753201115255761407" \
-  -H "X-API-TOKEN: uzTwKESIkqAaGViHNj4t8lCgrsRZU9LxFMOoQDP163pYbynfWemBd2v50X7Jch"
+  -H "X-API-ID: <YALIDINE_API_ID>" \
+  -H "X-API-TOKEN: <YALIDINE_API_TOKEN>"
 ```
-
-But the same request fails in your Flutter app. A standalone Dart test script confirms **the request itself works fine in Dart** (status 200, valid JSON response).
 
 ## Root Causes & Solutions
 
-### 1. ✅ **URL Trailing Slash** (FIXED)
-**Issue:** The code was missing a trailing slash
+### 1) URL Trailing Slash (FIXED)
+**Issue:** The code was missing a trailing slash.
 ```dart
-// ❌ Before (missing slash)
+// Before (missing slash)
 final uri = Uri.parse('https://api.yalidine.app/v1/wilayas');
 
-// ✅ After (with slash, matching curl)
+// After (with slash, matching curl)
 final uri = Uri.parse('https://api.yalidine.app/v1/wilayas/');
 ```
 
-### 2. ✅ **Database Column Error** (FIXED)
-**Issue:** The `loadSellerDeliverySettings` method queried non-existent columns
+### 2) Database Column Error (FIXED)
+**Issue:** loadSellerDeliverySettings queried non-existent columns.
 ```dart
-// ❌ Before
+// Before
 .select('api_key, api_secret, sender_id, extra, from_wilaya, receiver_name, ...')
 
-// ✅ After (only real columns)
+// After (only real columns)
 .select('api_key, api_secret, sender_id, extra')
 ```
 
-### 3. **HTTP Client Configuration** (Check if needed)
-If requests still fail in the Flutter app, verify:
+### 3) HTTP Client Configuration (dev only)
+If requests still fail in Flutter, verify SSL/TLS and timeouts.
 
 ```dart
-// Option A: Disable SSL/TLS verification (development only!)
+// Dev only: ignore bad certificates
 import 'dart:io';
 HttpOverrides.global = MyHttpOverrides();
 
@@ -49,23 +49,17 @@ class MyHttpOverrides extends HttpOverrides {
 }
 ```
 
-**⚠️ WARNING:** This disables certificate validation and should **NEVER** be used in production. Only use for debugging on emulators or development environments.
+**WARNING:** Never use this in production.
 
-### 4. **Request Timeout** (Check if needed)
-The current timeout is 8 seconds, which should be adequate:
+### 4) Request Timeout
+Increase timeout if needed:
 ```dart
-final resp = await http
-    .get(uri, headers: {...})
-    .timeout(const Duration(seconds: 8));
+final resp = await http.get(uri, headers: {...})
+  .timeout(const Duration(seconds: 15));
 ```
 
-If needed, increase it:
-```dart
-.timeout(const Duration(seconds: 15))
-```
-
-### 5. **Headers & Encoding**
-The current implementation is correct:
+### 5) Headers & Encoding
+Use:
 ```dart
 headers: {
   'X-API-ID': apiKey,
@@ -74,42 +68,18 @@ headers: {
 }
 ```
 
-The `http` package handles UTF-8 encoding automatically.
-
-### 6. **Network Connectivity (Flutter-specific)**
-In a Flutter app running on an emulator or device, check:
-- **Emulator:** Network settings, ensure internet access is enabled
-- **Device:** App has internet permission in `AndroidManifest.xml` and `Info.plist`
-- **Web:** Check for CORS issues (the Yalidine API response includes `access-control-allow-origin: *`, so CORS should be fine)
-
-## Testing the Fix
-
-The following changes have been made to `ShippingService`:
-
-1. ✅ Updated `_validateYalidine()` to use the correct URL with trailing slash
-2. ✅ Fixed `loadSellerDeliverySettings()` to query only existing database columns
-
 ## Verification
-
-To verify the fixes work:
-
-```bash
-# Run the standalone Dart test (succeeds if no network issues)
-dart run bin/test_yalidine.dart
-
-# Run the Flutter app and test courier settings
-flutter run
-```
+- validate-courier (Edge) must return ok for the vendor token.
+- courier-locations should load wilayas/communes with the same credentials.
 
 ## Summary
-
-**The root issue was:**
+The root issue was:
 - Missing trailing slash in the Yalidine URL
 - Non-existent database columns being queried
 
-**These have been fixed.** If requests still fail in the Flutter app, the issue is likely:
-1. Network connectivity (emulator/device internet access)
-2. SSL/TLS certificate validation (use the HttpOverrides solution above for development)
-3. API credentials have changed or are incorrect
+If requests still fail after these fixes, check:
+1) Network connectivity (device/emulator)
+2) SSL/TLS (dev only)
+3) API credentials validity
 
-Verify by checking the network request details in your IDE's debugger or by adding debug logging to the `_validateYalidine()` method.
+No secrets should ever be stored in the repository.
