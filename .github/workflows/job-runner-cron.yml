@@ -18,8 +18,23 @@ jobs:
             echo "Missing secrets SUPABASE_URL or SUPABASE_ANON_KEY" >&2
             exit 1
           fi
-          curl -sS -X POST "$SUPABASE_URL/functions/v1/job-runner" \
+          curl -sS --fail --retry 3 --retry-delay 10 --retry-all-errors \
+            -X POST "$SUPABASE_URL/functions/v1/job-runner" \
             -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
             -H "apikey: $SUPABASE_ANON_KEY" \
             -H "Content-Type: application/json" \
             --data '{"source":"github-cron"}'
+      - name: Create issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const date = new Date().toISOString();
+            const title = `job-runner failed (${date})`;
+            const body = `Workflow: ${process.env.GITHUB_WORKFLOW}\nRun: ${process.env.GITHUB_RUN_ID}\nCheck the Actions logs for details.`;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body
+            });
