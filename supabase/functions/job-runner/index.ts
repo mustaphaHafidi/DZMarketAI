@@ -79,5 +79,18 @@ serve(async (req) => {
     }
   }
 
-  return jsonResponse({ ok: true, processed: results.length, results });
+  let cancelled = 0;
+  try {
+    const { data: cancelledCount } = await supabase.rpc("cancel_stale_orders", {});
+    if (typeof cancelledCount === "number") cancelled = cancelledCount;
+  } catch (_) {
+    // Do not fail job runner if cancellation fails
+  }
+
+  return jsonResponse({
+    ok: true,
+    processed: results.length,
+    cancelled,
+    results,
+  });
 });

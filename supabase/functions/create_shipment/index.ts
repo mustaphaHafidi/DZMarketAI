@@ -309,6 +309,9 @@ serve(async (req) => {
     const freeShipping =
       pick(selection, "freeshipping") === true ||
       textValue(pick(selection, "freeshipping")).toLowerCase() === "true";
+    const insuranceActive =
+      pick(selection, "insuranceActive") === true ||
+      pick(selection, "insurance_active") === true;
     const isStopdesk =
       pick(selection, "deliveryType") === "stopdesk" ||
       pick(selection, "is_stopdesk") === true;
@@ -332,7 +335,7 @@ serve(async (req) => {
         to_wilaya_name: receiverWilaya,
         product_list: productList,
         price: Math.round(price),
-        do_insurance: false,
+        do_insurance: insuranceActive,
         declared_value: Math.round(declaredValue),
         height,
         width,

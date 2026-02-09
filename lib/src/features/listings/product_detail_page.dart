@@ -197,8 +197,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         'length': selection['length'],
         'productList': selection['productList'],
         'price': selection['price'],
+        'declaredValue': selection['declaredValue'],
         'courierId': selection['courierId'],
         'courierName': selection['courierName'],
+        'freeshipping': selection['freeshipping'],
+        'hasExchange': selection['hasExchange'],
+        'insuranceActive': selection['insuranceActive'],
       });
       await prefs.setString('checkout.last_address.v1', payload);
     } catch (_) {}
@@ -432,12 +436,15 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     final shippingOption = courierName;
     final paymentMethod = 'cod';
     final deliveryMode = courierName;
-    final shippingCost = isYalidine || isEcotrack || isZrExpress
-        ? selection['estimatedFee'] as double?
-        : shippingService.estimateCost(
-            buyerWilaya: _buyerWilaya,
-            sellerWilaya: _sellerWilaya,
-          );
+    final freeShipping = _product?.shippingFree == true;
+    final double? shippingCost = freeShipping
+        ? 0.0
+        : (isYalidine || isEcotrack || isZrExpress
+            ? (selection['estimatedFee'] as num?)?.toDouble()
+            : shippingService.estimateCost(
+                buyerWilaya: _buyerWilaya,
+                sellerWilaya: _sellerWilaya,
+              ));
     final etaLabel = isYalidine
         ? L10n.tr(context, 'checkout.eta_yalidine')
         : isEcotrack
@@ -555,6 +562,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
       builder: (context) => _CheckoutAddressSheet(
+        product: _product,
         sellerId: sellerId,
         courierId: courierId,
         courierName: courierName,
@@ -1079,6 +1087,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
 class _CheckoutAddressSheet extends StatefulWidget {
   const _CheckoutAddressSheet({
+    required this.product,
     required this.sellerId,
     required this.courierId,
     required this.courierName,
@@ -1091,6 +1100,7 @@ class _CheckoutAddressSheet extends StatefulWidget {
     required this.productTitle,
   });
 
+  final Product? product;
   final String sellerId;
   final String courierId;
   final String courierName;
@@ -1133,6 +1143,10 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
   String _deliveryType = 'home';
   bool _acceptTerms = false;
   bool _exchangeAfterDelivery = false;
+  bool _freeShipping = false;
+  bool _insuranceActive = false;
+  bool _allowStopdesk = true;
+  bool _shippingLocked = true;
   bool _isEcotrack = false;
   bool _isZrExpress = false;
   bool _supportsStopdeskList = true;
@@ -1164,6 +1178,12 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
       courierId: widget.courierId,
       courierName: widget.courierName,
     );
+    final product = widget.product;
+    _shippingLocked = true;
+    _freeShipping = product?.shippingFree ?? false;
+    _exchangeAfterDelivery = product?.exchangeAfterDelivery ?? false;
+    _insuranceActive = product?.insuranceActive ?? false;
+    _allowStopdesk = product?.allowStopdesk ?? true;
     _supportsStopdeskList = !_isEcotrack;
     final fullName = widget.buyerProfile?['full_name']?.toString() ?? '';
     final nameParts =
@@ -1208,20 +1228,35 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
               widget.defaultPrice.toStringAsFixed(0))
           .toString(),
     );
+    final declaredValue = product?.declaredValue ??
+        double.tryParse(widget.lastCheckout?['declaredValue']?.toString() ?? '') ??
+        widget.defaultPrice;
     _declaredValueCtrl = TextEditingController(
-      text: _priceCtrl.text,
+      text: declaredValue.toStringAsFixed(0),
     );
+    final weightValue = product?.weightKg ??
+        int.tryParse(widget.lastCheckout?['weight']?.toString() ?? '') ??
+        1;
     _weightCtrl = TextEditingController(
-      text: widget.lastCheckout?['weight']?.toString() ?? '1',
+      text: weightValue.toString(),
     );
+    final heightValue = product?.heightCm ??
+        int.tryParse(widget.lastCheckout?['height']?.toString() ?? '') ??
+        0;
     _heightCtrl = TextEditingController(
-      text: widget.lastCheckout?['height']?.toString() ?? '0',
+      text: heightValue.toString(),
     );
+    final widthValue = product?.widthCm ??
+        int.tryParse(widget.lastCheckout?['width']?.toString() ?? '') ??
+        0;
     _widthCtrl = TextEditingController(
-      text: widget.lastCheckout?['width']?.toString() ?? '0',
+      text: widthValue.toString(),
     );
+    final lengthValue = product?.lengthCm ??
+        int.tryParse(widget.lastCheckout?['length']?.toString() ?? '') ??
+        0;
     _lengthCtrl = TextEditingController(
-      text: widget.lastCheckout?['length']?.toString() ?? '0',
+      text: lengthValue.toString(),
     );
 
     _loadWilayas();
@@ -1478,6 +1513,8 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
     final width = int.tryParse(_widthCtrl.text.trim()) ?? 0;
     final length = int.tryParse(_lengthCtrl.text.trim()) ?? 0;
     if (price == null || weight == null) return;
+    final declaredValue =
+        double.tryParse(_declaredValueCtrl.text.trim()) ?? price.toDouble();
 
     final phoneMain = _phoneCtrl.text.trim();
     final phone2 = _phone2Ctrl.text.trim();
@@ -1515,12 +1552,15 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
       'zip': _zipCtrl.text.trim(),
       'productList': _productListCtrl.text.trim(),
       'price': price,
-      'declaredValue': price,
+      'declaredValue': declaredValue,
       'weight': weight,
       'height': height,
       'width': width,
       'length': length,
+      'freeshipping': _freeShipping,
       'hasExchange': _exchangeAfterDelivery,
+      'insuranceActive': _insuranceActive,
+      'insurance_active': _insuranceActive,
       'acceptTerms': _acceptTerms,
       'estimatedFee': _estimatedFee,
     };
@@ -1561,15 +1601,16 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                   _updateEstimatedFee();
                 },
               ),
-              RadioListTile<String>(
-                value: 'stopdesk',
-                groupValue: _deliveryType,
-                title: Text(L10n.tr(context, 'checkout.delivery_stopdesk')),
-                onChanged: (v) {
-                  setState(() => _deliveryType = v ?? 'stopdesk');
-                  _updateEstimatedFee();
-                },
-              ),
+              if (_allowStopdesk)
+                RadioListTile<String>(
+                  value: 'stopdesk',
+                  groupValue: _deliveryType,
+                  title: Text(L10n.tr(context, 'checkout.delivery_stopdesk')),
+                  onChanged: (v) {
+                    setState(() => _deliveryType = v ?? 'stopdesk');
+                    _updateEstimatedFee();
+                  },
+                ),
               const SizedBox(height: 8),
               Text(
                 L10n.tr(context, 'checkout.sender'),
@@ -1763,7 +1804,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                   validator: (_) =>
                       _receiverCommuneName == null ? L10n.tr(context, 'checkout.error_commune_required') : null,
                 ),
-              if (_deliveryType == 'stopdesk') ...[
+              if (_allowStopdesk && _deliveryType == 'stopdesk') ...[
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   value: _stopdeskCommuneName,
@@ -1858,7 +1899,9 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                   LengthLimitingTextInputFormatter(6),
                 ],
                 onChanged: (v) {
-                  _declaredValueCtrl.text = v;
+                  if (!_shippingLocked) {
+                    _declaredValueCtrl.text = v;
+                  }
                   setState(() {});
                 },
                 validator: (v) => v == null || v.trim().isEmpty
@@ -1866,124 +1909,208 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                     : null,
               ),
               const SizedBox(height: 8),
-              CheckboxListTile(
-                value: false,
-                onChanged: null,
-                title: Text(L10n.tr(context, 'checkout.free_shipping')),
-              ),
-              CheckboxListTile(
-                value: _exchangeAfterDelivery,
-                onChanged: (v) => setState(() => _exchangeAfterDelivery = v ?? false),
-                title: Text(L10n.tr(context, 'checkout.exchange_after_delivery')),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                L10n.tr(context, 'checkout.insurance'),
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-              SwitchListTile(
-                value: true,
-                onChanged: null,
-                title: Text(L10n.tr(context, 'checkout.insurance_active')),
-              ),
-              TextFormField(
-                controller: _declaredValueCtrl,
-                decoration: InputDecoration(
-                  labelText: L10n.tr(context, 'checkout.declared_value'),
+              if (_shippingLocked)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _SummaryRow(
+                      label: L10n.tr(context, 'checkout.free_shipping'),
+                      value: _freeShipping
+                          ? L10n.tr(context, 'common.yes')
+                          : L10n.tr(context, 'common.no'),
+                    ),
+                    _SummaryRow(
+                      label: L10n.tr(context, 'checkout.exchange_after_delivery'),
+                      value: _exchangeAfterDelivery
+                          ? L10n.tr(context, 'common.yes')
+                          : L10n.tr(context, 'common.no'),
+                    ),
+                    _SummaryRow(
+                      label: L10n.tr(context, 'listing.add.allow_stopdesk'),
+                      value: _allowStopdesk
+                          ? L10n.tr(context, 'common.yes')
+                          : L10n.tr(context, 'common.no'),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      L10n.tr(context, 'checkout.insurance'),
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    _SummaryRow(
+                      label: L10n.tr(context, 'checkout.insurance_active'),
+                      value: _insuranceActive
+                          ? L10n.tr(context, 'common.yes')
+                          : L10n.tr(context, 'common.no'),
+                    ),
+                    _SummaryRow(
+                      label: L10n.tr(context, 'checkout.declared_value'),
+                      value: _declaredValueCtrl.text.trim().isEmpty
+                          ? '-'
+                          : _declaredValueCtrl.text.trim(),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      L10n.tr(context, 'checkout.dimensions_weight'),
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    _SummaryRow(
+                      label: L10n.tr(context, 'checkout.weight_kg'),
+                      value: _weightCtrl.text.trim().isEmpty
+                          ? '-'
+                          : _weightCtrl.text.trim(),
+                    ),
+                    _SummaryRow(
+                      label: L10n.tr(context, 'checkout.height_cm'),
+                      value: _heightCtrl.text.trim().isEmpty
+                          ? '-'
+                          : _heightCtrl.text.trim(),
+                    ),
+                    _SummaryRow(
+                      label: L10n.tr(context, 'checkout.width_cm'),
+                      value: _widthCtrl.text.trim().isEmpty
+                          ? '-'
+                          : _widthCtrl.text.trim(),
+                    ),
+                    _SummaryRow(
+                      label: L10n.tr(context, 'checkout.length_cm'),
+                      value: _lengthCtrl.text.trim().isEmpty
+                          ? '-'
+                          : _lengthCtrl.text.trim(),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      L10n.tr(
+                        context,
+                        'checkout.overweight_label',
+                        params: {
+                          'value': (int.tryParse(_weightCtrl.text.trim()) != null &&
+                                  int.parse(_weightCtrl.text.trim()) > 5)
+                              ? L10n.tr(context, 'common.yes')
+                              : L10n.tr(context, 'common.no'),
+                        },
+                      ),
+                    ),
+                  ],
+                )
+              else ...[
+                CheckboxListTile(
+                  value: _freeShipping,
+                  onChanged: (v) =>
+                      setState(() => _freeShipping = v ?? false),
+                  title: Text(L10n.tr(context, 'checkout.free_shipping')),
                 ),
-                enabled: false,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                L10n.tr(context, 'checkout.dimensions_weight'),
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-              TextFormField(
-                controller: _weightCtrl,
-                decoration: InputDecoration(
-                  labelText: L10n.tr(context, 'checkout.weight_kg'),
+                CheckboxListTile(
+                  value: _exchangeAfterDelivery,
+                  onChanged: (v) =>
+                      setState(() => _exchangeAfterDelivery = v ?? false),
+                  title:
+                      Text(L10n.tr(context, 'checkout.exchange_after_delivery')),
                 ),
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(3),
-                ],
-                onChanged: (_) => setState(() {}),
-                validator: (v) {
-                  if (!_isWeightValid(v ?? '')) {
-                    return L10n.tr(
-                      context,
-                      'checkout.error_weight_range',
-                      params: {
-                        'min': _minWeightKg.toString(),
-                        'max': _maxWeightKg.toString(),
-                      },
-                    );
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _heightCtrl,
-                decoration: InputDecoration(
-                  labelText: L10n.tr(context, 'checkout.height_cm'),
+                const SizedBox(height: 12),
+                Text(
+                  L10n.tr(context, 'checkout.insurance'),
+                  style: Theme.of(context).textTheme.titleSmall,
                 ),
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(3),
-                ],
-                onChanged: (_) => setState(() {}),
-                validator: (v) => _isDimensionValid(v ?? '')
-                    ? null
-                    : L10n.tr(context, 'checkout.error_height_invalid'),
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _widthCtrl,
-                decoration: InputDecoration(
-                  labelText: L10n.tr(context, 'checkout.width_cm'),
+                SwitchListTile(
+                  value: _insuranceActive,
+                  onChanged: (v) =>
+                      setState(() => _insuranceActive = v ?? false),
+                  title: Text(L10n.tr(context, 'checkout.insurance_active')),
                 ),
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(3),
-                ],
-                onChanged: (_) => setState(() {}),
-                validator: (v) => _isDimensionValid(v ?? '')
-                    ? null
-                    : L10n.tr(context, 'checkout.error_width_invalid'),
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _lengthCtrl,
-                decoration: InputDecoration(
-                  labelText: L10n.tr(context, 'checkout.length_cm'),
+                TextFormField(
+                  controller: _declaredValueCtrl,
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'checkout.declared_value'),
+                  ),
                 ),
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(3),
-                ],
-                onChanged: (_) => setState(() {}),
-                validator: (v) => _isDimensionValid(v ?? '')
-                    ? null
-                    : L10n.tr(context, 'checkout.error_length_invalid'),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                L10n.tr(
-                  context,
-                  'checkout.overweight_label',
-                  params: {
-                    'value': (int.tryParse(_weightCtrl.text.trim()) != null &&
-                            int.parse(_weightCtrl.text.trim()) > 5)
-                        ? L10n.tr(context, 'common.yes')
-                        : L10n.tr(context, 'common.no'),
+                const SizedBox(height: 12),
+                Text(
+                  L10n.tr(context, 'checkout.dimensions_weight'),
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                TextFormField(
+                  controller: _weightCtrl,
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'checkout.weight_kg'),
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(3),
+                  ],
+                  validator: (v) {
+                    if (!_isWeightValid(v ?? '')) {
+                      return L10n.tr(
+                        context,
+                        'checkout.error_weight_range',
+                        params: {
+                          'min': _minWeightKg.toString(),
+                          'max': _maxWeightKg.toString(),
+                        },
+                      );
+                    }
+                    return null;
                   },
                 ),
-              ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _heightCtrl,
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'checkout.height_cm'),
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(3),
+                  ],
+                  validator: (v) => _isDimensionValid(v ?? '')
+                      ? null
+                      : L10n.tr(context, 'checkout.error_height_invalid'),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _widthCtrl,
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'checkout.width_cm'),
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(3),
+                  ],
+                  validator: (v) => _isDimensionValid(v ?? '')
+                      ? null
+                      : L10n.tr(context, 'checkout.error_width_invalid'),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _lengthCtrl,
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'checkout.length_cm'),
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(3),
+                  ],
+                  validator: (v) => _isDimensionValid(v ?? '')
+                      ? null
+                      : L10n.tr(context, 'checkout.error_length_invalid'),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  L10n.tr(
+                    context,
+                    'checkout.overweight_label',
+                    params: {
+                      'value': (int.tryParse(_weightCtrl.text.trim()) != null &&
+                              int.parse(_weightCtrl.text.trim()) > 5)
+                          ? L10n.tr(context, 'common.yes')
+                          : L10n.tr(context, 'common.no'),
+                    },
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               Text(
                 L10n.tr(context, 'checkout.price_summary'),

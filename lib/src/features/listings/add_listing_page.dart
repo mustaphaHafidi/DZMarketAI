@@ -6,9 +6,12 @@ import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/location_data_service.dart';
 import 'package:dzmarket/src/services/product_service.dart';
+import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/storage_service.dart';
+import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class AddListingPage extends StatefulWidget {
   const AddListingPage({super.key});
@@ -18,6 +21,8 @@ class AddListingPage extends StatefulWidget {
 }
 
 class _AddListingPageState extends State<AddListingPage> {
+  static const int _minWeightKg = 1;
+  static const int _maxWeightKg = 60;
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
@@ -25,6 +30,11 @@ class _AddListingPageState extends State<AddListingPage> {
   final _costCtrl = TextEditingController();
   final _brandCtrl = TextEditingController();
   final _sizeCtrl = TextEditingController();
+  final _declaredValueCtrl = TextEditingController();
+  final _weightCtrl = TextEditingController(text: '1');
+  final _heightCtrl = TextEditingController(text: '0');
+  final _widthCtrl = TextEditingController(text: '0');
+  final _lengthCtrl = TextEditingController(text: '0');
   String? _selectedWilayaCode;
   String? _selectedCommune;
   String _condition = 'new';
@@ -32,6 +42,13 @@ class _AddListingPageState extends State<AddListingPage> {
   String? _categoryNameFr;
   bool _deliveryCod = true;
   bool _deliveryPickup = false;
+  bool _freeShipping = false;
+  bool _exchangeAfterDelivery = false;
+  bool _insuranceActive = false;
+  bool _allowStopdesk = true;
+  bool _loadingCouriers = false;
+  CourierCapabilities _courierCaps = CourierCapabilities.all;
+  List<Map<String, dynamic>> _enabledCouriers = const [];
   int _step = 0;
   bool _saving = false;
   String? _error;
@@ -66,11 +83,17 @@ class _AddListingPageState extends State<AddListingPage> {
     super.initState();
     _loadCategories();
     _loadLocations();
+    _loadEnabledCouriers();
     _titleCtrl.addListener(_onFieldChanged);
     _descCtrl.addListener(_onFieldChanged);
     _priceCtrl.addListener(_onFieldChanged);
     _stockCtrl.addListener(_onFieldChanged);
     _costCtrl.addListener(_onFieldChanged);
+    _priceCtrl.addListener(() {
+      if (_declaredValueCtrl.text.trim().isEmpty) {
+        _declaredValueCtrl.text = _priceCtrl.text.trim();
+      }
+    });
   }
 
   @override
@@ -85,6 +108,11 @@ class _AddListingPageState extends State<AddListingPage> {
     _costCtrl.dispose();
     _brandCtrl.dispose();
     _sizeCtrl.dispose();
+    _declaredValueCtrl.dispose();
+    _weightCtrl.dispose();
+    _heightCtrl.dispose();
+    _widthCtrl.dispose();
+    _lengthCtrl.dispose();
     super.dispose();
   }
 
@@ -120,6 +148,38 @@ class _AddListingPageState extends State<AddListingPage> {
     });
   }
 
+  void _applyCourierCaps() {
+    if (!_courierCaps.supportsStopdesk) {
+      _allowStopdesk = false;
+      _deliveryPickup = false;
+    }
+    if (!_courierCaps.supportsExchange) {
+      _exchangeAfterDelivery = false;
+    }
+    if (!_courierCaps.supportsInsurance) {
+      _insuranceActive = false;
+      if (_declaredValueCtrl.text.trim().isNotEmpty) {
+        _declaredValueCtrl.text = '';
+      }
+    }
+  }
+
+  Future<void> _loadEnabledCouriers() async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+    setState(() {
+      _loadingCouriers = true;
+    });
+    final rows = await ShippingService().fetchEnabledCouriersForSeller(userId);
+    if (!mounted) return;
+    setState(() {
+      _enabledCouriers = rows;
+      _courierCaps = ShippingService.aggregateCapabilities(rows);
+      _applyCourierCaps();
+      _loadingCouriers = false;
+    });
+  }
+
   void _onWilayaSelected(String? code) {
     setState(() {
       _selectedWilayaCode = code;
@@ -144,6 +204,96 @@ class _AddListingPageState extends State<AddListingPage> {
         _locationLoadError = L10n.tr(context, 'listing.add.error_no_communes');
       }
     });
+  }
+
+  Future<Map<String, String>?> _showLocationPicker({
+    required BuildContext context,
+    required String title,
+    required List<Map<String, String>> items,
+    required String Function(Map<String, String>) itemLabel,
+  }) {
+    final searchCtrl = TextEditingController();
+    return showModalBottomSheet<Map<String, String>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: StatefulBuilder(
+            builder: (sheetContext, setState) {
+              final query = searchCtrl.text.trim().toLowerCase();
+              final filtered = query.isEmpty
+                  ? items
+                  : items.where((item) {
+                      final label = itemLabel(item).toLowerCase();
+                      final code = (item['code'] ?? '').toLowerCase();
+                      return label.contains(query) || code.contains(query);
+                    }).toList();
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      title,
+                      style: Theme.of(sheetContext).textTheme.titleMedium,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: TextField(
+                      controller: searchCtrl,
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.search),
+                        hintText: L10n.tr(sheetContext, 'common.search'),
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final item = filtered[index];
+                        return ListTile(
+                          title: Text(itemLabel(item)),
+                          onTap: () => Navigator.of(sheetContext).pop(item),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPickerField({
+    required String label,
+    required String value,
+    VoidCallback? onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          enabled: onTap != null,
+        ),
+        child: Row(
+          children: [
+            Expanded(child: Text(value)),
+            const Icon(Icons.arrow_drop_down),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _pickImages() async {
@@ -191,7 +341,7 @@ class _AddListingPageState extends State<AddListingPage> {
       case 3:
         try {
           InputSanitizer.parseAmount(_priceCtrl.text, min: 1);
-          final stock = int.tryParse(_stockCtrl.text.trim()) ?? 0;
+          final stock = _parseDigits(_stockCtrl.text.trim());
           if (stock <= 0) {
             _setError(L10n.tr(context, 'listing.add.error_invalid_stock'));
             return false;
@@ -216,6 +366,44 @@ class _AddListingPageState extends State<AddListingPage> {
           return false;
         }
         return true;
+      case 6:
+        final weight = _parseDigitsNullable(_weightCtrl.text.trim());
+        final height = _parseDigitsNullable(_heightCtrl.text.trim());
+        final width = _parseDigitsNullable(_widthCtrl.text.trim());
+        final length = _parseDigitsNullable(_lengthCtrl.text.trim());
+        if (weight == null ||
+            weight < _minWeightKg ||
+            weight > _maxWeightKg) {
+          _setError(
+            L10n.tr(
+              context,
+              'checkout.error_weight_range',
+              params: {
+                'min': _minWeightKg.toString(),
+                'max': _maxWeightKg.toString(),
+              },
+            ),
+          );
+          return false;
+        }
+        if (height == null || height < 0 || height > 200) {
+          _setError(L10n.tr(context, 'checkout.error_height_invalid'));
+          return false;
+        }
+        if (width == null || width < 0 || width > 200) {
+          _setError(L10n.tr(context, 'checkout.error_width_invalid'));
+          return false;
+        }
+        if (length == null || length < 0 || length > 200) {
+          _setError(L10n.tr(context, 'checkout.error_length_invalid'));
+          return false;
+        }
+        if (_insuranceActive &&
+            _declaredValueCtrl.text.trim().isEmpty) {
+          _setError(L10n.tr(context, 'checkout.error_price_required'));
+          return false;
+        }
+        return true;
       default:
         return true;
     }
@@ -236,11 +424,22 @@ class _AddListingPageState extends State<AddListingPage> {
     setState(() {});
   }
 
+  int _parseDigits(String value, {int fallback = 0}) {
+    final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
+    return int.tryParse(digits) ?? fallback;
+  }
+
+  int? _parseDigitsNullable(String value) {
+    final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return null;
+    return int.tryParse(digits);
+  }
+
   void _next() {
     _clearError();
     if (!_validateStep(_step)) return;
     setState(() {
-      _step = (_step + 1).clamp(0, 6);
+      _step = (_step + 1).clamp(0, 7);
     });
   }
 
@@ -253,7 +452,7 @@ class _AddListingPageState extends State<AddListingPage> {
 
   Future<void> _publish() async {
     _clearError();
-    if (!_validateStep(5)) return;
+    if (!_validateStep(6)) return;
     setState(() => _saving = true);
     try {
       final title = InputSanitizer.sanitizeText(_titleCtrl.text, maxLength: 80);
@@ -263,7 +462,7 @@ class _AddListingPageState extends State<AddListingPage> {
         allowNewlines: true,
       );
       final price = InputSanitizer.parseAmount(_priceCtrl.text, min: 1);
-      final stock = int.tryParse(_stockCtrl.text.trim()) ?? 0;
+      final stock = _parseDigits(_stockCtrl.text.trim());
       if (stock <= 0) {
         throw FormatException(L10n.tr(context, 'listing.add.error_invalid_stock'));
       }
@@ -304,6 +503,13 @@ class _AddListingPageState extends State<AddListingPage> {
         if (_deliveryCod) 'cod',
         if (_deliveryPickup) 'pickup',
       ];
+      final weight = _parseDigits(_weightCtrl.text.trim(), fallback: 1);
+      final height = _parseDigits(_heightCtrl.text.trim());
+      final width = _parseDigits(_widthCtrl.text.trim());
+      final length = _parseDigits(_lengthCtrl.text.trim());
+      final declaredValue = _declaredValueCtrl.text.trim().isEmpty
+          ? null
+          : InputSanitizer.parseAmount(_declaredValueCtrl.text, min: 0);
 
       await ProductService().createProduct(
         title: title,
@@ -321,6 +527,15 @@ class _AddListingPageState extends State<AddListingPage> {
         deliveryOptions: deliveryOptions,
         stockQuantity: stock,
         costPrice: costPrice,
+        shippingFree: _freeShipping,
+        exchangeAfterDelivery: _exchangeAfterDelivery,
+        insuranceActive: _insuranceActive,
+        allowStopdesk: _allowStopdesk,
+        declaredValue: declaredValue,
+        weightKg: weight,
+        heightCm: height,
+        widthCm: width,
+        lengthCm: length,
       );
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
@@ -381,8 +596,15 @@ class _AddListingPageState extends State<AddListingPage> {
   }
 
   String _wilayaLabel(BuildContext context) {
+    return _wilayaLabelWithPlaceholder(context, placeholder: '-');
+  }
+
+  String _wilayaLabelWithPlaceholder(
+    BuildContext context, {
+    required String placeholder,
+  }) {
     final code = _selectedWilayaCode;
-    if (code == null || code.isEmpty) return '-';
+    if (code == null || code.isEmpty) return placeholder;
     final match = _wilayas.where((w) => w['code'] == code).toList();
     if (match.isEmpty) return code;
     final fr = match.first['name_fr'] ?? code;
@@ -397,8 +619,15 @@ class _AddListingPageState extends State<AddListingPage> {
   }
 
   String _selectedCommuneLabel(BuildContext context) {
+    return _selectedCommuneLabelWithPlaceholder(context, placeholder: '-');
+  }
+
+  String _selectedCommuneLabelWithPlaceholder(
+    BuildContext context, {
+    required String placeholder,
+  }) {
     final id = _selectedCommune;
-    if (id == null || id.isEmpty) return '-';
+    if (id == null || id.isEmpty) return placeholder;
     final match = _communes.where((c) => c['id'] == id).toList();
     if (match.isEmpty) return id;
     final fr = match.first['name_fr'] ?? id;
@@ -424,7 +653,7 @@ class _AddListingPageState extends State<AddListingPage> {
       case 3:
         try {
           InputSanitizer.parseAmount(_priceCtrl.text, min: 1);
-          final stock = int.tryParse(_stockCtrl.text.trim()) ?? 0;
+          final stock = _parseDigits(_stockCtrl.text.trim());
           if (stock <= 0) return false;
           if (_costCtrl.text.trim().isNotEmpty) {
             InputSanitizer.parseAmount(_costCtrl.text, min: 0);
@@ -437,6 +666,19 @@ class _AddListingPageState extends State<AddListingPage> {
         return _selectedWilayaCode != null && _selectedCommune != null;
       case 5:
         return _deliveryCod || _deliveryPickup;
+      case 6:
+        final weight = _parseDigits(_weightCtrl.text.trim());
+        final height = _parseDigits(_heightCtrl.text.trim(), fallback: -1);
+        final width = _parseDigits(_widthCtrl.text.trim(), fallback: -1);
+        final length = _parseDigits(_lengthCtrl.text.trim(), fallback: -1);
+        if (weight < _minWeightKg || weight > _maxWeightKg) return false;
+        if (height < 0 || height > 200) return false;
+        if (width < 0 || width > 200) return false;
+        if (length < 0 || length > 200) return false;
+        if (_insuranceActive && _declaredValueCtrl.text.trim().isEmpty) {
+          return false;
+        }
+        return true;
       default:
         return true;
     }
@@ -468,7 +710,7 @@ class _AddListingPageState extends State<AddListingPage> {
                     child: Text(L10n.tr(context, 'listing.add.back')),
                   ),
                 const Spacer(),
-                if (_step < 6)
+                if (_step < 7)
                   FilledButton(
                     onPressed: _canContinue() ? _next : null,
                     child: Text(L10n.tr(context, 'listing.add.continue')),
@@ -671,6 +913,7 @@ class _AddListingPageState extends State<AddListingPage> {
                 TextField(
                   controller: _stockCtrl,
                   keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   decoration: InputDecoration(
                     labelText: L10n.tr(context, 'listing.add.stock_label'),
                   ),
@@ -711,44 +954,64 @@ class _AddListingPageState extends State<AddListingPage> {
                       )
                     : Column(
                         children: [
-                          DropdownButtonFormField<String>(
-                            initialValue: _selectedWilayaCode,
-                            decoration: InputDecoration(
-                              labelText:
-                                  L10n.tr(context, 'listing.add.wilaya_label'),
+                          _buildPickerField(
+                            label: L10n.tr(context, 'listing.add.wilaya_label'),
+                            value: _wilayaLabelWithPlaceholder(
+                              context,
+                              placeholder: L10n.tr(
+                                context,
+                                'listing.add.select_wilaya',
+                              ),
                             ),
-                            items: _wilayas
-                                .map(
-                                  (w) => DropdownMenuItem(
-                                    value: w['code'],
-                                    child: Text(
-                                      '${w['code']} - ${_wilayaItemLabel(context, w)}',
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: _onWilayaSelected,
+                            onTap: _wilayas.isEmpty
+                                ? null
+                                : () async {
+                                    final picked = await _showLocationPicker(
+                                      context: context,
+                                      title: L10n.tr(
+                                        context,
+                                        'listing.add.wilaya_label',
+                                      ),
+                                      items: _wilayas,
+                                      itemLabel: (w) =>
+                                          '${w['code']} - ${_wilayaItemLabel(context, w)}',
+                                    );
+                                    if (picked != null) {
+                                      _onWilayaSelected(picked['code']);
+                                    }
+                                  },
                           ),
                           const SizedBox(height: 12),
-                          DropdownButtonFormField<String>(
-                            initialValue: _selectedCommune,
-                            decoration:
-                                InputDecoration(
-                                  labelText: L10n.tr(
-                                    context,
-                                    'listing.add.commune_label',
-                                  ),
-                                ),
-                            items: _communes
-                                .map(
-                                  (c) => DropdownMenuItem(
-                                    value: c['id'],
-                                    child: Text(_communeItemLabel(context, c)),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (value) =>
-                                setState(() => _selectedCommune = value),
+                          _buildPickerField(
+                            label:
+                                L10n.tr(context, 'listing.add.commune_label'),
+                            value: _selectedCommuneLabelWithPlaceholder(
+                              context,
+                              placeholder: L10n.tr(
+                                context,
+                                'listing.add.select_commune',
+                              ),
+                            ),
+                            onTap: (_selectedWilayaCode == null ||
+                                    _communes.isEmpty)
+                                ? null
+                                : () async {
+                                    final picked = await _showLocationPicker(
+                                      context: context,
+                                      title: L10n.tr(
+                                        context,
+                                        'listing.add.commune_label',
+                                      ),
+                                      items: _communes,
+                                      itemLabel: (c) =>
+                                          _communeItemLabel(context, c),
+                                    );
+                                    if (picked != null) {
+                                      setState(
+                                        () => _selectedCommune = picked['id'],
+                                      );
+                                    }
+                                  },
                           ),
                         ],
                       ),
@@ -758,26 +1021,130 @@ class _AddListingPageState extends State<AddListingPage> {
             isActive: _step >= 5,
             content: Column(
               children: [
-                SwitchListTile(
-                  value: _deliveryCod,
-                  onChanged: (value) => setState(() => _deliveryCod = value),
-                  title: Text(L10n.tr(context, 'listing.add.delivery_cod')),
-                  subtitle:
-                      Text(L10n.tr(context, 'listing.add.delivery_cod_hint')),
+                  SwitchListTile(
+                    value: _deliveryCod,
+                    onChanged: (value) => setState(() => _deliveryCod = value),
+                    title: Text(L10n.tr(context, 'listing.add.delivery_cod')),
+                    subtitle:
+                        Text(L10n.tr(context, 'listing.add.delivery_cod_hint')),
+                  ),
+                  if (_courierCaps.supportsStopdesk)
+                    SwitchListTile(
+                      value: _deliveryPickup,
+                      onChanged: (value) =>
+                          setState(() => _deliveryPickup = value),
+                      title: Text(L10n.tr(context, 'listing.add.delivery_pickup')),
+                      subtitle: Text(
+                        L10n.tr(context, 'listing.add.delivery_pickup_hint'),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Step(
+              title: Text(L10n.tr(context, 'listing.add.step_shipping')),
+              isActive: _step >= 6,
+              content: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CheckboxListTile(
+                    value: _freeShipping,
+                    onChanged: (v) => setState(() => _freeShipping = v ?? false),
+                    title: Text(L10n.tr(context, 'checkout.free_shipping')),
+                  ),
+                  if (_courierCaps.supportsExchange)
+                    CheckboxListTile(
+                      value: _exchangeAfterDelivery,
+                      onChanged: (v) =>
+                          setState(() => _exchangeAfterDelivery = v ?? false),
+                      title:
+                          Text(L10n.tr(context, 'checkout.exchange_after_delivery')),
+                    ),
+                  if (_courierCaps.supportsStopdesk)
+                    CheckboxListTile(
+                      value: _allowStopdesk,
+                      onChanged: (v) =>
+                          setState(() => _allowStopdesk = v ?? true),
+                      title: Text(L10n.tr(context, 'listing.add.allow_stopdesk')),
+                    ),
+                  if (_courierCaps.supportsInsurance) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      L10n.tr(context, 'checkout.insurance'),
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    SwitchListTile(
+                      value: _insuranceActive,
+                      onChanged: (v) =>
+                          setState(() => _insuranceActive = v ?? false),
+                      title: Text(L10n.tr(context, 'checkout.insurance_active')),
+                    ),
+                    TextField(
+                      controller: _declaredValueCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: L10n.tr(context, 'checkout.declared_value'),
+                      ),
+                    ),
+                  ],
+                const SizedBox(height: 12),
+                Text(
+                  L10n.tr(context, 'checkout.dimensions_weight'),
+                  style: Theme.of(context).textTheme.titleSmall,
                 ),
-                SwitchListTile(
-                  value: _deliveryPickup,
-                  onChanged: (value) => setState(() => _deliveryPickup = value),
-                  title: Text(L10n.tr(context, 'listing.add.delivery_pickup')),
-                  subtitle:
-                      Text(L10n.tr(context, 'listing.add.delivery_pickup_hint')),
+                TextField(
+                  controller: _weightCtrl,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'checkout.weight_kg'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _heightCtrl,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'checkout.height_cm'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _widthCtrl,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'checkout.width_cm'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _lengthCtrl,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'checkout.length_cm'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  L10n.tr(
+                    context,
+                    'checkout.overweight_label',
+                    params: {
+                      'value': (_parseDigits(_weightCtrl.text.trim()) > 5)
+                          ? L10n.tr(context, 'common.yes')
+                          : L10n.tr(context, 'common.no'),
+                    },
+                  ),
                 ),
               ],
             ),
           ),
           Step(
             title: Text(L10n.tr(context, 'listing.add.step_preview')),
-            isActive: _step >= 6,
+            isActive: _step >= 7,
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -842,6 +1209,65 @@ class _AddListingPageState extends State<AddListingPage> {
                 _PreviewRow(
                   label: L10n.tr(context, 'listing.add.preview_delivery'),
                   value: _deliveryOptionsPreview(context).join(', '),
+                ),
+                  _PreviewRow(
+                    label: L10n.tr(context, 'checkout.free_shipping'),
+                    value: _freeShipping
+                        ? L10n.tr(context, 'common.yes')
+                        : L10n.tr(context, 'common.no'),
+                  ),
+                  if (_courierCaps.supportsExchange)
+                    _PreviewRow(
+                      label:
+                          L10n.tr(context, 'checkout.exchange_after_delivery'),
+                      value: _exchangeAfterDelivery
+                          ? L10n.tr(context, 'common.yes')
+                          : L10n.tr(context, 'common.no'),
+                    ),
+                  if (_courierCaps.supportsStopdesk)
+                    _PreviewRow(
+                      label: L10n.tr(context, 'listing.add.allow_stopdesk'),
+                      value: _allowStopdesk
+                          ? L10n.tr(context, 'common.yes')
+                          : L10n.tr(context, 'common.no'),
+                    ),
+                  if (_courierCaps.supportsInsurance) ...[
+                    _PreviewRow(
+                      label: L10n.tr(context, 'checkout.insurance_active'),
+                      value: _insuranceActive
+                          ? L10n.tr(context, 'common.yes')
+                          : L10n.tr(context, 'common.no'),
+                    ),
+                    _PreviewRow(
+                      label: L10n.tr(context, 'checkout.declared_value'),
+                      value: _declaredValueCtrl.text.trim().isEmpty
+                          ? '-'
+                          : _declaredValueCtrl.text.trim(),
+                    ),
+                  ],
+                _PreviewRow(
+                  label: L10n.tr(context, 'checkout.weight_kg'),
+                  value: _weightCtrl.text.trim().isEmpty
+                      ? '-'
+                      : _weightCtrl.text.trim(),
+                ),
+                _PreviewRow(
+                  label: L10n.tr(context, 'checkout.height_cm'),
+                  value: _heightCtrl.text.trim().isEmpty
+                      ? '-'
+                      : _heightCtrl.text.trim(),
+                ),
+                _PreviewRow(
+                  label: L10n.tr(context, 'checkout.width_cm'),
+                  value: _widthCtrl.text.trim().isEmpty
+                      ? '-'
+                      : _widthCtrl.text.trim(),
+                ),
+                _PreviewRow(
+                  label: L10n.tr(context, 'checkout.length_cm'),
+                  value: _lengthCtrl.text.trim().isEmpty
+                      ? '-'
+                      : _lengthCtrl.text.trim(),
                 ),
                 const SizedBox(height: 12),
                 if (_descCtrl.text.trim().isNotEmpty)

@@ -25,6 +25,53 @@ class _CacheItem<T> {
   bool get isExpired => DateTime.now().isAfter(expiry);
 }
 
+class CourierCapabilities {
+  final bool supportsStopdesk;
+  final bool supportsInsurance;
+  final bool supportsExchange;
+  final bool supportsDeclaredValue;
+  final bool supportsDimensions;
+  final bool supportsWeight;
+
+  const CourierCapabilities({
+    required this.supportsStopdesk,
+    required this.supportsInsurance,
+    required this.supportsExchange,
+    required this.supportsDeclaredValue,
+    required this.supportsDimensions,
+    required this.supportsWeight,
+  });
+
+  static const all = CourierCapabilities(
+    supportsStopdesk: true,
+    supportsInsurance: true,
+    supportsExchange: true,
+    supportsDeclaredValue: true,
+    supportsDimensions: true,
+    supportsWeight: true,
+  );
+
+  static const none = CourierCapabilities(
+    supportsStopdesk: false,
+    supportsInsurance: false,
+    supportsExchange: false,
+    supportsDeclaredValue: false,
+    supportsDimensions: false,
+    supportsWeight: false,
+  );
+
+  CourierCapabilities mergeAny(CourierCapabilities other) {
+    return CourierCapabilities(
+      supportsStopdesk: supportsStopdesk || other.supportsStopdesk,
+      supportsInsurance: supportsInsurance || other.supportsInsurance,
+      supportsExchange: supportsExchange || other.supportsExchange,
+      supportsDeclaredValue: supportsDeclaredValue || other.supportsDeclaredValue,
+      supportsDimensions: supportsDimensions || other.supportsDimensions,
+      supportsWeight: supportsWeight || other.supportsWeight,
+    );
+  }
+}
+
 class ShippingService {
   // Shared HTTP client to reuse connections across instances.
   static final http.Client _httpClient = http.Client();
@@ -149,6 +196,60 @@ class ShippingService {
     final idKey = _normalizeCourierKey(courierId);
     final nameKey = _normalizeCourierKey(courierName);
     return idKey.contains('zrexpress') || nameKey.contains('zrexpress');
+  }
+
+  static CourierCapabilities capabilitiesFor({
+    String? courierId,
+    String? courierName,
+  }) {
+    final key = _normalizeCourierKey('${courierId ?? ''} ${courierName ?? ''}');
+    if (key.contains('yalidine')) {
+      return const CourierCapabilities(
+        supportsStopdesk: true,
+        supportsInsurance: true,
+        supportsExchange: true,
+        supportsDeclaredValue: true,
+        supportsDimensions: true,
+        supportsWeight: true,
+      );
+    }
+    if (key.contains('ecotrack')) {
+      return const CourierCapabilities(
+        supportsStopdesk: true,
+        supportsInsurance: false,
+        supportsExchange: true,
+        supportsDeclaredValue: false,
+        supportsDimensions: true,
+        supportsWeight: true,
+      );
+    }
+    if (key.contains('zrexpress')) {
+      return const CourierCapabilities(
+        supportsStopdesk: true,
+        supportsInsurance: false,
+        supportsExchange: false,
+        supportsDeclaredValue: false,
+        supportsDimensions: true,
+        supportsWeight: true,
+      );
+    }
+    return CourierCapabilities.all;
+  }
+
+  static CourierCapabilities aggregateCapabilities(
+    List<Map<String, dynamic>> couriers,
+  ) {
+    if (couriers.isEmpty) return CourierCapabilities.all;
+    var caps = CourierCapabilities.none;
+    for (final courier in couriers) {
+      caps = caps.mergeAny(
+        capabilitiesFor(
+          courierId: courier['courier_id']?.toString(),
+          courierName: courier['courier_name']?.toString(),
+        ),
+      );
+    }
+    return caps;
   }
 
   static String optionLabel(BuildContext context, String option) {
@@ -448,20 +549,59 @@ class ShippingService {
         orderRow['agreed_price'] ?? orderRow['sale_price'];
     double price = priceValue is num ? priceValue.toDouble() : 0.0;
 
+    // Produit (for fallbacks / enrich stored selection)
+    String productTitle = 'Produit $productId';
+    bool freeShipping = false;
+    bool exchangeAfterDelivery = false;
+    bool insuranceActive = false;
+    double? declaredValue;
+    int? weightKg;
+    int? heightCm;
+    int? widthCm;
+    int? lengthCm;
+    if (productId != null) {
+      final productRes = await supabase
+          .from('products')
+          .select(
+              'title,price,shipping_free,exchange_after_delivery,insurance_active,declared_value,weight_kg,height_cm,width_cm,length_cm')
+          .eq('id', productId)
+          .maybeSingle();
+      final Map<String, dynamic>? product = productRes;
+      if (product != null) {
+        productTitle =
+            InputSanitizer.sanitizeOptionalText(product['title'], maxLength: 120) ??
+                productTitle;
+        if (price <= 0 && product['price'] is num) {
+          price = (product['price'] as num).toDouble();
+        }
+        freeShipping = product['shipping_free'] == true;
+        exchangeAfterDelivery = product['exchange_after_delivery'] == true;
+        insuranceActive = product['insurance_active'] == true;
+        declaredValue =
+            (product['declared_value'] as num?)?.toDouble() ?? declaredValue;
+        weightKg = (product['weight_kg'] as num?)?.toInt() ?? weightKg;
+        heightCm = (product['height_cm'] as num?)?.toInt() ?? heightCm;
+        widthCm = (product['width_cm'] as num?)?.toInt() ?? widthCm;
+        lengthCm = (product['length_cm'] as num?)?.toInt() ?? lengthCm;
+      }
+    }
+
     // If buyer selection is already stored, reuse it to avoid name mismatches.
-      if (storedSelection is Map) {
-        final selection = Map<String, dynamic>.from(storedSelection);
-        selection['order_id'] = safeOrderId;
-        selection['from_wilaya_name'] ??= selection['senderWilaya'];
-        selection['to_wilaya_name'] ??= selection['receiverWilaya'];
-        selection['to_commune_name'] ??= selection['receiverCommune'];
+    if (storedSelection is Map) {
+      final selection = Map<String, dynamic>.from(storedSelection);
+      selection['order_id'] = safeOrderId;
+      selection['from_wilaya_name'] ??= selection['senderWilaya'];
+      selection['to_wilaya_name'] ??= selection['receiverWilaya'];
+      selection['to_commune_name'] ??= selection['receiverCommune'];
       selection['receiverDaira'] ??=
-            selection['receiver_daira'] ?? selection['to_daira_name'];
+          selection['receiver_daira'] ?? selection['to_daira_name'];
       selection['receiver_daira'] ??= selection['receiverDaira'];
       selection['receiverWilaya'] ??= selection['to_wilaya_name'];
       selection['receiverCommune'] ??= selection['to_commune_name'];
       selection['receiverWilayaId'] ??=
-          selection['receiver_wilaya_id'] ?? selection['wilayaCode'] ?? selection['wilaya_id'];
+          selection['receiver_wilaya_id'] ??
+          selection['wilayaCode'] ??
+          selection['wilaya_id'];
       selection['receiverCommuneId'] ??=
           selection['receiver_commune_id'] ?? selection['commune_id'];
       selection['phone_main'] ??= selection['phone'];
@@ -495,8 +635,22 @@ class ShippingService {
           selection['phone2_e164'] = e164Secondary;
         }
       }
-      selection['productList'] ??= selection['product_list'];
+      selection['productList'] ??= selection['product_list'] ?? productTitle;
+      selection['freeshipping'] ??=
+          selection['free_shipping'] ?? selection['shipping_free'] ?? freeShipping;
+      selection['hasExchange'] ??=
+          selection['exchange_after_delivery'] ??
+          selection['has_exchange'] ??
+          exchangeAfterDelivery;
+      selection['insuranceActive'] ??=
+          selection['insurance_active'] ?? selection['insurance'] ?? insuranceActive;
+      selection['declaredValue'] ??=
+          selection['declared_value'] ?? declaredValue;
       selection['declared_value'] ??= selection['declaredValue'];
+      selection['weight'] ??= selection['weight_kg'] ?? weightKg;
+      selection['height'] ??= selection['height_cm'] ?? heightCm;
+      selection['width'] ??= selection['width_cm'] ?? widthCm;
+      selection['length'] ??= selection['length_cm'] ?? lengthCm;
       selection['is_stopdesk'] ??=
           selection['deliveryType'] == 'stopdesk' ||
           selection['is_stopdesk'] == true;
@@ -557,28 +711,16 @@ class ShippingService {
       }
     }
 
-    // Produit
-    String productTitle = 'Produit $productId';
-    if (productId != null) {
-      final productRes = await supabase
-          .from('products')
-          .select('title,price')
-          .eq('id', productId)
-          .maybeSingle();
-      final Map<String, dynamic>? product = productRes;
-      if (product != null) {
-        productTitle =
-            InputSanitizer.sanitizeOptionalText(product['title'], maxLength: 120) ??
-                productTitle;
-        if (price <= 0 && product['price'] is num) {
-          price = (product['price'] as num).toDouble();
-        }
-      }
-    }
+    // Produit (already loaded above)
 
     final safeAddress = address.isNotEmpty ? address : 'Adresse à confirmer';
     final safeWilaya = toWilaya.isNotEmpty ? toWilaya : 'M\'Sila';
     final safeCommune = toCommune.isNotEmpty ? toCommune : 'M\'Sila';
+    final fallbackDeclared = declaredValue ?? price;
+    final fallbackWeight = weightKg ?? 2;
+    final fallbackHeight = heightCm ?? 30;
+    final fallbackWidth = widthCm ?? 30;
+    final fallbackLength = lengthCm ?? 30;
     return {
       'order_id': safeOrderId,
       'from_wilaya_name': fromWilaya,
@@ -595,15 +737,18 @@ class ShippingService {
       'receiverWilaya': safeWilaya,
       'productList': productTitle,
       'price': price,
-      'do_insurance': false,
-      'declared_value': price,
-      'length': 30,
-      'width': 30,
-      'height': 30,
-      'weight': 2,
-      'freeshipping': false,
+      'do_insurance': insuranceActive,
+      'insuranceActive': insuranceActive,
+      'declared_value': fallbackDeclared,
+      'declaredValue': fallbackDeclared,
+      'length': fallbackLength,
+      'width': fallbackWidth,
+      'height': fallbackHeight,
+      'weight': fallbackWeight,
+      'freeshipping': freeShipping,
       'is_stopdesk': false,
-      'has_exchange': false,
+      'has_exchange': exchangeAfterDelivery,
+      'hasExchange': exchangeAfterDelivery,
     };
   }
 

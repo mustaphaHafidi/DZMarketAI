@@ -20,6 +20,15 @@ class Product {
     this.locationWilaya,
     this.locationDaira,
     this.deliveryOptions = const [],
+    this.shippingFree = false,
+    this.exchangeAfterDelivery = false,
+    this.insuranceActive = false,
+    this.declaredValue,
+    this.weightKg,
+    this.heightCm,
+    this.widthCm,
+    this.lengthCm,
+    this.allowStopdesk = true,
     this.stockQuantity = 1,
     this.soldCount = 0,
     this.isArchived = false,
@@ -46,6 +55,15 @@ class Product {
   final String? locationWilaya;
   final String? locationDaira;
   final List<String> deliveryOptions;
+  final bool shippingFree;
+  final bool exchangeAfterDelivery;
+  final bool insuranceActive;
+  final double? declaredValue;
+  final int? weightKg;
+  final int? heightCm;
+  final int? widthCm;
+  final int? lengthCm;
+  final bool allowStopdesk;
   final int stockQuantity;
   final int soldCount;
   final bool isArchived;
@@ -83,6 +101,16 @@ class Product {
             .map((e) => e?.toString() ?? '')
             .where((e) => e.isNotEmpty)
             .toList(),
+        shippingFree: json['shipping_free'] as bool? ?? false,
+        exchangeAfterDelivery:
+            json['exchange_after_delivery'] as bool? ?? false,
+        insuranceActive: json['insurance_active'] as bool? ?? false,
+        declaredValue: (json['declared_value'] as num?)?.toDouble(),
+        weightKg: (json['weight_kg'] as num?)?.toInt(),
+        heightCm: (json['height_cm'] as num?)?.toInt(),
+        widthCm: (json['width_cm'] as num?)?.toInt(),
+        lengthCm: (json['length_cm'] as num?)?.toInt(),
+        allowStopdesk: json['allow_stopdesk'] as bool? ?? true,
         stockQuantity: (json['stock_quantity'] as num?)?.toInt() ?? 1,
         soldCount: (json['sold_count'] as num?)?.toInt() ?? 0,
         isArchived: json['is_archived'] as bool? ?? false,

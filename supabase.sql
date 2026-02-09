@@ -469,6 +469,15 @@ create table if not exists public.products (
     location_wilaya text,
     location_daira text,
     delivery_options text[] not null default '{}',
+    shipping_free boolean not null default false,
+    exchange_after_delivery boolean not null default false,
+    insurance_active boolean not null default false,
+    declared_value numeric(12,2),
+    weight_kg int default 1 check (weight_kg >= 0),
+    height_cm int default 0 check (height_cm >= 0),
+    width_cm int default 0 check (width_cm >= 0),
+    length_cm int default 0 check (length_cm >= 0),
+    allow_stopdesk boolean not null default true,
     category_id bigint references public.categories(id),
     category_slug text references public.categories(slug),
     condition text,
@@ -501,6 +510,24 @@ alter table public.products
   add column if not exists location_daira text;
 alter table public.products
   add column if not exists delivery_options text[] default '{}';
+alter table public.products
+  add column if not exists allow_stopdesk boolean default true;
+alter table public.products
+  add column if not exists shipping_free boolean default false;
+alter table public.products
+  add column if not exists exchange_after_delivery boolean default false;
+alter table public.products
+  add column if not exists insurance_active boolean default false;
+alter table public.products
+  add column if not exists declared_value numeric(12,2);
+alter table public.products
+  add column if not exists weight_kg int default 1;
+alter table public.products
+  add column if not exists height_cm int default 0;
+alter table public.products
+  add column if not exists width_cm int default 0;
+alter table public.products
+  add column if not exists length_cm int default 0;
 alter table public.products enable row level security;
 drop policy if exists "products readable by all" on public.products;
 drop policy if exists "products insert by seller" on public.products;
@@ -514,6 +541,25 @@ drop trigger if exists products_touch on public.products;
 create trigger products_touch
   before update on public.products
   for each row execute procedure public.touch_updated_at();
+
+-- Auto-archive products when stock reaches 0 (keep history)
+create or replace function public.auto_archive_product()
+returns trigger as $$
+begin
+  if new.stock_quantity is not null and new.stock_quantity <= 0 then
+    new.is_archived = true;
+    if new.status is distinct from 'sold' then
+      new.status = 'sold';
+    end if;
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists products_auto_archive on public.products;
+create trigger products_auto_archive
+  before insert or update on public.products
+  for each row execute procedure public.auto_archive_product();
 
 create index if not exists products_owner_idx on public.products (owner_id);
 create index if not exists products_category_slug_idx on public.products (category_slug);
@@ -1427,6 +1473,55 @@ revoke all on function public.post_order_event(bigint, text, jsonb, text) from p
 grant execute on function public.post_order_event(bigint, text, jsonb, text) to authenticated, service_role;
 revoke all on function public.send_message(uuid, text, text, jsonb, text) from public;
 grant execute on function public.send_message(uuid, text, text, jsonb, text) to authenticated;
+
+-- Auto-cancel stale orders (no bordereau after 3 days) + system chat message
+create or replace function public.cancel_stale_orders(p_cutoff interval default interval '3 days')
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  rec record;
+  v_count integer := 0;
+begin
+  for rec in
+    select o.id
+    from public.orders o
+    left join public.shipments s on s.order_id = o.id
+    where o.status in ('pending', 'paid')
+      and o.created_at < now() - p_cutoff
+      and (s.order_id is null or s.label_url is null)
+  loop
+    update public.orders
+    set status = 'cancelled',
+        payment_status = case when payment_status = 'paid' then 'failed' else payment_status end,
+        updated_at = now()
+    where id = rec.id;
+
+    begin
+      perform public.post_order_event(
+        rec.id,
+        'order_cancelled',
+        jsonb_build_object(
+          'i18n_key', 'order.system.cancelled',
+          'status', 'cancelled',
+          'status_i18n', 'order.status.cancelled'
+        ),
+        'order:' || rec.id || ':cancelled'
+      );
+    exception when others then
+      null;
+    end;
+
+    v_count := v_count + 1;
+  end loop;
+
+  return v_count;
+end;
+$$;
+revoke all on function public.cancel_stale_orders(interval) from public;
+grant execute on function public.cancel_stale_orders(interval) to service_role;
 
 -- RPC: delete_conversation (soft delete per user)
 CREATE OR REPLACE FUNCTION public.delete_conversation(p_conversation_id uuid)

@@ -28,12 +28,23 @@ class _EditProductPageState extends State<EditProductPage> {
   late final TextEditingController _sizeCtrl;
   late final TextEditingController _wilayaCtrl;
   late final TextEditingController _dairaCtrl;
+  late final TextEditingController _declaredValueCtrl;
+  late final TextEditingController _weightCtrl;
+  late final TextEditingController _heightCtrl;
+  late final TextEditingController _widthCtrl;
+  late final TextEditingController _lengthCtrl;
   String _condition = 'new';
   bool _deliveryCod = true;
   bool _deliveryPickup = false;
+  bool _freeShipping = false;
+  bool _exchangeAfterDelivery = false;
+  bool _insuranceActive = false;
+  bool _allowStopdesk = true;
   final List<String> _existingImages = [];
   final List<PlatformFile> _newImages = [];
   bool _saving = false;
+  static const int _minWeightKg = 1;
+  static const int _maxWeightKg = 60;
   static const _conditions = ['new', 'like new', 'good', 'fair'];
 
   String _conditionLabel(BuildContext context, String value) {
@@ -70,6 +81,26 @@ class _EditProductPageState extends State<EditProductPage> {
     _condition = widget.product.condition ?? 'new';
     _deliveryCod = widget.product.deliveryOptions.contains('cod');
     _deliveryPickup = widget.product.deliveryOptions.contains('pickup');
+    _freeShipping = widget.product.shippingFree;
+    _exchangeAfterDelivery = widget.product.exchangeAfterDelivery;
+    _insuranceActive = widget.product.insuranceActive;
+    _allowStopdesk = widget.product.allowStopdesk;
+    final declaredValue =
+        widget.product.declaredValue ?? widget.product.price;
+    _declaredValueCtrl =
+        TextEditingController(text: declaredValue.toStringAsFixed(0));
+    _weightCtrl = TextEditingController(
+      text: (widget.product.weightKg ?? 1).toString(),
+    );
+    _heightCtrl = TextEditingController(
+      text: (widget.product.heightCm ?? 0).toString(),
+    );
+    _widthCtrl = TextEditingController(
+      text: (widget.product.widthCm ?? 0).toString(),
+    );
+    _lengthCtrl = TextEditingController(
+      text: (widget.product.lengthCm ?? 0).toString(),
+    );
     _existingImages.addAll(widget.product.imageUrls);
   }
 
@@ -85,6 +116,11 @@ class _EditProductPageState extends State<EditProductPage> {
     _sizeCtrl.dispose();
     _wilayaCtrl.dispose();
     _dairaCtrl.dispose();
+    _declaredValueCtrl.dispose();
+    _weightCtrl.dispose();
+    _heightCtrl.dispose();
+    _widthCtrl.dispose();
+    _lengthCtrl.dispose();
     super.dispose();
   }
 
@@ -134,6 +170,37 @@ class _EditProductPageState extends State<EditProductPage> {
           InputSanitizer.sanitizeOptionalText(_dairaCtrl.text, maxLength: 60);
       final categoryName =
           InputSanitizer.sanitizeOptionalText(_categoryCtrl.text, maxLength: 80);
+      final weight = int.tryParse(_weightCtrl.text.trim()) ?? 0;
+      final height = int.tryParse(_heightCtrl.text.trim()) ?? 0;
+      final width = int.tryParse(_widthCtrl.text.trim()) ?? 0;
+      final length = int.tryParse(_lengthCtrl.text.trim()) ?? 0;
+      if (weight < _minWeightKg || weight > _maxWeightKg) {
+        throw FormatException(
+          L10n.tr(
+            context,
+            'checkout.error_weight_range',
+            params: {
+              'min': _minWeightKg.toString(),
+              'max': _maxWeightKg.toString(),
+            },
+          ),
+        );
+      }
+      if (height < 0 || height > 200) {
+        throw FormatException(L10n.tr(context, 'checkout.error_height_invalid'));
+      }
+      if (width < 0 || width > 200) {
+        throw FormatException(L10n.tr(context, 'checkout.error_width_invalid'));
+      }
+      if (length < 0 || length > 200) {
+        throw FormatException(L10n.tr(context, 'checkout.error_length_invalid'));
+      }
+      final declaredValue = _declaredValueCtrl.text.trim().isEmpty
+          ? null
+          : InputSanitizer.parseAmount(_declaredValueCtrl.text, min: 0);
+      if (_insuranceActive && declaredValue == null) {
+        throw FormatException(L10n.tr(context, 'checkout.error_price_required'));
+      }
       final deliveryOptions = <String>[
         if (_deliveryCod) 'cod',
         if (_deliveryPickup) 'pickup',
@@ -165,6 +232,15 @@ class _EditProductPageState extends State<EditProductPage> {
         locationWilaya: wilaya,
         locationDaira: daira,
         deliveryOptions: deliveryOptions,
+        shippingFree: _freeShipping,
+        exchangeAfterDelivery: _exchangeAfterDelivery,
+        insuranceActive: _insuranceActive,
+        allowStopdesk: _allowStopdesk,
+        declaredValue: declaredValue,
+        weightKg: weight,
+        heightCm: height,
+        widthCm: width,
+        lengthCm: length,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -362,6 +438,80 @@ class _EditProductPageState extends State<EditProductPage> {
               value: _deliveryPickup,
               onChanged: (value) => setState(() => _deliveryPickup = value),
               title: Text(L10n.tr(context, 'listing.add.delivery_pickup')),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              L10n.tr(context, 'checkout.package_details'),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            CheckboxListTile(
+              value: _freeShipping,
+              onChanged: (v) => setState(() => _freeShipping = v ?? false),
+              title: Text(L10n.tr(context, 'checkout.free_shipping')),
+            ),
+            CheckboxListTile(
+              value: _exchangeAfterDelivery,
+              onChanged: (v) =>
+                  setState(() => _exchangeAfterDelivery = v ?? false),
+              title: Text(L10n.tr(context, 'checkout.exchange_after_delivery')),
+            ),
+            CheckboxListTile(
+              value: _allowStopdesk,
+              onChanged: (v) => setState(() => _allowStopdesk = v ?? true),
+              title: Text(L10n.tr(context, 'listing.add.allow_stopdesk')),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              L10n.tr(context, 'checkout.insurance'),
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            SwitchListTile(
+              value: _insuranceActive,
+              onChanged: (v) => setState(() => _insuranceActive = v ?? false),
+              title: Text(L10n.tr(context, 'checkout.insurance_active')),
+            ),
+            TextField(
+              controller: _declaredValueCtrl,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: L10n.tr(context, 'checkout.declared_value'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              L10n.tr(context, 'checkout.dimensions_weight'),
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            TextField(
+              controller: _weightCtrl,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: L10n.tr(context, 'checkout.weight_kg'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _heightCtrl,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: L10n.tr(context, 'checkout.height_cm'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _widthCtrl,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: L10n.tr(context, 'checkout.width_cm'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _lengthCtrl,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: L10n.tr(context, 'checkout.length_cm'),
+              ),
             ),
             const SizedBox(height: 24),
             FilledButton.icon(

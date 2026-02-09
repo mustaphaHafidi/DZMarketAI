@@ -10,9 +10,16 @@ import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-/// Listing management: open, edit, delete own products.
-class MyListingsPage extends StatelessWidget {
+/// Listing management: open, edit, archive own products.
+class MyListingsPage extends StatefulWidget {
   const MyListingsPage({super.key});
+
+  @override
+  State<MyListingsPage> createState() => _MyListingsPageState();
+}
+
+class _MyListingsPageState extends State<MyListingsPage> {
+  String _filter = 'active';
 
   @override
   Widget build(BuildContext context) {
@@ -36,14 +43,54 @@ class MyListingsPage extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           final products = snapshot.data ?? const [];
-          if (products.isEmpty) {
-            return Center(child: Text(L10n.tr(context, 'listing.empty')));
-          }
+          final filtered = switch (_filter) {
+            'archived' => products.where((p) => p.isArchived).toList(),
+            'all' => products,
+            _ => products.where((p) => !p.isArchived).toList(),
+          };
+          final emptyLabel = switch (_filter) {
+            'archived' => L10n.tr(context, 'listing.archived_empty'),
+            'active' => L10n.tr(context, 'listing.active_empty'),
+            _ => L10n.tr(context, 'listing.empty'),
+          };
           return ListView.separated(
-            itemCount: products.length,
+            itemCount: filtered.length + 1,
             separatorBuilder: (_, __) => const Divider(height: 1),
             itemBuilder: (context, index) {
-              final p = products[index];
+              if (index == 0) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: Wrap(
+                    spacing: 8,
+                    children: [
+                      ChoiceChip(
+                        label: Text(L10n.tr(context, 'listing.filter_active')),
+                        selected: _filter == 'active',
+                        onSelected: (_) =>
+                            setState(() => _filter = 'active'),
+                      ),
+                      ChoiceChip(
+                        label: Text(L10n.tr(context, 'listing.filter_archived')),
+                        selected: _filter == 'archived',
+                        onSelected: (_) =>
+                            setState(() => _filter = 'archived'),
+                      ),
+                      ChoiceChip(
+                        label: Text(L10n.tr(context, 'listing.filter_all')),
+                        selected: _filter == 'all',
+                        onSelected: (_) => setState(() => _filter = 'all'),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              if (filtered.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 32),
+                  child: Center(child: Text(emptyLabel)),
+                );
+              }
+              final p = filtered[index - 1];
               final raw = p.imageUrls.isNotEmpty ? p.imageUrls.first : p.imageUrl;
               final img = InputSanitizer.safeUrl(raw);
               final stockLabel = L10n.tr(
@@ -56,6 +103,17 @@ class MyListingsPage extends StatelessWidget {
                 'listing.detail.sold',
                 params: {'value': p.soldCount.toString()},
               );
+              final metaParts = <String>[
+                currency.format(p.price),
+                stockLabel,
+                soldLabel,
+              ];
+              if (p.stockQuantity <= 0) {
+                metaParts.add(L10n.tr(context, 'cta.out_of_stock'));
+              }
+              if (p.isArchived) {
+                metaParts.add(L10n.tr(context, 'listing.status_archived'));
+              }
               return ListTile(
                 leading: img != null
                     ? CircleAvatar(
@@ -68,7 +126,7 @@ class MyListingsPage extends StatelessWidget {
                     : const CircleAvatar(child: Icon(Icons.image)),
                 title: Text(p.title),
                 subtitle: Text(
-                  '${currency.format(p.price)} • $stockLabel • $soldLabel',
+                  metaParts.join(' • '),
                 ),
                 trailing: PopupMenuButton<String>(
                   onSelected: (value) async {
@@ -76,20 +134,6 @@ class MyListingsPage extends StatelessWidget {
                       await Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => EditProductPage(product: p)),
                       );
-                    } else if (value == 'delete') {
-                      final confirmed = await _confirmDelete(context, p.title);
-                      if (confirmed) {
-                        await ProductService().deleteProduct(p.id.toString());
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                L10n.tr(context, 'listing.delete_success'),
-                              ),
-                            ),
-                          );
-                        }
-                      }
                     } else if (value == 'archive') {
                       await ProductService()
                           .updateProduct(id: p.id.toString(), isArchived: true);
@@ -123,10 +167,6 @@ class MyListingsPage extends StatelessWidget {
                         value: 'unarchive',
                         child: Text(L10n.tr(context, 'common.unarchive')),
                       ),
-                    PopupMenuItem(
-                      value: 'delete',
-                      child: Text(L10n.tr(context, 'common.delete')),
-                    ),
                   ],
                 ),
                 onTap: () => Navigator.of(context).push(
@@ -140,33 +180,6 @@ class MyListingsPage extends StatelessWidget {
         },
       ),
     );
-  }
-
-  Future<bool> _confirmDelete(BuildContext context, String title) async {
-    return await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text(L10n.tr(context, 'listing.delete_title')),
-            content: Text(
-              L10n.tr(
-                context,
-                'listing.delete_confirm',
-                params: {'title': title},
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text(L10n.tr(context, 'common.cancel')),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: Text(L10n.tr(context, 'common.delete')),
-              ),
-            ],
-          ),
-        ) ??
-        false;
   }
 }
 

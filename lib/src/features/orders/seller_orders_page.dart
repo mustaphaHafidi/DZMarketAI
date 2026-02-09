@@ -91,6 +91,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
                     if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
                   },
                   onDelete: () => _confirmDelete(context, order.id),
+                  canCancel: order.status == OrderStatus.pending &&
+                      (order.labelUrl == null || order.labelUrl!.isEmpty),
                 );
               },
             ),
@@ -156,6 +158,7 @@ class _SellerOrderCard extends StatelessWidget {
     required this.onGenerateLabel,
     required this.onOpenLabel,
     required this.onDelete,
+    required this.canCancel,
   });
 
   final Order order;
@@ -163,6 +166,7 @@ class _SellerOrderCard extends StatelessWidget {
   final VoidCallback onGenerateLabel;
   final void Function(String labelUrl) onOpenLabel;
   final VoidCallback onDelete;
+  final bool canCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -234,11 +238,12 @@ class _SellerOrderCard extends StatelessWidget {
                     spacing: 8,
                     runSpacing: 6,
                     children: [
-                      TextButton.icon(
-                        onPressed: onDelete,
-                        icon: const Icon(Icons.delete_outline),
-                        label: Text(L10n.tr(context, 'common.delete')),
-                      ),
+                      if (canCancel)
+                        TextButton.icon(
+                          onPressed: onDelete,
+                          icon: const Icon(Icons.delete_outline),
+                          label: Text(L10n.tr(context, 'common.delete')),
+                        ),
                       if ((order.labelUrl ?? '').isNotEmpty)
                         TextButton.icon(
                           onPressed: () => onOpenLabel(order.labelUrl!),

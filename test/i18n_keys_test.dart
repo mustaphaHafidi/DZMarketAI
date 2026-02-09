@@ -35,9 +35,9 @@ void main() {
       final arValue = ar[key];
       expect(frValue, isA<String>(), reason: 'Non-string fr value for $key');
       expect(arValue, isA<String>(), reason: 'Non-string ar value for $key');
-      expect((frValue as String).isNotEmpty, isTrue,
+      expect((frValue as String).trim().isNotEmpty, isTrue,
           reason: 'Empty fr value for $key');
-      expect((arValue as String).isNotEmpty, isTrue,
+      expect((arValue as String).trim().isNotEmpty, isTrue,
           reason: 'Empty ar value for $key');
     }
   });

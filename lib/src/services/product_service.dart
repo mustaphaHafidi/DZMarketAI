@@ -162,6 +162,15 @@ class ProductService {
     String? locationWilaya,
     String? locationDaira,
     List<String> deliveryOptions = const [],
+    bool shippingFree = false,
+    bool exchangeAfterDelivery = false,
+    bool insuranceActive = false,
+    double? declaredValue,
+    int? weightKg,
+    int? heightCm,
+    int? widthCm,
+    int? lengthCm,
+    bool allowStopdesk = true,
     int stockQuantity = 1,
     double? costPrice,
   }) async {
@@ -211,6 +220,12 @@ class ProductService {
         .map((opt) => InputSanitizer.sanitizeText(opt, maxLength: 20))
         .where((opt) => opt.isNotEmpty)
         .toList();
+    final safeDeclaredValue = declaredValue;
+    final safeWeight = weightKg;
+    final safeHeight = heightCm;
+    final safeWidth = widthCm;
+    final safeLength = lengthCm;
+    final safeAllowStopdesk = allowStopdesk;
 
     await RateLimiter.instance.run(
       'products.insert',
@@ -230,6 +245,15 @@ class ProductService {
       'location_wilaya': safeWilaya,
       'location_daira': safeDaira,
       'delivery_options': safeDelivery,
+      'shipping_free': shippingFree,
+      'exchange_after_delivery': exchangeAfterDelivery,
+      'insurance_active': insuranceActive,
+      'declared_value': safeDeclaredValue,
+      'weight_kg': safeWeight,
+      'height_cm': safeHeight,
+      'width_cm': safeWidth,
+      'length_cm': safeLength,
+      'allow_stopdesk': safeAllowStopdesk,
       'owner_id': userId,
       'stock_quantity': stockQuantity,
       'cost_price': safeCostPrice,
@@ -253,6 +277,15 @@ class ProductService {
     String? locationWilaya,
     String? locationDaira,
     List<String>? deliveryOptions,
+    bool? shippingFree,
+    bool? exchangeAfterDelivery,
+    bool? insuranceActive,
+    double? declaredValue,
+    int? weightKg,
+    int? heightCm,
+    int? widthCm,
+    int? lengthCm,
+    bool? allowStopdesk,
     int? stockQuantity,
     double? costPrice,
     bool? isArchived,
@@ -315,6 +348,19 @@ class ProductService {
           .map((opt) => InputSanitizer.sanitizeText(opt, maxLength: 20))
           .where((opt) => opt.isNotEmpty)
           .toList();
+    }
+    if (shippingFree != null) payload['shipping_free'] = shippingFree;
+    if (exchangeAfterDelivery != null) {
+      payload['exchange_after_delivery'] = exchangeAfterDelivery;
+    }
+    if (insuranceActive != null) payload['insurance_active'] = insuranceActive;
+    if (declaredValue != null) payload['declared_value'] = declaredValue;
+    if (weightKg != null) payload['weight_kg'] = weightKg;
+    if (heightCm != null) payload['height_cm'] = heightCm;
+    if (widthCm != null) payload['width_cm'] = widthCm;
+    if (lengthCm != null) payload['length_cm'] = lengthCm;
+    if (allowStopdesk != null) {
+      payload['allow_stopdesk'] = allowStopdesk;
     }
     if (stockQuantity != null) payload['stock_quantity'] = stockQuantity;
     if (costPrice != null) payload['cost_price'] = costPrice;
