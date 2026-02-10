@@ -14,7 +14,7 @@ class ChatRepository {
 
   /// Stream visible conversations sorted client-side by last_message_at desc.
   Stream<List<Conversation>> watchConversations({
-    int limit = 100,
+    int limit = 30,
     ConversationCursor? cursor,
   }) {
     var query = _client
@@ -35,16 +35,28 @@ class ChatRepository {
   }
 
   /// Stream messages for a conversation, newest last.
-  Stream<List<ChatMessage>> watchMessages(String conversationId) {
+  Stream<List<ChatMessage>> watchMessages(
+    String conversationId, {
+    int limit = 30,
+  }) {
     return _client
         .from(SupabaseTables.messages)
         .stream(primaryKey: ['id'])
         .eq('conversation_id', conversationId)
-        .order('created_at')
-        .map((rows) => rows
-            .map(ChatMessage.fromJson)
-            .where((m) => m.deletedAt == null)
-            .toList());
+        .order('created_at', ascending: false)
+        .limit(limit)
+        .map((rows) {
+          final list = rows
+              .map(ChatMessage.fromJson)
+              .where((m) => m.deletedAt == null)
+              .toList();
+          list.sort((a, b) {
+            final at = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            final bt = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            return at.compareTo(bt);
+          });
+          return list;
+        });
   }
 
   Future<ChatMessage> sendMessage(
@@ -273,6 +285,8 @@ class ChatRepository {
         .from(SupabaseTables.reads)
         .stream(primaryKey: ['conversation_id', 'user_id'])
         .eq('user_id', userId)
+        .order('last_read_at', ascending: false)
+        .limit(200)
         .map((rows) => {
               for (final row in rows)
                 row['conversation_id'].toString(): ReadState.fromJson(row)

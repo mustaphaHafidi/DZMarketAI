@@ -1,11 +1,14 @@
 import 'package:dzmarket/src/app.dart';
 import 'package:dzmarket/src/config/app_config.dart';
+import 'dart:async';
+
 import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:dzmarket/src/services/notification_service.dart';
 import 'package:dzmarket/src/services/translation_service.dart';
 import 'package:dzmarket/src/services/connectivity_service.dart';
 import 'package:dzmarket/src/services/firebase_service.dart';
 import 'package:dzmarket/src/services/crashlytics_service.dart';
+import 'package:dzmarket/src/services/app_error_service.dart';
 import 'package:dzmarket/src/services/app_logger.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -47,13 +50,22 @@ Future<void> main() async {
     FlutterError.onError = (details) {
       FlutterError.presentError(details);
       CrashlyticsService.instance.recordFlutterError(details);
+      unawaited(AppErrorService.instance.logFlutterError(details));
     };
     PlatformDispatcher.instance.onError = (error, stack) {
       CrashlyticsService.instance.recordError(error, stack, fatal: true);
+      unawaited(AppErrorService.instance.logError(error, stack, fatal: true));
       return true;
     };
   } else {
-    FlutterError.onError = FlutterError.presentError;
+    FlutterError.onError = (details) {
+      FlutterError.presentError(details);
+      unawaited(AppErrorService.instance.logFlutterError(details));
+    };
+    PlatformDispatcher.instance.onError = (error, stack) {
+      unawaited(AppErrorService.instance.logError(error, stack, fatal: true));
+      return true;
+    };
   }
 
   AppLogger.info('App flavor: ${config.flavor}');

@@ -22,6 +22,7 @@ class _ChatHubPageState extends State<ChatHubPage> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _query = '';
   final RefreshController _refreshController = RefreshController();
+  static const int _maxConversations = 30;
 
   @override
   void dispose() {
@@ -136,7 +137,8 @@ class _ChatHubPageState extends State<ChatHubPage> {
                               return title.toLowerCase().contains(_query) ||
                                   seller.toLowerCase().contains(_query);
                             }).toList();
-                            if (filtered.isEmpty) {
+                            final limited = filtered.take(_maxConversations).toList();
+                            if (limited.isEmpty) {
                               return Center(
                                 child: Text(L10n.tr(context, 'chat.no_results')),
                               );
@@ -144,11 +146,11 @@ class _ChatHubPageState extends State<ChatHubPage> {
                             return RefreshIndicator(
                               onRefresh: manualRefresh,
                               child: ListView.separated(
-                                itemCount: filtered.length,
+                                itemCount: limited.length,
                                 separatorBuilder: (_, __) =>
                                     const Divider(height: 1),
                                 itemBuilder: (context, index) {
-                                  final conv = filtered[index];
+                                  final conv = limited[index];
                                   final meta = metaMap[conv.id];
                                   final read = readMap[conv.id];
                                   final unread = !archivedList &&

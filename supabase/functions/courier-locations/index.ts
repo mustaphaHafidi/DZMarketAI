@@ -61,6 +61,15 @@ const extractList = (decoded: unknown) => {
   return [];
 };
 
+const normalizeName = (value: unknown) =>
+  textValue(value)
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+
+const cacheTtlMs = 1000 * 60 * 60 * 24 * 15;
+
 const zrSearch = async (
   path: string,
   bodies: Array<Record<string, unknown>>,
@@ -79,6 +88,77 @@ const zrSearch = async (
     if (list.length) return list;
   }
   return [];
+};
+
+const mapCacheWilayas = (rows: Array<Record<string, unknown>>) =>
+  rows
+    .map((r) => ({
+      id: textValue(r.remote_id),
+      code: textValue(r.wilaya_code) || textValue(r.remote_id),
+      name: textValue(r.name_raw),
+    }))
+    .filter((m) => m.name);
+
+const mapCacheCommunes = (rows: Array<Record<string, unknown>>) =>
+  rows
+    .map((r) => {
+      const extra = (r.extra as Record<string, unknown>) ?? {};
+      return {
+        id: textValue(r.remote_id),
+        name: textValue(r.name_raw),
+        wilaya_id: textValue(r.parent_remote_id) || textValue(r.wilaya_code),
+        has_stop_desk: textValue(extra.has_stop_desk ?? extra.hasStopDesk ?? "0"),
+        stopdesk_id: textValue(extra.stopdesk_id ?? extra.stopdeskId ?? ""),
+      };
+    })
+    .filter((m) => m.name);
+
+const readCache = async (
+  supabase: ReturnType<typeof createClient>,
+  courierKey: string,
+  type: string,
+  parentId?: string,
+) => {
+  let query = supabase
+    .from("courier_locations")
+    .select("remote_id,name_raw,parent_remote_id,wilaya_code,extra,updated_at")
+    .eq("courier_key", courierKey)
+    .eq("type", type);
+  if (parentId) query = query.eq("parent_remote_id", parentId);
+  const { data } = await query;
+  if (!data || data.length === 0) return null;
+  let latest = 0;
+  for (const row of data) {
+    const ts = Date.parse(textValue(row.updated_at));
+    if (!Number.isNaN(ts) && ts > latest) latest = ts;
+  }
+  if (latest && Date.now() - latest > cacheTtlMs) return null;
+  return data as Array<Record<string, unknown>>;
+};
+
+const writeCache = async (
+  supabase: ReturnType<typeof createClient>,
+  courierKey: string,
+  courierId: string,
+  type: string,
+  rows: Array<Record<string, unknown>>,
+) => {
+  if (!rows.length) return;
+  const payload = rows.map((r) => ({
+    courier_key: courierKey,
+    courier_id: courierId,
+    type,
+    remote_id: textValue(r.remote_id) || textValue(r.id) || textValue(r.code) || textValue(r.name_raw),
+    name_raw: textValue(r.name_raw) || textValue(r.name),
+    name_norm: normalizeName(r.name_raw ?? r.name),
+    parent_remote_id: textValue(r.parent_remote_id),
+    wilaya_code: textValue(r.wilaya_code),
+    extra: r.extra ?? {},
+    updated_at: new Date().toISOString(),
+  }));
+  await supabase.from("courier_locations").upsert(payload, {
+    onConflict: "courier_key,type,remote_id,parent_remote_id",
+  });
 };
 
 serve(async (req) => {
@@ -152,6 +232,7 @@ serve(async (req) => {
   const normalizeCourier = (value: string) =>
     value.toLowerCase().replace(/[^a-z0-9]/g, "");
   const normalizedVariants = variants.map(normalizeCourier);
+  const courierKey = normalizeCourier(courierId);
 
   const { data: settingsRow } = await supabaseAdmin
     .from("seller_delivery_settings")
@@ -168,6 +249,23 @@ serve(async (req) => {
   const isEcotrack = normalizedVariants.some((v) => v.includes("ecotrack"));
   const isZrExpress = normalizedVariants.some((v) => v.includes("zrexpress"));
 
+  const cacheType = requestType === "wilayas" ? "wilaya" : "commune";
+  if (courierKey) {
+    const cached = await readCache(
+      supabaseAdmin,
+      courierKey,
+      cacheType,
+      requestType === "communes" ? wilayaCode : undefined,
+    );
+    if (cached) {
+      const data =
+        requestType === "wilayas"
+          ? mapCacheWilayas(cached)
+          : mapCacheCommunes(cached);
+      if (data.length) return jsonResponse({ ok: true, data });
+    }
+  }
+
   if (requestType === "wilayas") {
     if (isYalidine && settingsRow.api_secret) {
       const url = "https://api.yalidine.app/v1/wilayas/";
@@ -182,11 +280,24 @@ serve(async (req) => {
         const decoded = await resp.json();
         const data = decoded?.data ?? decoded;
         if (Array.isArray(data)) {
-          const list = data.map((m) => ({
-            id: textValue(m.id),
-            code: textValue(m.wilaya_code),
-            name: textValue(m.wilaya_name) || textValue(m.name),
-          })).filter((m) => m.name);
+          const list = data
+            .map((m) => ({
+              id: textValue(m.id),
+              code: textValue(m.wilaya_code),
+              name: textValue(m.wilaya_name) || textValue(m.name),
+            }))
+            .filter((m) => m.name);
+          await writeCache(
+            supabaseAdmin,
+            courierKey,
+            courierId,
+            "wilaya",
+            list.map((m) => ({
+              remote_id: m.id || m.code,
+              name_raw: m.name,
+              wilaya_code: m.code,
+            })),
+          );
           return jsonResponse({ ok: true, data: list });
         }
       }
@@ -222,11 +333,24 @@ serve(async (req) => {
               .select("code, name_fr, name_ar")
               .in("code", expanded);
             if (rows && rows.length) {
-              const list = rows.map((r) => ({
-                id: textValue(r.code),
-                code: textValue(r.code),
-                name: textValue(r.name_fr) || textValue(r.name_ar),
-              })).filter((m) => m.name);
+              const list = rows
+                .map((r) => ({
+                  id: textValue(r.code),
+                  code: textValue(r.code),
+                  name: textValue(r.name_fr) || textValue(r.name_ar),
+                }))
+                .filter((m) => m.name);
+              await writeCache(
+                supabaseAdmin,
+                courierKey,
+                courierId,
+                "wilaya",
+                list.map((m) => ({
+                  remote_id: m.id || m.code,
+                  name_raw: m.name,
+                  wilaya_code: m.code,
+                })),
+              );
               return jsonResponse({ ok: true, data: list });
             }
           }
@@ -273,7 +397,20 @@ serve(async (req) => {
               : null;
           })
           .filter((m): m is Record<string, string> => !!m && !!m.name);
-        if (mapped.length) return jsonResponse({ ok: true, data: mapped });
+        if (mapped.length) {
+          await writeCache(
+            supabaseAdmin,
+            courierKey,
+            courierId,
+            "wilaya",
+            mapped.map((m) => ({
+              remote_id: m.id || m.code,
+              name_raw: m.name,
+              wilaya_code: m.code,
+            })),
+          );
+          return jsonResponse({ ok: true, data: mapped });
+        }
       }
     }
 
@@ -292,6 +429,17 @@ serve(async (req) => {
         name: textValue(r.name_fr) || textValue(r.name_ar),
       }))
       .filter((m) => m.name);
+    await writeCache(
+      supabaseAdmin,
+      courierKey,
+      courierId,
+      "wilaya",
+      fallback.map((m) => ({
+        remote_id: m.id || m.code,
+        name_raw: m.name,
+        wilaya_code: m.code,
+      })),
+    );
     return jsonResponse({ ok: true, data: fallback });
   }
 
@@ -310,13 +458,31 @@ serve(async (req) => {
     const decoded = await resp.json();
     const data = decoded?.data ?? decoded;
     if (Array.isArray(data)) {
-      const list = data.map((m) => ({
-        id: textValue(m.id),
-        name: textValue(m.commune_name) || textValue(m.name),
-        wilaya_id: textValue(m.wilaya_id),
-        has_stop_desk: textValue(m.has_stop_desk),
-        stopdesk_id: textValue(m.stopdesk_id),
-      })).filter((m) => m.name);
+      const list = data
+        .map((m) => ({
+          id: textValue(m.id),
+          name: textValue(m.commune_name) || textValue(m.name),
+          wilaya_id: textValue(m.wilaya_id),
+          has_stop_desk: textValue(m.has_stop_desk),
+          stopdesk_id: textValue(m.stopdesk_id),
+        }))
+        .filter((m) => m.name);
+      await writeCache(
+        supabaseAdmin,
+        courierKey,
+        courierId,
+        "commune",
+        list.map((m) => ({
+          remote_id: m.id || m.name,
+          name_raw: m.name,
+          parent_remote_id: m.wilaya_id || wilayaCode,
+          wilaya_code: wilayaCode,
+          extra: {
+            has_stop_desk: m.has_stop_desk,
+            stopdesk_id: m.stopdesk_id,
+          },
+        })),
+      );
       return jsonResponse({ ok: true, data: list });
     }
   }
@@ -341,14 +507,30 @@ serve(async (req) => {
         const decoded = await resp.json();
         const data = Array.isArray(decoded) ? decoded : decoded?.data;
         if (Array.isArray(data)) {
-          const list = data.map((m) => ({
-            id: "",
-            name: textValue(m.commune) || textValue(m.name),
-            wilaya_id: wilayaCode,
-            has_stop_desk: "0",
-            stopdesk_id: "",
-          })).filter((m) => m.name);
-          if (list.length) return jsonResponse({ ok: true, data: list });
+          const list = data
+            .map((m) => ({
+              id: textValue(m.id) || textValue(m.code) || textValue(m.commune),
+              name: textValue(m.commune) || textValue(m.name),
+              wilaya_id: wilayaCode,
+              has_stop_desk: "0",
+              stopdesk_id: "",
+            }))
+            .filter((m) => m.name);
+          if (list.length) {
+            await writeCache(
+              supabaseAdmin,
+              courierKey,
+              courierId,
+              "commune",
+              list.map((m) => ({
+                remote_id: m.id || m.name,
+                name_raw: m.name,
+                parent_remote_id: wilayaCode,
+                wilaya_code: wilayaCode,
+              })),
+            );
+            return jsonResponse({ ok: true, data: list });
+          }
         }
       }
     }
@@ -435,6 +617,22 @@ serve(async (req) => {
           stopdesk_id: hubId,
         };
       });
+      await writeCache(
+        supabaseAdmin,
+        courierKey,
+        courierId,
+        "commune",
+        enriched.map((c) => ({
+          remote_id: c.id,
+          name_raw: c.name,
+          parent_remote_id: c.wilaya_id || wilayaCode,
+          wilaya_code: wilayaCode,
+          extra: {
+            has_stop_desk: c.has_stop_desk,
+            stopdesk_id: c.stopdesk_id,
+          },
+        })),
+      );
       return jsonResponse({ ok: true, data: enriched });
     }
   }
@@ -454,5 +652,22 @@ serve(async (req) => {
     .from("communes")
     .select("name_fr, name_ar")
     .in("wilaya_code", codes);
-  return jsonResponse({ ok: true, data: mapDbCommunes(rows ?? []) });
+  const fallback = mapDbCommunes(rows ?? []);
+  await writeCache(
+    supabaseAdmin,
+    courierKey,
+    courierId,
+    "commune",
+    fallback.map((c) => ({
+      remote_id: c.name,
+      name_raw: c.name,
+      parent_remote_id: wilayaCode,
+      wilaya_code: wilayaCode,
+      extra: {
+        has_stop_desk: c.has_stop_desk,
+        stopdesk_id: c.stopdesk_id,
+      },
+    })),
+  );
+  return jsonResponse({ ok: true, data: fallback });
 });

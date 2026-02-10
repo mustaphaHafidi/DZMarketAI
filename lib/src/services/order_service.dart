@@ -8,6 +8,8 @@ import 'package:rxdart/rxdart.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class OrderService {
+  static const int _maxOrdersStream = 30;
+
   Stream<List<Order>> streamOrdersForUser(String userId) {
     final safeUserId = InputSanitizer.sanitizeId(userId, maxLength: 64);
     final buyerStream = RateLimiter.instance.stream(
@@ -16,7 +18,8 @@ class OrderService {
           .from(SupabaseTables.orders)
           .stream(primaryKey: ['id'])
           .eq('buyer_id', safeUserId)
-          .order('created_at'),
+          .order('created_at', ascending: false)
+          .limit(_maxOrdersStream),
     );
 
     final sellerStream = RateLimiter.instance.stream(
@@ -25,7 +28,8 @@ class OrderService {
           .from(SupabaseTables.orders)
           .stream(primaryKey: ['id'])
           .eq('seller_id', safeUserId)
-          .order('created_at'),
+          .order('created_at', ascending: false)
+          .limit(_maxOrdersStream),
     );
 
     final driverStream = RateLimiter.instance.stream(
@@ -34,7 +38,8 @@ class OrderService {
           .from(SupabaseTables.orders)
           .stream(primaryKey: ['id'])
           .eq('driver_id', safeUserId)
-          .order('created_at'),
+          .order('created_at', ascending: false)
+          .limit(_maxOrdersStream),
     );
 
     return Rx.combineLatest3<
@@ -56,7 +61,13 @@ class OrderService {
         for (final row in driver) {
           merged[row['id'].toString()] = row;
         }
-        return merged.values.map(Order.fromJson).toList();
+        final list = merged.values.map(Order.fromJson).toList();
+        list.sort((a, b) {
+          final at = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final bt = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return bt.compareTo(at);
+        });
+        return list;
       },
     );
   }

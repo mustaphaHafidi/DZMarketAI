@@ -30,7 +30,6 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   final _controller = TextEditingController();
   bool _sending = false;
   String? _sellerId;
-  String? _buyerId;
   String? _productId;
   late Future<void> _conversationFuture;
   late Future<_ProductHeaderData?> _headerFuture;
@@ -78,7 +77,6 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       setState(() {
         _productId = resolvedProductId;
         _sellerId = conv['seller_id']?.toString();
-        _buyerId = conv['buyer_id']?.toString();
       });
     } catch (_) {}
   }

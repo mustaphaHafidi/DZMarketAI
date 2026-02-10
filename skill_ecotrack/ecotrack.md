@@ -36,6 +36,21 @@
    - POST /api/v1/add/maj?tracking=...&content=...
    - GET /api/v1/get/maj?tracking=...
    - GET /api/v1/get/tracking/info?tracking=...
+   - Status codes observed in tracking history:
+     - order_information_received_by_carrier
+     - picked
+     - accepted_by_carrier
+     - dispatched_to_driver
+     - attempt_delivery
+     - return_asked
+     - return_in_transit
+     - Return_received
+     - livred
+     - encaissed
+     - payed
+   - Return-related endpoints:
+     - POST /api/v1/ask/for/order/return?tracking=...
+     - GET /api/v1/get/orders?page=...&start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
 
 9. Locations (wilayas/communes)
    - GET /api/v1/get/wilayas

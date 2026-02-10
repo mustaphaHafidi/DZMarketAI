@@ -50,18 +50,30 @@ description: Reference synthetique et prescriptive pour DZMarketAI (Flutter + Su
    - Buyer choisit la societe parmi celles configurees par le vendeur.
    - Bordereau genere cote vendeur uniquement (UI Mes ventes).
 
+7.1 Retours colis (NPAI) & score fiabilite acheteur
+   - Objectif: avertir le vendeur si un acheteur a deja des retours “non reclame / retour expediteur”.
+   - Base factuelle uniquement: statuts transporteur verifiables (pas d’estimation ni jugement).
+   - Fenetre temporelle limitee (reco: 12 mois). Pas de blacklist permanente.
+   - Affichage vendeur: badge “Historique retours: X (12 mois)” + derniere date/transporteur.
+   - Pas de blocage automatique d’achat; c’est un avertissement.
+   - Confidentialite: ne pas exposer plus de donnees perso que l’order courant.
+   - Job quotidien (03:00 UTC): recupere statuts retours via APIs, met a jour stats et publie un message systeme si retour detecte.
+   - Acces: stats visibles uniquement au vendeur concerne par la commande.
+
 8. Bordereaux / Labels
    - shipments = source of truth (tracking/label). orders.label_url conserve pour compat UI.
    - labels stockes dans bucket `labels` (private). URL label visible cote vendeur uniquement dans le chat.
+   - job-runner met a jour shipments.status + shipments.events pour construire la timeline transporteur.
 
 9. Chat style Vinted + commandes
    - Tables: conversations (product_id, order_id, buyer_id, seller_id, last_message_at/text, hidden_at), messages (type, payload, dedupe_key), reads, user_blocks.
    - Conversations d'ordre: unique par order_id (partial unique index).
    - RPCs: ensure_conversation, ensure_order_conversation, send_message, post_order_event, delete/restore_conversation, mark_read, get_conversations.
-   - Messages systeme: order_created, order_validated, order_shipped (payload i18n_key/status/tracking/label_url).
+   - Messages systeme: order_created, order_validated, order_shipped, order_tracking, order_returned (payload i18n_key/status/tracking/label_url).
    - Dedupe: unique (conversation_id, dedupe_key) pour eviter doublons sur retries.
    - Client: ChatRepository streams (tri client), header produit sticky, badge non-lu, hide/restore explicite.
    - Label visible vendeur uniquement; buyer voit status + tracking sans bouton label.
+   - Suivi: job-runner publie les mises a jour de tracking dans la room (et met a jour shipments.events).
 
 10. Securite & secrets
    - Jamais de secrets dans le client: anon key uniquement.

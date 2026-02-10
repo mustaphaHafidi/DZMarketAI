@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:dzmarket/src/features/profile/my_listings_page.dart';
 import 'package:dzmarket/src/services/category_service.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
@@ -46,9 +44,7 @@ class _AddListingPageState extends State<AddListingPage> {
   bool _exchangeAfterDelivery = false;
   bool _insuranceActive = false;
   bool _allowStopdesk = true;
-  bool _loadingCouriers = false;
   CourierCapabilities _courierCaps = CourierCapabilities.all;
-  List<Map<String, dynamic>> _enabledCouriers = const [];
   int _step = 0;
   bool _saving = false;
   String? _error;
@@ -167,16 +163,11 @@ class _AddListingPageState extends State<AddListingPage> {
   Future<void> _loadEnabledCouriers() async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return;
-    setState(() {
-      _loadingCouriers = true;
-    });
     final rows = await ShippingService().fetchEnabledCouriersForSeller(userId);
     if (!mounted) return;
     setState(() {
-      _enabledCouriers = rows;
       _courierCaps = ShippingService.aggregateCapabilities(rows);
       _applyCourierCaps();
-      _loadingCouriers = false;
     });
   }
 
@@ -472,7 +463,7 @@ class _AddListingPageState extends State<AddListingPage> {
       final brand = InputSanitizer.sanitizeOptionalText(_brandCtrl.text, maxLength: 40);
       final size = InputSanitizer.sanitizeOptionalText(_sizeCtrl.text, maxLength: 40);
       final wilaya = InputSanitizer.sanitizeText(
-        _wilayaLabel(context),
+        _wilayaNameOnly(context),
         maxLength: 60,
       );
       final daira =
@@ -599,6 +590,24 @@ class _AddListingPageState extends State<AddListingPage> {
     return _wilayaLabelWithPlaceholder(context, placeholder: '-');
   }
 
+  String _wilayaNameOnly(BuildContext context) {
+    final code = _selectedWilayaCode;
+    if (code == null || code.isEmpty) return '-';
+    final match = _wilayas.where((w) => w['code'] == code).toList();
+    if (match.isEmpty) return code;
+    final fr = match.first['name_fr'] ?? code;
+    final ar = match.first['name_ar'] ?? fr;
+    return _pickLocalizedName(context, fr, ar);
+  }
+
+  String _formatWilayaLabel(String code, String name) {
+    final raw = code.trim();
+    if (raw.isEmpty) return name;
+    final numeric = int.tryParse(raw);
+    final normalized = numeric != null ? raw.padLeft(2, '0') : raw;
+    return '$normalized - $name';
+  }
+
   String _wilayaLabelWithPlaceholder(
     BuildContext context, {
     required String placeholder,
@@ -609,13 +618,16 @@ class _AddListingPageState extends State<AddListingPage> {
     if (match.isEmpty) return code;
     final fr = match.first['name_fr'] ?? code;
     final ar = match.first['name_ar'] ?? fr;
-    return _pickLocalizedName(context, fr, ar);
+    final name = _pickLocalizedName(context, fr, ar);
+    return _formatWilayaLabel(code, name);
   }
 
   String _wilayaItemLabel(BuildContext context, Map<String, String> item) {
     final fr = item['name_fr'] ?? '';
     final ar = item['name_ar'] ?? fr;
-    return _pickLocalizedName(context, fr, ar);
+    final name = _pickLocalizedName(context, fr, ar);
+    final code = item['code'] ?? '';
+    return _formatWilayaLabel(code, name);
   }
 
   String _selectedCommuneLabel(BuildContext context) {
@@ -1076,7 +1088,7 @@ class _AddListingPageState extends State<AddListingPage> {
                     SwitchListTile(
                       value: _insuranceActive,
                       onChanged: (v) =>
-                          setState(() => _insuranceActive = v ?? false),
+                          setState(() => _insuranceActive = v),
                       title: Text(L10n.tr(context, 'checkout.insurance_active')),
                     ),
                     TextField(

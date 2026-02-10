@@ -28,7 +28,7 @@ Il ne contient aucun secret, uniquement la structure, les dependances et les eta
 
 ## 4.3 Orders / Shipments
 - orders: buyer_id, seller_id, courier_id, courier_name, shipping_selection (jsonb), tracking_number, label_url
-- shipments: label_url, tracking_number, carrier, delivery_mode, events (jsonb)
+- shipments: label_url, tracking_number, carrier, delivery_mode, status, events (jsonb)
 - RPC create_order(...) (atomic, stock reservation) + message systeme order_created
 
 ## 4.4 Chat v2 (Vinted style)
@@ -43,7 +43,25 @@ Il ne contient aucun secret, uniquement la structure, les dependances et les eta
 - couriers (static list, si present)
   - ZR Express: courier_id = zrexpress, api_key = secretKey, api_secret = tenantId
 
-## 4.6 Selection livraison (shipping_selection)
+## 4.6 Retours colis (score fiabilite acheteur)
+- buyer_return_events (historique factuel)
+  - id bigserial PK
+  - buyer_id uuid (FK profiles)
+  - order_id bigint (FK orders)
+  - courier_id text
+  - status text (ex: returned_to_sender / not_claimed)
+  - returned_at timestamptz
+  - created_at timestamptz default now()
+- buyer_return_stats (agrégats)
+  - buyer_id uuid PK
+  - returns_6m int default 0
+  - returns_12m int default 0
+  - last_return_at timestamptz
+  - last_return_courier text
+  - updated_at timestamptz default now()
+- RLS: ecriture service_role uniquement; lecture vendeur via RPC (verifie seller_id sur order).
+
+## 4.7 Selection livraison (shipping_selection)
 - Champs communs: firstname, familyname, phone, address, receiverWilaya/Commune, weight, dimensions, price, etc.
 - Champs ZR Express:
   - receiverWilayaId (UUID territoire)
@@ -74,7 +92,15 @@ Retourne wilayas/communes/stopdesk pour le transporteur choisi, en utilisant les
 Expose les infos d'un transporteur pour un vendeur (sans secrets cote client).
 
 ## 6.5 job-runner
-Traitement asynchrone (jobs queue).
+Traitement asynchrone (jobs queue) + suivi transporteurs.
+
+## 6.6 job retour-colis (cron)
+- Job quotidien (03:00 UTC) qui:
+  1) collecte les statuts transporteurs (Yalidine/Ecotrack/ZR Express),
+  2) enregistre les events retours,
+  3) met a jour buyer_return_stats,
+  4) publie un message systeme de suivi dans la chat room,
+  5) met a jour shipments.status + shipments.events (timeline transporteur).
 
 ### Deploiement CLI
 ```

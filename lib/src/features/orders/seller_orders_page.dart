@@ -1,5 +1,7 @@
 import 'package:dzmarket/src/features/orders/fulfillment_page.dart';
+import 'package:dzmarket/src/models/buyer_return_stats.dart';
 import 'package:dzmarket/src/models/order.dart';
+import 'package:dzmarket/src/services/buyer_return_service.dart';
 import 'package:dzmarket/src/services/order_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/widgets/refresh_controller.dart';
@@ -20,7 +22,16 @@ class SellerOrdersPage extends StatefulWidget {
 class _SellerOrdersPageState extends State<SellerOrdersPage> {
   final RefreshController _refreshController = RefreshController();
   final _orderService = OrderService();
+  final _buyerReturnService = BuyerReturnService();
+  Future<Map<String, BuyerReturnStats>>? _returnStatsFuture;
   int _refreshEpoch = 0;
+  static const int _maxOrders = 30;
+
+  @override
+  void initState() {
+    super.initState();
+    _returnStatsFuture = _buyerReturnService.fetchForSeller();
+  }
 
   Future<void> _triggerRefresh(String userId) async {
     await _refreshController.run(
@@ -28,6 +39,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
       () => _orderService.refreshOrders(userId),
     );
     if (mounted) {
+      _returnStatsFuture = _buyerReturnService.fetchForSeller();
       setState(() => _refreshEpoch++);
     }
   }
@@ -62,40 +74,53 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
               .toList()
             ..sort((a, b) =>
                 (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
-          if (orders.isEmpty) {
+          final limited = orders.take(_maxOrders).toList();
+          if (limited.isEmpty) {
             return Center(child: Text(L10n.tr(context, 'seller_orders.empty')));
           }
-          return RefreshIndicator(
-            onRefresh: () => _triggerRefresh(userId),
-            child: ListView.builder(
-              padding: const EdgeInsets.all(12),
-              physics: const AlwaysScrollableScrollPhysics(),
-              itemCount: orders.length,
-              itemBuilder: (context, index) {
-                final order = orders[index];
-                return _SellerOrderCard(
-                  order: order,
-                  currency: currency,
-                  onGenerateLabel: () async {
-                    final updated = await Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => FulfillmentPage(orderId: order.id),
-                      ),
+          return FutureBuilder<Map<String, BuyerReturnStats>>(
+            future: _returnStatsFuture,
+            builder: (context, statsSnapshot) {
+              final statsMap = statsSnapshot.data ?? const {};
+              return RefreshIndicator(
+                onRefresh: () => _triggerRefresh(userId),
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  itemCount: limited.length,
+                  itemBuilder: (context, index) {
+                    final order = limited[index];
+                    return _SellerOrderCard(
+                      order: order,
+                      currency: currency,
+                      buyerReturnStats: statsMap[order.buyerId],
+                      onGenerateLabel: () async {
+                        final updated = await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => FulfillmentPage(orderId: order.id),
+                          ),
+                        );
+                        if (updated == true && context.mounted) {
+                          await _triggerRefresh(userId);
+                        }
+                      },
+                      onOpenLabel: (labelUrl) async {
+                        final uri = Uri.tryParse(labelUrl);
+                        if (uri != null) {
+                          await launchUrl(
+                            uri,
+                            mode: LaunchMode.externalApplication,
+                          );
+                        }
+                      },
+                      onDelete: () => _confirmDelete(context, order.id),
+                      canCancel: order.status == OrderStatus.pending &&
+                          (order.labelUrl == null || order.labelUrl!.isEmpty),
                     );
-                    if (updated == true && context.mounted) {
-                      await _triggerRefresh(userId);
-                    }
                   },
-                  onOpenLabel: (labelUrl) async {
-                    final uri = Uri.tryParse(labelUrl);
-                    if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
-                  },
-                  onDelete: () => _confirmDelete(context, order.id),
-                  canCancel: order.status == OrderStatus.pending &&
-                      (order.labelUrl == null || order.labelUrl!.isEmpty),
-                );
-              },
-            ),
+                ),
+              );
+            },
           );
         },
       ),
@@ -155,6 +180,7 @@ class _SellerOrderCard extends StatelessWidget {
   const _SellerOrderCard({
     required this.order,
     required this.currency,
+    required this.buyerReturnStats,
     required this.onGenerateLabel,
     required this.onOpenLabel,
     required this.onDelete,
@@ -163,6 +189,7 @@ class _SellerOrderCard extends StatelessWidget {
 
   final Order order;
   final NumberFormat currency;
+  final BuyerReturnStats? buyerReturnStats;
   final VoidCallback onGenerateLabel;
   final void Function(String labelUrl) onOpenLabel;
   final VoidCallback onDelete;
@@ -204,6 +231,31 @@ class _SellerOrderCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(priceText),
+            if ((buyerReturnStats?.returns12m ?? 0) > 0) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, size: 16, color: Colors.orange),
+                    const SizedBox(width: 6),
+                    Text(
+                      L10n.tr(
+                        context,
+                        'seller_orders.return_warning',
+                        params: {'count': '${buyerReturnStats?.returns12m ?? 0}'},
+                      ),
+                      style: const TextStyle(color: Colors.orange),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 4),
             if (order.shippingOption != null)
               Chip(

@@ -76,12 +76,10 @@ class ShippingService {
   // Shared HTTP client to reuse connections across instances.
   static final http.Client _httpClient = http.Client();
 
-  // Simple in-memory cache for Yalidine responses to avoid repeated network calls
-  // when UI re-opens forms. Cache keys are based on API credentials and
-  // optionally wilaya code for communes.
+  // Simple in-memory cache for courier responses to avoid repeated network calls.
   static const Duration _cacheTtl = Duration(minutes: 30);
-  static final Map<String, _CacheItem<List<Map<String, String>>>> _yalidineWilayasCache = {};
-  static final Map<String, _CacheItem<List<Map<String, String>>>> _yalidineCommunesCache = {};
+  static final Map<String, _CacheItem<List<Map<String, String>>>> _courierWilayasCache = {};
+  static final Map<String, _CacheItem<List<Map<String, String>>>> _courierCommunesCache = {};
   static final Map<String, _CacheItem<Map<String, dynamic>>> _ecotrackFeesCache = {};
   static const options = <String>[
     'Livraison domicile (24-72h)',
@@ -96,6 +94,18 @@ class ShippingService {
     'shipping.option.pickup': 'shipping.option.pickup',
     'shipping.option.local': 'shipping.option.local',
   };
+
+  static String _courierWilayaCacheKey(String courierId, String? sellerId) {
+    return '$courierId|${sellerId ?? ''}';
+  }
+
+  static String _courierCommuneCacheKey(
+    String courierId,
+    String? sellerId,
+    String wilayaCode,
+  ) {
+    return '$courierId|${sellerId ?? ''}|$wilayaCode';
+  }
 
   static const couriers = <Map<String, String>>[
     {
@@ -459,7 +469,7 @@ class ShippingService {
         final labelKey =
             hasLabel ? 'order.system.shipped' : 'order.system.validated';
         final eventKey =
-            hasLabel ? 'order:${orderId}:shipped' : 'order:${orderId}:validated';
+            hasLabel ? 'order:$orderId:shipped' : 'order:$orderId:validated';
         final locale =
             LocaleService.instance.locale.value?.languageCode ?? 'fr';
         await _postOrderSystemMessage(
@@ -1424,60 +1434,82 @@ class ShippingService {
     Map<String, dynamic>? settings,
     String? sellerId,
   }) async {
-    final safeCourierId =
-        InputSanitizer.sanitizeText(courierId, maxLength: 40).toLowerCase();
-    final isZrExpress = isZrExpressCourier(courierId: safeCourierId);
-    final apiKey = settings?['api_key']?.toString() ?? '';
-    final apiSecret = settings?['api_secret']?.toString() ?? '';
-    if (safeCourierId.contains('yalidine')) {
-      if (apiKey.isEmpty || apiSecret.isEmpty) {
+      final safeCourierId =
+          InputSanitizer.sanitizeText(courierId, maxLength: 40).toLowerCase();
+      final cacheKey = _courierWilayaCacheKey(safeCourierId, sellerId);
+      final cached = _courierWilayasCache[cacheKey];
+      if (cached != null && !cached.isExpired) {
+        return cached.value;
+      }
+      final isZrExpress = isZrExpressCourier(courierId: safeCourierId);
+      if (safeCourierId.contains('yalidine')) {
         if (sellerId != null && sellerId.isNotEmpty) {
           final edge = await _fetchCourierWilayasViaEdge(
             sellerId: sellerId,
             courierId: safeCourierId,
           );
-          if (edge.isNotEmpty) return edge;
+          if (edge.isNotEmpty) {
+            _courierWilayasCache[cacheKey] =
+                _CacheItem(edge, DateTime.now().add(_cacheTtl));
+            return edge;
+          }
         }
-        return _fetchDbWilayas();
-      }
-      final list = await _fetchYalidineWilayas(
-        apiKey: apiKey,
-        apiSecret: apiSecret,
-      );
-      return list.isEmpty ? _fetchDbWilayas() : list;
-    } else if (safeCourierId.contains('ecotrack')) {
-      if (apiKey.isEmpty) {
+        final fallback = await _fetchDbWilayas();
+        if (fallback.isNotEmpty) {
+          _courierWilayasCache[cacheKey] =
+              _CacheItem(fallback, DateTime.now().add(_cacheTtl));
+        }
+        return fallback;
+      } else if (safeCourierId.contains('ecotrack')) {
         if (sellerId != null && sellerId.isNotEmpty) {
           final edge = await _fetchCourierWilayasViaEdge(
             sellerId: sellerId,
             courierId: safeCourierId,
           );
-          if (edge.isNotEmpty) return edge;
+          if (edge.isNotEmpty) {
+            _courierWilayasCache[cacheKey] =
+                _CacheItem(edge, DateTime.now().add(_cacheTtl));
+            return edge;
+          }
         }
-        return _fetchDbWilayas();
+        final fallback = await _fetchDbWilayas();
+        if (fallback.isNotEmpty) {
+          _courierWilayasCache[cacheKey] =
+              _CacheItem(fallback, DateTime.now().add(_cacheTtl));
+        }
+        return fallback;
       }
-      final list = await _fetchEcotrackWilayas(
-        apiKey: apiKey,
-      );
-      return list.isEmpty ? _fetchDbWilayas() : list;
-    }
-    if (isZrExpress) {
+      if (isZrExpress) {
+        if (sellerId != null && sellerId.isNotEmpty) {
+          final edge = await _fetchCourierWilayasViaEdge(
+            sellerId: sellerId,
+            courierId: safeCourierId,
+          );
+          if (edge.isNotEmpty) {
+            _courierWilayasCache[cacheKey] =
+                _CacheItem(edge, DateTime.now().add(_cacheTtl));
+          }
+          return edge;
+        }
+        return const [];
+      }
       if (sellerId != null && sellerId.isNotEmpty) {
-        return _fetchCourierWilayasViaEdge(
+        final edge = await _fetchCourierWilayasViaEdge(
           sellerId: sellerId,
           courierId: safeCourierId,
         );
+        if (edge.isNotEmpty) {
+          _courierWilayasCache[cacheKey] =
+              _CacheItem(edge, DateTime.now().add(_cacheTtl));
+          return edge;
+        }
       }
-      return const [];
-    }
-    if (sellerId != null && sellerId.isNotEmpty) {
-      final edge = await _fetchCourierWilayasViaEdge(
-        sellerId: sellerId,
-        courierId: safeCourierId,
-      );
-      if (edge.isNotEmpty) return edge;
-    }
-    return _fetchDbWilayas();
+      final fallback = await _fetchDbWilayas();
+      if (fallback.isNotEmpty) {
+        _courierWilayasCache[cacheKey] =
+            _CacheItem(fallback, DateTime.now().add(_cacheTtl));
+      }
+      return fallback;
   }
 
   Future<List<Map<String, String>>> _fetchCourierWilayasViaEdge({
@@ -1521,58 +1553,73 @@ class ShippingService {
     required String wilayaCode,
     String? sellerId,
   }) async {
-    final safeCourierId =
-        InputSanitizer.sanitizeText(courierId, maxLength: 40).toLowerCase();
-    final isZrExpress = isZrExpressCourier(courierId: safeCourierId);
-    final safeWilayaCode = InputSanitizer.sanitizeText(
-      wilayaCode,
-      maxLength: isZrExpress ? 64 : 8,
-    );
-    final apiKey = settings?['api_key']?.toString() ?? '';
-    final apiSecret = settings?['api_secret']?.toString() ?? '';
-    if (safeCourierId.contains('yalidine')) {
-      if (apiKey.isEmpty || apiSecret.isEmpty) {
+      final safeCourierId =
+          InputSanitizer.sanitizeText(courierId, maxLength: 40).toLowerCase();
+      final isZrExpress = isZrExpressCourier(courierId: safeCourierId);
+      final safeWilayaCode = InputSanitizer.sanitizeText(
+        wilayaCode,
+        maxLength: isZrExpress ? 64 : 8,
+      );
+      final cacheKey = _courierCommuneCacheKey(
+        safeCourierId,
+        sellerId,
+        safeWilayaCode,
+      );
+      final cached = _courierCommunesCache[cacheKey];
+      if (cached != null && !cached.isExpired) {
+        return cached.value;
+      }
+      if (safeCourierId.contains('yalidine')) {
         if (sellerId != null && sellerId.isNotEmpty) {
           final edge = await _fetchCourierCommunesViaEdge(
             sellerId: sellerId,
             courierId: safeCourierId,
             wilayaCode: safeWilayaCode,
           );
-          if (edge.isNotEmpty) return edge;
+          if (edge.isNotEmpty) {
+            _courierCommunesCache[cacheKey] =
+                _CacheItem(edge, DateTime.now().add(_cacheTtl));
+            return edge;
+          }
         }
-        return _fetchDbCommunes(safeWilayaCode);
-      }
-      final list = await _fetchYalidineCommunes(
-        apiKey: apiKey,
-        apiSecret: apiSecret,
-        wilayaCode: safeWilayaCode,
-      );
-      return list.isEmpty ? _fetchDbCommunes(safeWilayaCode) : list;
-    } else if (safeCourierId.contains('ecotrack')) {
-      if (apiKey.isEmpty) {
+        final fallback = await _fetchDbCommunes(safeWilayaCode);
+        if (fallback.isNotEmpty) {
+          _courierCommunesCache[cacheKey] =
+              _CacheItem(fallback, DateTime.now().add(_cacheTtl));
+        }
+        return fallback;
+      } else if (safeCourierId.contains('ecotrack')) {
         if (sellerId != null && sellerId.isNotEmpty) {
           final edge = await _fetchCourierCommunesViaEdge(
             sellerId: sellerId,
             courierId: safeCourierId,
             wilayaCode: safeWilayaCode,
           );
-          if (edge.isNotEmpty) return edge;
+          if (edge.isNotEmpty) {
+            _courierCommunesCache[cacheKey] =
+                _CacheItem(edge, DateTime.now().add(_cacheTtl));
+            return edge;
+          }
         }
-        return _fetchDbCommunes(safeWilayaCode);
+        final fallback = await _fetchDbCommunes(safeWilayaCode);
+        if (fallback.isNotEmpty) {
+          _courierCommunesCache[cacheKey] =
+              _CacheItem(fallback, DateTime.now().add(_cacheTtl));
+        }
+        return fallback;
       }
-      final list = await _fetchEcotrackCommunes(
-        apiKey: apiKey,
-        wilayaCode: safeWilayaCode,
-      );
-      return list.isEmpty ? _fetchDbCommunes(safeWilayaCode) : list;
-    }
     if (isZrExpress) {
       if (sellerId != null && sellerId.isNotEmpty) {
-        return _fetchCourierCommunesViaEdge(
+        final edge = await _fetchCourierCommunesViaEdge(
           sellerId: sellerId,
           courierId: safeCourierId,
           wilayaCode: safeWilayaCode,
         );
+        if (edge.isNotEmpty) {
+          _courierCommunesCache[cacheKey] =
+              _CacheItem(edge, DateTime.now().add(_cacheTtl));
+        }
+        return edge;
       }
       return const [];
     }
@@ -1582,9 +1629,18 @@ class ShippingService {
         courierId: safeCourierId,
         wilayaCode: safeWilayaCode,
       );
-      if (edge.isNotEmpty) return edge;
+      if (edge.isNotEmpty) {
+        _courierCommunesCache[cacheKey] =
+            _CacheItem(edge, DateTime.now().add(_cacheTtl));
+        return edge;
+      }
     }
-    return _fetchDbCommunes(safeWilayaCode);
+    final fallback = await _fetchDbCommunes(safeWilayaCode);
+    if (fallback.isNotEmpty) {
+      _courierCommunesCache[cacheKey] =
+          _CacheItem(fallback, DateTime.now().add(_cacheTtl));
+    }
+    return fallback;
   }
 
   Future<List<Map<String, String>>> _fetchCourierCommunesViaEdge({
@@ -1683,99 +1739,6 @@ class ShippingService {
     return const [];
   }
 
-  Future<List<Map<String, String>>> _fetchYalidineWilayas({
-    required String apiKey,
-    required String apiSecret,
-  }) async {
-    final uri = Uri.parse('https://api.yalidine.app/v1/wilayas/');
-    try {
-      final cacheKey = '${apiKey.trim()}|${apiSecret.trim()}';
-      final cached = _yalidineWilayasCache[cacheKey];
-      if (cached != null && !cached.isExpired) return cached.value;
-
-      final resp = await RateLimiter.instance.run(
-        'yalidine.wilayas',
-        () => _httpClient
-            .get(
-              uri,
-              headers: {
-                'X-API-ID': apiKey.trim(),
-                'X-API-TOKEN': apiSecret.trim(),
-                'Accept': 'application/json',
-              },
-            )
-            .timeout(const Duration(seconds: 10)),
-      );
-      if (resp.statusCode < 200 || resp.statusCode >= 300) return const [];
-      final data = jsonDecode(resp.body);
-      if (data is Map && data['data'] is List) {
-        final list = (data['data'] as List)
-            .whereType<Map>()
-            .map(
-              (m) => {
-                'id': m['id']?.toString() ?? '',
-                'code': m['wilaya_code']?.toString() ?? '',
-                'name': m['wilaya_name']?.toString() ?? '',
-              },
-            )
-            .where((m) => m['name']!.isNotEmpty)
-            .toList();
-        _yalidineWilayasCache[cacheKey] = _CacheItem(list, DateTime.now().add(_cacheTtl));
-        return list;
-      }
-    } catch (_) {}
-    return const [];
-  }
-
-  Future<List<Map<String, String>>> _fetchYalidineCommunes({
-    required String apiKey,
-    required String apiSecret,
-    required String wilayaCode,
-  }) async {
-    final uri = Uri.parse(
-      'https://api.yalidine.app/v1/communes?wilaya_id=${Uri.encodeQueryComponent(wilayaCode)}',
-    );
-    try {
-      final cacheKey = '${apiKey.trim()}|${apiSecret.trim()}|$wilayaCode';
-      final cached = _yalidineCommunesCache[cacheKey];
-      if (cached != null && !cached.isExpired) return cached.value;
-
-      final resp = await RateLimiter.instance.run(
-        'yalidine.communes',
-        () => _httpClient
-            .get(
-              uri,
-              headers: {
-                'X-API-ID': apiKey.trim(),
-                'X-API-TOKEN': apiSecret.trim(),
-                'Accept': 'application/json',
-              },
-            )
-            .timeout(const Duration(seconds: 10)),
-      );
-      if (resp.statusCode < 200 || resp.statusCode >= 300) return const [];
-      final data = jsonDecode(resp.body);
-      if (data is Map && data['data'] is List) {
-        final list = (data['data'] as List)
-            .whereType<Map>()
-            .map(
-              (m) => {
-                'id': m['id']?.toString() ?? '',
-                'name': m['commune_name']?.toString() ?? '',
-                'wilaya_id': m['wilaya_id']?.toString() ?? '',
-                'has_stop_desk': m['has_stop_desk']?.toString() ?? '',
-                'stopdesk_id': m['stopdesk_id']?.toString() ?? '',
-              },
-            )
-            .where((m) => m['name']!.isNotEmpty)
-            .toList();
-        _yalidineCommunesCache[cacheKey] = _CacheItem(list, DateTime.now().add(_cacheTtl));
-        return list;
-      }
-    } catch (_) {}
-    return const [];
-  }
-
   Future<bool> _validateEcotrack({required String token}) async {
     final uriWithParam = Uri.parse(
       'https://api.ecotrack.dz/api/v1/validate/token?api_token=${Uri.encodeQueryComponent(token.trim())}',
@@ -1837,96 +1800,6 @@ class ShippingService {
     }
     debugPrint('Ecotrack validate: success message="$message"');
     return true;
-  }
-
-  Future<List<Map<String, String>>> _fetchEcotrackWilayas({
-    required String apiKey,
-  }) async {
-    try {
-      final fees = await _fetchEcotrackFees(apiKey: apiKey);
-      final livraison = fees['livraison'];
-      if (livraison is! List) return const [];
-      final idsRaw = livraison
-          .whereType<Map>()
-          .map((m) => m['wilaya_id']?.toString())
-          .whereType<String>()
-          .toSet();
-      final ids = idsRaw
-          .expand((id) => {id, id.padLeft(2, '0')})
-          .toSet()
-          .toList();
-      if (ids.isEmpty) return const [];
-
-      final rows = await RateLimiter.instance.run(
-        'ecotrack.wilayas.db',
-        () => supabase
-            .from('wilayas')
-            .select('code, name_fr')
-            .inFilter('code', ids),
-      );
-      return rows
-          .whereType<Map>()
-          .map(
-            (m) => {
-              'code': m['code']?.toString() ?? '',
-              'name': m['name_fr']?.toString() ?? '',
-            },
-          )
-          .where((m) => m['code']!.isNotEmpty && m['name']!.isNotEmpty)
-          .toList();
-    } catch (_) {
-      return const [];
-    }
-  }
-
-  Future<List<Map<String, String>>> _fetchEcotrackCommunes({
-    required String apiKey,
-    required String wilayaCode,
-  }) async {
-    final uri = Uri.parse(
-      'https://api.ecotrack.dz/api/v1/get/communes?wilaya_id=${Uri.encodeQueryComponent(wilayaCode)}',
-    );
-    try {
-      final resp = await RateLimiter.instance.run(
-        'ecotrack.communes',
-        () => _httpClient
-            .get(
-              uri,
-              headers: {
-                'Authorization': 'Bearer ${apiKey.trim()}',
-                'Accept': 'application/json',
-              },
-            )
-            .timeout(const Duration(seconds: 10)),
-      );
-      if (resp.statusCode < 200 || resp.statusCode >= 300) return const [];
-      final data = jsonDecode(resp.body);
-      if (data is List) {
-        return data
-            .whereType<Map>()
-            .map(
-              (m) => {
-                'name': m['commune']?.toString() ?? m['name']?.toString() ?? '',
-                'wilaya_code': wilayaCode,
-              },
-            )
-            .where((m) => m['name']!.isNotEmpty)
-            .toList();
-      }
-      if (data is Map && data['data'] is List) {
-        return (data['data'] as List)
-            .whereType<Map>()
-            .map(
-              (m) => {
-                'name': m['commune']?.toString() ?? m['name']?.toString() ?? '',
-                'wilaya_code': wilayaCode,
-              },
-            )
-            .where((m) => m['name']!.isNotEmpty)
-            .toList();
-      }
-    } catch (_) {}
-    return const [];
   }
 
   Future<Map<String, dynamic>> _fetchEcotrackFees({
@@ -2195,28 +2068,29 @@ class ShippingService {
       }
 
       final result = <Map<String, dynamic>>[];
-      for (final r in rows) {
-        final orderId = r['order_id']?.toString();
-        if (orderId == null) continue;
-        final order = ordersById[orderId];
-        if (order == null) continue;
+        for (final r in rows) {
+          final orderId = r['order_id']?.toString();
+          if (orderId == null) continue;
+          final order = ordersById[orderId];
+          if (order == null) continue;
         if ((order['seller_id']?.toString() ?? '') != safeSellerId) continue;
 
         final createdAt =
             r['created_at'] as String? ?? order['created_at'] as String?;
-        result.add({
-          'order_id': orderId,
-          'status': r['status'] as String? ?? 'pending',
-          'carrier':
-              r['carrier'] as String? ??
-              r['courier_name'] as String? ??
-              order['courier_name'] as String? ??
-              '-',
-          'tracking_number': r['tracking_number'] as String?,
-          'shipping_cost': r['shipping_cost'] ?? order['shipping_cost'],
-          'label_url': r['label_url'] as String?,
-          'created_at': createdAt,
-        });
+          result.add({
+            'order_id': orderId,
+            'status': r['status'] as String? ?? 'pending',
+            'carrier':
+                r['carrier'] as String? ??
+                r['courier_name'] as String? ??
+                order['courier_name'] as String? ??
+                '-',
+            'courier_id': order['courier_id'] as String?,
+            'tracking_number': r['tracking_number'] as String?,
+            'shipping_cost': r['shipping_cost'] ?? order['shipping_cost'],
+            'label_url': r['label_url'] as String?,
+            'created_at': createdAt,
+          });
       }
 
       result.sort((a, b) {
@@ -2228,7 +2102,7 @@ class ShippingService {
         return bDate.compareTo(aDate);
       });
 
-      return result;
+      return result.take(30).toList();
     });
   }
 

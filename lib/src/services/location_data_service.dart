@@ -9,8 +9,8 @@ class LocationDataService {
   LocationDataService._();
   static final instance = LocationDataService._();
 
-  static const _wilayasCacheKey = 'cache.wilayas.v1';
-  static const _communesCachePrefix = 'cache.communes.v1.';
+  static const _wilayasCacheKey = 'cache.wilayas.v2';
+  static const _communesCachePrefix = 'cache.communes.v2.';
   static const Duration _cacheTtl = Duration(hours: 12);
 
   List<Map<String, String>>? _wilayasCache;

@@ -1146,7 +1146,6 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
   bool _freeShipping = false;
   bool _insuranceActive = false;
   bool _allowStopdesk = true;
-  bool _shippingLocked = true;
   bool _isEcotrack = false;
   bool _isZrExpress = false;
   bool _supportsStopdeskList = true;
@@ -1179,7 +1178,6 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
       courierName: widget.courierName,
     );
     final product = widget.product;
-    _shippingLocked = true;
     _freeShipping = product?.shippingFree ?? false;
     _exchangeAfterDelivery = product?.exchangeAfterDelivery ?? false;
     _insuranceActive = product?.insuranceActive ?? false;
@@ -1228,33 +1226,23 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
               widget.defaultPrice.toStringAsFixed(0))
           .toString(),
     );
-    final declaredValue = product?.declaredValue ??
-        double.tryParse(widget.lastCheckout?['declaredValue']?.toString() ?? '') ??
-        widget.defaultPrice;
+    final declaredValue = product?.declaredValue ?? widget.defaultPrice;
     _declaredValueCtrl = TextEditingController(
       text: declaredValue.toStringAsFixed(0),
     );
-    final weightValue = product?.weightKg ??
-        int.tryParse(widget.lastCheckout?['weight']?.toString() ?? '') ??
-        1;
+    final weightValue = product?.weightKg ?? 1;
     _weightCtrl = TextEditingController(
       text: weightValue.toString(),
     );
-    final heightValue = product?.heightCm ??
-        int.tryParse(widget.lastCheckout?['height']?.toString() ?? '') ??
-        0;
+    final heightValue = product?.heightCm ?? 0;
     _heightCtrl = TextEditingController(
       text: heightValue.toString(),
     );
-    final widthValue = product?.widthCm ??
-        int.tryParse(widget.lastCheckout?['width']?.toString() ?? '') ??
-        0;
+    final widthValue = product?.widthCm ?? 0;
     _widthCtrl = TextEditingController(
       text: widthValue.toString(),
     );
-    final lengthValue = product?.lengthCm ??
-        int.tryParse(widget.lastCheckout?['length']?.toString() ?? '') ??
-        0;
+    final lengthValue = product?.lengthCm ?? 0;
     _lengthCtrl = TextEditingController(
       text: lengthValue.toString(),
     );
@@ -1284,12 +1272,21 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
 
   String _wilayaName(Map<String, String> w) => w['name'] ?? '';
   String _wilayaId(Map<String, String> w) => w['id'] ?? w['code'] ?? '';
+  String _wilayaDisplayName(Map<String, String> w) {
+    final name = _wilayaName(w);
+    final rawId = _wilayaId(w).trim();
+    final numeric = int.tryParse(rawId);
+    if (numeric == null) return name;
+    final normalized = rawId.padLeft(2, '0');
+    return '$normalized - $name';
+  }
   String _communeName(Map<String, String> c) => c['name'] ?? '';
   bool _communeHasStopdesk(Map<String, String> c) =>
       c['has_stop_desk'] == 'true' || c['has_stop_desk'] == '1';
 
   Future<void> _loadWilayas() async {
     if (!mounted) return;
+    final locale = Localizations.localeOf(context).languageCode;
     setState(() {
       _loadingWilayas = true;
       _loadError = null;
@@ -1299,15 +1296,27 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
           courierId: widget.courierId,
           sellerId: widget.sellerId,
         );
+        if (_wilayas.isNotEmpty) {
+          _wilayas.sort((a, b) {
+            final aNum = int.tryParse(_wilayaId(a));
+            final bNum = int.tryParse(_wilayaId(b));
+            if (aNum != null && bNum != null) {
+              return aNum.compareTo(bNum);
+            }
+            if (aNum != null) return -1;
+            if (bNum != null) return 1;
+            return _wilayaName(a).compareTo(_wilayaName(b));
+          });
+        }
         if (_wilayas.isEmpty) {
           _loadError = _isZrExpress
-              ? L10n.tr(context, 'location.error_zr_locations')
-              : L10n.tr(context, 'location.error_no_wilayas');
+              ? L10n.trLocale(locale, 'location.error_zr_locations')
+              : L10n.trLocale(locale, 'location.error_no_wilayas');
       }
     } catch (_) {
       _loadError = _isZrExpress
-          ? L10n.tr(context, 'location.error_zr_locations')
-          : L10n.tr(context, 'location.error_wilayas_load');
+          ? L10n.trLocale(locale, 'location.error_zr_locations')
+          : L10n.trLocale(locale, 'location.error_wilayas_load');
     } finally {
       if (mounted) {
         setState(() {
@@ -1362,6 +1371,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
 
   Future<void> _loadCommunes(String wilayaId) async {
     if (!mounted) return;
+    final locale = Localizations.localeOf(context).languageCode;
     setState(() {
       _loadingCommunes = true;
       _loadError = null;
@@ -1383,13 +1393,13 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
           : _communes;
       if (_communes.isEmpty) {
         _loadError = _isZrExpress
-            ? L10n.tr(context, 'location.error_zr_locations')
-            : L10n.tr(context, 'location.error_no_communes');
+            ? L10n.trLocale(locale, 'location.error_zr_locations')
+            : L10n.trLocale(locale, 'location.error_no_communes');
       }
     } catch (_) {
       _loadError = _isZrExpress
-          ? L10n.tr(context, 'location.error_zr_locations')
-          : L10n.tr(context, 'location.error_communes_load');
+          ? L10n.trLocale(locale, 'location.error_zr_locations')
+          : L10n.trLocale(locale, 'location.error_communes_load');
     } finally {
       if (mounted) {
         setState(() {
@@ -1625,7 +1635,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                     .map(
                       (w) => DropdownMenuItem(
                         value: _wilayaId(w),
-                        child: Text(_wilayaName(w)),
+                        child: Text(_wilayaDisplayName(w)),
                       ),
                     )
                     .toList(),
@@ -1743,7 +1753,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                     .map(
                       (w) => DropdownMenuItem(
                         value: _wilayaId(w),
-                        child: Text(_wilayaName(w)),
+                        child: Text(_wilayaDisplayName(w)),
                       ),
                     )
                     .toList(),
@@ -1898,219 +1908,94 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(6),
                 ],
-                onChanged: (v) {
-                  if (!_shippingLocked) {
-                    _declaredValueCtrl.text = v;
-                  }
-                  setState(() {});
-                },
+                onChanged: (_) => setState(() {}),
                 validator: (v) => v == null || v.trim().isEmpty
                     ? L10n.tr(context, 'checkout.error_price_required')
                     : null,
               ),
               const SizedBox(height: 8),
-              if (_shippingLocked)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _SummaryRow(
-                      label: L10n.tr(context, 'checkout.free_shipping'),
-                      value: _freeShipping
-                          ? L10n.tr(context, 'common.yes')
-                          : L10n.tr(context, 'common.no'),
-                    ),
-                    _SummaryRow(
-                      label: L10n.tr(context, 'checkout.exchange_after_delivery'),
-                      value: _exchangeAfterDelivery
-                          ? L10n.tr(context, 'common.yes')
-                          : L10n.tr(context, 'common.no'),
-                    ),
-                    _SummaryRow(
-                      label: L10n.tr(context, 'listing.add.allow_stopdesk'),
-                      value: _allowStopdesk
-                          ? L10n.tr(context, 'common.yes')
-                          : L10n.tr(context, 'common.no'),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      L10n.tr(context, 'checkout.insurance'),
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    _SummaryRow(
-                      label: L10n.tr(context, 'checkout.insurance_active'),
-                      value: _insuranceActive
-                          ? L10n.tr(context, 'common.yes')
-                          : L10n.tr(context, 'common.no'),
-                    ),
-                    _SummaryRow(
-                      label: L10n.tr(context, 'checkout.declared_value'),
-                      value: _declaredValueCtrl.text.trim().isEmpty
-                          ? '-'
-                          : _declaredValueCtrl.text.trim(),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      L10n.tr(context, 'checkout.dimensions_weight'),
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    _SummaryRow(
-                      label: L10n.tr(context, 'checkout.weight_kg'),
-                      value: _weightCtrl.text.trim().isEmpty
-                          ? '-'
-                          : _weightCtrl.text.trim(),
-                    ),
-                    _SummaryRow(
-                      label: L10n.tr(context, 'checkout.height_cm'),
-                      value: _heightCtrl.text.trim().isEmpty
-                          ? '-'
-                          : _heightCtrl.text.trim(),
-                    ),
-                    _SummaryRow(
-                      label: L10n.tr(context, 'checkout.width_cm'),
-                      value: _widthCtrl.text.trim().isEmpty
-                          ? '-'
-                          : _widthCtrl.text.trim(),
-                    ),
-                    _SummaryRow(
-                      label: L10n.tr(context, 'checkout.length_cm'),
-                      value: _lengthCtrl.text.trim().isEmpty
-                          ? '-'
-                          : _lengthCtrl.text.trim(),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      L10n.tr(
-                        context,
-                        'checkout.overweight_label',
-                        params: {
-                          'value': (int.tryParse(_weightCtrl.text.trim()) != null &&
-                                  int.parse(_weightCtrl.text.trim()) > 5)
-                              ? L10n.tr(context, 'common.yes')
-                              : L10n.tr(context, 'common.no'),
-                        },
-                      ),
-                    ),
-                  ],
-                )
-              else ...[
-                CheckboxListTile(
-                  value: _freeShipping,
-                  onChanged: (v) =>
-                      setState(() => _freeShipping = v ?? false),
-                  title: Text(L10n.tr(context, 'checkout.free_shipping')),
-                ),
-                CheckboxListTile(
-                  value: _exchangeAfterDelivery,
-                  onChanged: (v) =>
-                      setState(() => _exchangeAfterDelivery = v ?? false),
-                  title:
-                      Text(L10n.tr(context, 'checkout.exchange_after_delivery')),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  L10n.tr(context, 'checkout.insurance'),
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                SwitchListTile(
-                  value: _insuranceActive,
-                  onChanged: (v) =>
-                      setState(() => _insuranceActive = v ?? false),
-                  title: Text(L10n.tr(context, 'checkout.insurance_active')),
-                ),
-                TextFormField(
-                  controller: _declaredValueCtrl,
-                  decoration: InputDecoration(
-                    labelText: L10n.tr(context, 'checkout.declared_value'),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SummaryRow(
+                    label: L10n.tr(context, 'checkout.free_shipping'),
+                    value: _freeShipping
+                        ? L10n.tr(context, 'common.yes')
+                        : L10n.tr(context, 'common.no'),
                   ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  L10n.tr(context, 'checkout.dimensions_weight'),
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                TextFormField(
-                  controller: _weightCtrl,
-                  decoration: InputDecoration(
-                    labelText: L10n.tr(context, 'checkout.weight_kg'),
+                  _SummaryRow(
+                    label: L10n.tr(context, 'checkout.exchange_after_delivery'),
+                    value: _exchangeAfterDelivery
+                        ? L10n.tr(context, 'common.yes')
+                        : L10n.tr(context, 'common.no'),
                   ),
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(3),
-                  ],
-                  validator: (v) {
-                    if (!_isWeightValid(v ?? '')) {
-                      return L10n.tr(
-                        context,
-                        'checkout.error_weight_range',
-                        params: {
-                          'min': _minWeightKg.toString(),
-                          'max': _maxWeightKg.toString(),
-                        },
-                      );
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _heightCtrl,
-                  decoration: InputDecoration(
-                    labelText: L10n.tr(context, 'checkout.height_cm'),
+                  _SummaryRow(
+                    label: L10n.tr(context, 'listing.add.allow_stopdesk'),
+                    value: _allowStopdesk
+                        ? L10n.tr(context, 'common.yes')
+                        : L10n.tr(context, 'common.no'),
                   ),
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(3),
-                  ],
-                  validator: (v) => _isDimensionValid(v ?? '')
-                      ? null
-                      : L10n.tr(context, 'checkout.error_height_invalid'),
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _widthCtrl,
-                  decoration: InputDecoration(
-                    labelText: L10n.tr(context, 'checkout.width_cm'),
+                  const SizedBox(height: 12),
+                  Text(
+                    L10n.tr(context, 'checkout.insurance'),
+                    style: Theme.of(context).textTheme.titleSmall,
                   ),
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(3),
-                  ],
-                  validator: (v) => _isDimensionValid(v ?? '')
-                      ? null
-                      : L10n.tr(context, 'checkout.error_width_invalid'),
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _lengthCtrl,
-                  decoration: InputDecoration(
-                    labelText: L10n.tr(context, 'checkout.length_cm'),
+                  _SummaryRow(
+                    label: L10n.tr(context, 'checkout.insurance_active'),
+                    value: _insuranceActive
+                        ? L10n.tr(context, 'common.yes')
+                        : L10n.tr(context, 'common.no'),
                   ),
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(3),
-                  ],
-                  validator: (v) => _isDimensionValid(v ?? '')
-                      ? null
-                      : L10n.tr(context, 'checkout.error_length_invalid'),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  L10n.tr(
-                    context,
-                    'checkout.overweight_label',
-                    params: {
-                      'value': (int.tryParse(_weightCtrl.text.trim()) != null &&
-                              int.parse(_weightCtrl.text.trim()) > 5)
-                          ? L10n.tr(context, 'common.yes')
-                          : L10n.tr(context, 'common.no'),
-                    },
+                  _SummaryRow(
+                    label: L10n.tr(context, 'checkout.declared_value'),
+                    value: _declaredValueCtrl.text.trim().isEmpty
+                        ? '-'
+                        : _declaredValueCtrl.text.trim(),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  Text(
+                    L10n.tr(context, 'checkout.dimensions_weight'),
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  _SummaryRow(
+                    label: L10n.tr(context, 'checkout.weight_kg'),
+                    value: _weightCtrl.text.trim().isEmpty
+                        ? '-'
+                        : _weightCtrl.text.trim(),
+                  ),
+                  _SummaryRow(
+                    label: L10n.tr(context, 'checkout.height_cm'),
+                    value: _heightCtrl.text.trim().isEmpty
+                        ? '-'
+                        : _heightCtrl.text.trim(),
+                  ),
+                  _SummaryRow(
+                    label: L10n.tr(context, 'checkout.width_cm'),
+                    value: _widthCtrl.text.trim().isEmpty
+                        ? '-'
+                        : _widthCtrl.text.trim(),
+                  ),
+                  _SummaryRow(
+                    label: L10n.tr(context, 'checkout.length_cm'),
+                    value: _lengthCtrl.text.trim().isEmpty
+                        ? '-'
+                        : _lengthCtrl.text.trim(),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    L10n.tr(
+                      context,
+                      'checkout.overweight_label',
+                      params: {
+                        'value': (int.tryParse(_weightCtrl.text.trim()) != null &&
+                                int.parse(_weightCtrl.text.trim()) > 5)
+                            ? L10n.tr(context, 'common.yes')
+                            : L10n.tr(context, 'common.no'),
+                      },
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 12),
               Text(
                 L10n.tr(context, 'checkout.price_summary'),

@@ -1,6 +1,7 @@
 ﻿// ignore_for_file: deprecated_member_use
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cached_network_image_platform_interface/cached_network_image_platform_interface.dart';
+import 'package:dzmarket/src/features/admin/app_errors_page.dart';
 import 'package:dzmarket/src/features/orders/shipments_dashboard_page.dart';
 import 'package:dzmarket/src/features/orders/seller_orders_page.dart';
 import 'package:dzmarket/src/features/profile/courier_settings_page.dart';
@@ -11,6 +12,7 @@ import 'package:dzmarket/src/services/auth_service.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/locale_service.dart';
+import 'package:dzmarket/src/services/location_data_service.dart';
 import 'package:dzmarket/src/services/location_service.dart';
 import 'package:dzmarket/src/services/storage_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
@@ -43,11 +45,18 @@ class _ProfilePageState extends State<ProfilePage> {
   Profile? _profile;
   String? _error;
   String? _avatarUrl;
+  bool _loadingLocations = false;
+  String? _locationLoadError;
+  List<Map<String, String>> _wilayas = const [];
+  List<Map<String, String>> _communes = const [];
+  String? _selectedWilayaCode;
+  String? _selectedCommuneId;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
+    _loadLocations();
   }
 
   @override
@@ -98,6 +107,7 @@ class _ProfilePageState extends State<ProfilePage> {
       _lang = p.lang ?? LocaleService.instance.locale.value?.languageCode ?? 'fr';
       _lat = p.locationLat;
       _lng = p.locationLng;
+      _syncLocationSelectionFromText();
     } on FormatException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -170,6 +180,226 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  Future<void> _loadLocations() async {
+    setState(() {
+      _loadingLocations = true;
+      _locationLoadError = null;
+    });
+    final items = await LocationDataService.instance.fetchWilayas();
+    if (!mounted) return;
+    setState(() {
+      _wilayas = items;
+      _loadingLocations = false;
+      if (items.isEmpty) {
+        _locationLoadError = L10n.tr(context, 'listing.add.error_no_wilayas');
+      }
+    });
+    _syncLocationSelectionFromText();
+  }
+
+  void _syncLocationSelectionFromText() {
+    if (_wilayas.isEmpty) return;
+    final wilayaText = _wilayaCtrl.text.trim().toLowerCase();
+    if (wilayaText.isNotEmpty) {
+      final match = _wilayas.firstWhere(
+        (w) =>
+            (w['name_fr'] ?? '').toLowerCase() == wilayaText ||
+            (w['name_ar'] ?? '').toLowerCase() == wilayaText ||
+            (w['code'] ?? '').toLowerCase() == wilayaText,
+        orElse: () => const {},
+      );
+      final code = match['code'];
+      if (code != null && code.isNotEmpty) {
+        _selectedWilayaCode = code;
+        _loadCommunes(code);
+      }
+    }
+  }
+
+  Future<void> _loadCommunes(String code) async {
+    setState(() {
+      _loadingLocations = true;
+      _locationLoadError = null;
+      _communes = const [];
+    });
+    final items = await LocationDataService.instance.fetchCommunes(code);
+    if (!mounted) return;
+    setState(() {
+      _communes = items;
+      _loadingLocations = false;
+      if (items.isEmpty) {
+        _locationLoadError = L10n.tr(context, 'listing.add.error_no_communes');
+      }
+    });
+    _syncCommuneSelectionFromText();
+  }
+
+  void _syncCommuneSelectionFromText() {
+    if (_communes.isEmpty) return;
+    final communeText = _dairaCtrl.text.trim().toLowerCase();
+    if (communeText.isEmpty) return;
+    final match = _communes.firstWhere(
+      (c) =>
+          (c['name_fr'] ?? '').toLowerCase() == communeText ||
+          (c['name_ar'] ?? '').toLowerCase() == communeText ||
+          (c['id'] ?? '').toLowerCase() == communeText,
+      orElse: () => const {},
+    );
+    final id = match['id'];
+    if (id != null && id.isNotEmpty) {
+      _selectedCommuneId = id;
+    }
+  }
+
+  bool _hasArabicLetters(String value) {
+    return RegExp(r'[\u0600-\u06FF]').hasMatch(value);
+  }
+
+  String _pickLocalizedName(BuildContext context, String fr, String ar) {
+    final isAr = Localizations.localeOf(context).languageCode == 'ar';
+    if (!isAr) return fr.isNotEmpty ? fr : ar;
+    if (_hasArabicLetters(ar)) return ar;
+    return fr.isNotEmpty ? fr : ar;
+  }
+
+  String _formatWilayaLabel(String code, String name) {
+    final raw = code.trim();
+    if (raw.isEmpty) return name;
+    final numeric = int.tryParse(raw);
+    final normalized = numeric != null ? raw.padLeft(2, '0') : raw;
+    return '$normalized - $name';
+  }
+
+  String _wilayaLabel(BuildContext context) {
+    final code = _selectedWilayaCode;
+    if (code == null || code.isEmpty) {
+      return L10n.tr(context, 'listing.add.select_wilaya');
+    }
+    final match = _wilayas.where((w) => w['code'] == code).toList();
+    if (match.isEmpty) return code;
+    final fr = match.first['name_fr'] ?? code;
+    final ar = match.first['name_ar'] ?? fr;
+    final name = _pickLocalizedName(context, fr, ar);
+    return _formatWilayaLabel(code, name);
+  }
+
+  String _communeLabel(BuildContext context) {
+    final id = _selectedCommuneId;
+    if (id == null || id.isEmpty) {
+      return L10n.tr(context, 'listing.add.select_commune');
+    }
+    final match = _communes.where((c) => c['id'] == id).toList();
+    if (match.isEmpty) return id;
+    final fr = match.first['name_fr'] ?? id;
+    final ar = match.first['name_ar'] ?? fr;
+    return _pickLocalizedName(context, fr, ar);
+  }
+
+  String _wilayaItemLabel(BuildContext context, Map<String, String> item) {
+    final fr = item['name_fr'] ?? '';
+    final ar = item['name_ar'] ?? fr;
+    final name = _pickLocalizedName(context, fr, ar);
+    final code = item['code'] ?? '';
+    return _formatWilayaLabel(code, name);
+  }
+
+  String _communeItemLabel(BuildContext context, Map<String, String> item) {
+    final fr = item['name_fr'] ?? '';
+    final ar = item['name_ar'] ?? fr;
+    return _pickLocalizedName(context, fr, ar);
+  }
+
+  Future<Map<String, String>?> _showLocationPicker({
+    required BuildContext context,
+    required String title,
+    required List<Map<String, String>> items,
+    required String Function(Map<String, String>) itemLabel,
+  }) {
+    final searchCtrl = TextEditingController();
+    return showModalBottomSheet<Map<String, String>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: StatefulBuilder(
+            builder: (sheetContext, setState) {
+              final query = searchCtrl.text.trim().toLowerCase();
+              final filtered = query.isEmpty
+                  ? items
+                  : items.where((item) {
+                      final label = itemLabel(item).toLowerCase();
+                      final code = (item['code'] ?? '').toLowerCase();
+                      return label.contains(query) || code.contains(query);
+                    }).toList();
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      title,
+                      style: Theme.of(sheetContext).textTheme.titleMedium,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: TextField(
+                      controller: searchCtrl,
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.search),
+                        hintText: L10n.tr(sheetContext, 'common.search'),
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final item = filtered[index];
+                        return ListTile(
+                          title: Text(itemLabel(item)),
+                          onTap: () => Navigator.of(sheetContext).pop(item),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPickerField({
+    required String label,
+    required String value,
+    required VoidCallback? onTap,
+    required IconData icon,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon),
+          enabled: onTap != null,
+        ),
+        child: Row(
+          children: [
+            Expanded(child: Text(value)),
+            const Icon(Icons.arrow_drop_down),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _useMyLocation() async {
     setState(() => _saving = true);
     final data = await LocationService.instance.fetchLocation();
@@ -179,10 +409,15 @@ class _ProfilePageState extends State<ProfilePage> {
       if (data != null) {
         _lat = data.latitude;
         _lng = data.longitude;
-        if (data.wilaya != null) _wilayaCtrl.text = data.wilaya!;
-        if (data.daira != null) _dairaCtrl.text = data.daira!;
+        if (data.wilaya != null) {
+          _wilayaCtrl.text = data.wilaya!;
+        }
+        if (data.daira != null) {
+          _dairaCtrl.text = data.daira!;
+        }
       }
     });
+    _syncLocationSelectionFromText();
   }
 
   Future<void> _pickAvatar() async {
@@ -262,6 +497,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
     final safeAvatar = InputSanitizer.safeUrl(_avatarUrl);
     final isSeller = _isSeller;
+    final isAdmin = _profile?.role == UserRole.admin;
 
     return Scaffold(
       appBar: AppBar(title: Text(L10n.tr(context, 'profile.title'))),
@@ -377,26 +613,93 @@ class _ProfilePageState extends State<ProfilePage> {
                         Row(
                           children: [
                             Expanded(
-                              child: TextField(
-                                controller: _wilayaCtrl,
-                                decoration: InputDecoration(
-                                  labelText: L10n.tr(context, 'profile.wilaya'),
-                                  prefixIcon: const Icon(Icons.map_outlined),
-                                ),
+                              child: _buildPickerField(
+                                label: L10n.tr(context, 'profile.wilaya'),
+                                value: _wilayaLabel(context),
+                                icon: Icons.map_outlined,
+                                onTap: (_loadingLocations || _wilayas.isEmpty)
+                                    ? null
+                                    : () async {
+                                        final selected =
+                                            await _showLocationPicker(
+                                          context: context,
+                                          title:
+                                              L10n.tr(context, 'profile.wilaya'),
+                                          items: _wilayas,
+                                          itemLabel: (item) =>
+                                              _wilayaItemLabel(context, item),
+                                        );
+                                        if (!mounted || selected == null) return;
+                                        final code = selected['code'] ?? '';
+                                        setState(() {
+                                          _selectedWilayaCode =
+                                              code.isNotEmpty ? code : null;
+                                          _wilayaCtrl.text =
+                                              selected['name_fr'] ?? code;
+                                          _selectedCommuneId = null;
+                                          _dairaCtrl.text = '';
+                                          _communes = const [];
+                                        });
+                                        if (code.isNotEmpty) {
+                                          await _loadCommunes(code);
+                                        }
+                                      },
                               ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: TextField(
-                                controller: _dairaCtrl,
-                                decoration: InputDecoration(
-                                  labelText: L10n.tr(context, 'profile.daira'),
-                                  prefixIcon: const Icon(Icons.place_outlined),
-                                ),
+                              child: _buildPickerField(
+                                label: L10n.tr(context, 'profile.daira'),
+                                value: _communeLabel(context),
+                                icon: Icons.place_outlined,
+                                onTap: (_loadingLocations ||
+                                        _selectedWilayaCode == null ||
+                                        _communes.isEmpty)
+                                    ? null
+                                    : () async {
+                                        final selected =
+                                            await _showLocationPicker(
+                                          context: context,
+                                          title:
+                                              L10n.tr(context, 'profile.daira'),
+                                          items: _communes,
+                                          itemLabel: (item) =>
+                                              _communeItemLabel(context, item),
+                                        );
+                                        if (!mounted || selected == null) return;
+                                        final communeId = selected['id'] ?? '';
+                                        setState(() {
+                                          _selectedCommuneId =
+                                              communeId.isNotEmpty
+                                                  ? communeId
+                                                  : null;
+                                          _dairaCtrl.text =
+                                              selected['name_fr'] ??
+                                                  (communeId.isNotEmpty
+                                                      ? communeId
+                                                      : '');
+                                        });
+                                      },
                               ),
                             ),
                           ],
                         ),
+                        if (_loadingLocations)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 8),
+                            child: LinearProgressIndicator(minHeight: 2),
+                          ),
+                        if (_locationLoadError != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              _locationLoadError!,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String>(
                           value: _lang,
@@ -491,6 +794,21 @@ class _ProfilePageState extends State<ProfilePage> {
                             Text(L10n.tr(context, 'profile.view_public_hint')),
                         onTap: () {},
                       ),
+                      if (isAdmin) const Divider(height: 1),
+                      if (isAdmin)
+                        ListTile(
+                          leading:
+                              const Icon(Icons.admin_panel_settings_outlined),
+                          title: Text(L10n.tr(context, 'admin.errors_title')),
+                          subtitle:
+                              Text(L10n.tr(context, 'admin.errors_subtitle')),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const AppErrorsPage(),
+                            ),
+                          ),
+                        ),
                       if (isSeller) const Divider(height: 1),
                       if (isSeller)
                         ListTile(

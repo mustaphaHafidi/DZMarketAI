@@ -9,6 +9,7 @@ import 'package:dzmarket/src/services/supabase_service.dart';
 class ProductService {
   static final Map<String, _ProductCacheEntry> _cache = {};
   static const Duration _cacheTtl = Duration(seconds: 20);
+  static const int _maxOwnerProducts = 30;
 
   Stream<List<Product>> streamProducts() {
     final userId = supabase.auth.currentUser?.id;
@@ -42,7 +43,8 @@ class ProductService {
           .from(SupabaseTables.products)
           .stream(primaryKey: ['id'])
           .eq('owner_id', safeOwnerId)
-          .order('created_at')
+          .order('created_at', ascending: false)
+          .limit(_maxOwnerProducts)
           .map((rows) => rows.map(Product.fromJson).toList()),
     );
   }

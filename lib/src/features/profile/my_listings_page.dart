@@ -20,6 +20,7 @@ class MyListingsPage extends StatefulWidget {
 
 class _MyListingsPageState extends State<MyListingsPage> {
   String _filter = 'active';
+  static const int _maxListings = 30;
 
   @override
   Widget build(BuildContext context) {
@@ -44,17 +45,24 @@ class _MyListingsPageState extends State<MyListingsPage> {
           }
           final products = snapshot.data ?? const [];
           final filtered = switch (_filter) {
-            'archived' => products.where((p) => p.isArchived).toList(),
+            'archived' => products
+                .where((p) => p.isArchived || p.stockQuantity <= 0)
+                .toList(),
             'all' => products,
-            _ => products.where((p) => !p.isArchived).toList(),
-          };
+            _ => products
+                .where((p) => !p.isArchived && p.stockQuantity > 0)
+                .toList(),
+          }
+            ..sort((a, b) => (b.createdAt ?? DateTime(0))
+                .compareTo(a.createdAt ?? DateTime(0)));
+          final limited = filtered.take(_maxListings).toList();
           final emptyLabel = switch (_filter) {
             'archived' => L10n.tr(context, 'listing.archived_empty'),
             'active' => L10n.tr(context, 'listing.active_empty'),
             _ => L10n.tr(context, 'listing.empty'),
           };
           return ListView.separated(
-            itemCount: filtered.length + 1,
+            itemCount: limited.length + 1,
             separatorBuilder: (_, __) => const Divider(height: 1),
             itemBuilder: (context, index) {
               if (index == 0) {
@@ -84,13 +92,13 @@ class _MyListingsPageState extends State<MyListingsPage> {
                   ),
                 );
               }
-              if (filtered.isEmpty) {
+              if (limited.isEmpty) {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 32),
                   child: Center(child: Text(emptyLabel)),
                 );
               }
-              final p = filtered[index - 1];
+              final p = limited[index - 1];
               final raw = p.imageUrls.isNotEmpty ? p.imageUrls.first : p.imageUrl;
               final img = InputSanitizer.safeUrl(raw);
               final stockLabel = L10n.tr(

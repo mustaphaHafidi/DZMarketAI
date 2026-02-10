@@ -54,6 +54,7 @@ class ShipmentsDashboardPage extends StatelessWidget {
               final r = rows[i];
               final status = (r['status'] as String?) ?? 'pending';
               final carrier = r['carrier'] as String? ?? '-';
+              final courierId = (r['courier_id'] as String?) ?? '';
               final tracking = r['tracking_number'] as String? ?? '-';
               final cost = r['shipping_cost'] != null
                   ? (r['shipping_cost'] as num).toStringAsFixed(0)
@@ -64,6 +65,11 @@ class ShipmentsDashboardPage extends StatelessWidget {
                   : null;
               final orderId = r['order_id']?.toString() ?? '?';
               final statusLabel = _statusLabel(context, status);
+              final carrierKey = (courierId.isNotEmpty ? courierId : carrier).toLowerCase();
+              final isIntegratedCarrier = carrierKey.contains('yalidine') ||
+                  carrierKey.contains('ecotrack') ||
+                  carrierKey.contains('zrexpress');
+              final allowManualStatus = !isIntegratedCarrier;
               return ListTile(
                 title: Text(
                   L10n.tr(
@@ -110,15 +116,21 @@ class ShipmentsDashboardPage extends StatelessWidget {
                         L10n.tr(context, 'shipments.label_ready'),
                         style: TextStyle(color: Theme.of(context).colorScheme.primary),
                       ),
+                    if (!allowManualStatus)
+                      Text(
+                        L10n.tr(context, 'shipments.auto_status'),
+                        style: TextStyle(color: Theme.of(context).colorScheme.secondary),
+                      ),
                     const SizedBox(height: 6),
                     Wrap(
                       spacing: 8,
                       children: [
-                        TextButton.icon(
-                          onPressed: () => _showStatusSheet(context, orderId, status),
-                          icon: const Icon(Icons.sync_outlined, size: 18),
-                          label: Text(L10n.tr(context, 'shipments.change_status')),
-                        ),
+                        if (allowManualStatus)
+                          TextButton.icon(
+                            onPressed: () => _showStatusSheet(context, orderId, status),
+                            icon: const Icon(Icons.sync_outlined, size: 18),
+                            label: Text(L10n.tr(context, 'shipments.change_status')),
+                          ),
                         if (labelUrl == null)
                           TextButton.icon(
                             onPressed: () async {
@@ -147,7 +159,9 @@ class ShipmentsDashboardPage extends StatelessWidget {
                         onPressed: () => _openLabel(labelUrl),
                       )
                     : null,
-                onTap: () => _showStatusSheet(context, orderId, status),
+                onTap: allowManualStatus
+                    ? () => _showStatusSheet(context, orderId, status)
+                    : null,
               );
             },
           );

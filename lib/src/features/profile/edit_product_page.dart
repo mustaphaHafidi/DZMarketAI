@@ -467,7 +467,7 @@ class _EditProductPageState extends State<EditProductPage> {
             ),
             SwitchListTile(
               value: _insuranceActive,
-              onChanged: (v) => setState(() => _insuranceActive = v ?? false),
+              onChanged: (v) => setState(() => _insuranceActive = v),
               title: Text(L10n.tr(context, 'checkout.insurance_active')),
             ),
             TextField(

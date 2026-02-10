@@ -24,6 +24,7 @@ class OrdersPage extends StatefulWidget {
 class _OrdersPageState extends State<OrdersPage> {
   final Set<String> _paying = {};
   final RefreshController _refreshController = RefreshController();
+  static const int _maxOrders = 30;
 
   @override
   Widget build(BuildContext context) {
@@ -53,8 +54,11 @@ class _OrdersPageState extends State<OrdersPage> {
             return const Center(child: CircularProgressIndicator());
           }
           final orders = snapshot.data ?? const [];
-          final filtered = orders.where((o) => o.buyerId == userId).toList();
-          if (filtered.isEmpty) {
+          final filtered = orders.where((o) => o.buyerId == userId).toList()
+            ..sort((a, b) => (b.createdAt ?? DateTime(0))
+                .compareTo(a.createdAt ?? DateTime(0)));
+          final limited = filtered.take(_maxOrders).toList();
+          if (limited.isEmpty) {
             return Center(
               child: Text(L10n.tr(context, 'orders.empty')),
             );
@@ -66,9 +70,9 @@ class _OrdersPageState extends State<OrdersPage> {
             ),
             child: ListView.builder(
               padding: const EdgeInsets.all(12),
-              itemCount: filtered.length,
+              itemCount: limited.length,
               itemBuilder: (context, index) {
-                final order = filtered[index];
+                final order = limited[index];
                 return _OrderCard(
                   order: order,
                   currency: currency,
