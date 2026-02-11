@@ -44,6 +44,33 @@ class StorageService {
     return urls;
   }
 
+  Future<void> deletePublicUrls(
+    List<String> urls, {
+    String bucket = _bucket,
+  }) async {
+    if (urls.isEmpty) return;
+    final paths = <String>[];
+    for (final url in urls) {
+      try {
+        final uri = Uri.parse(url);
+        final marker = '/storage/v1/object/public/$bucket/';
+        final idx = uri.path.indexOf(marker);
+        if (idx == -1) continue;
+        final path = uri.path.substring(idx + marker.length);
+        if (path.isNotEmpty) {
+          paths.add(path);
+        }
+      } catch (_) {
+        // Ignore malformed URLs.
+      }
+    }
+    if (paths.isEmpty) return;
+    await RateLimiter.instance.run(
+      'storage.delete',
+      () => supabase.storage.from(bucket).remove(paths),
+    );
+  }
+
   /// Upload a single file to a bucket and return a signed URL (for private buckets like labels).
   Future<String> uploadBytesAndSign({
     required Uint8List data,
@@ -57,7 +84,9 @@ class StorageService {
     final path = '$userId/${_uuid.v4()}-$safeFileName';
     await RateLimiter.instance.run(
       'storage.upload.sign',
-      () => supabase.storage.from(bucket).uploadBinary(
+      () => supabase.storage
+          .from(bucket)
+          .uploadBinary(
             path,
             data,
             fileOptions: const FileOptions(upsert: true),
@@ -65,7 +94,8 @@ class StorageService {
     );
     final signed = await RateLimiter.instance.run(
       'storage.sign',
-      () => supabase.storage.from(bucket).createSignedUrl(path, expiresInSeconds),
+      () =>
+          supabase.storage.from(bucket).createSignedUrl(path, expiresInSeconds),
     );
     return signed;
   }
@@ -86,7 +116,11 @@ class StorageService {
       'storage.upload.private',
       () => supabase.storage
           .from(bucket)
-          .uploadBinary(path, data, fileOptions: const FileOptions(upsert: true)),
+          .uploadBinary(
+            path,
+            data,
+            fileOptions: const FileOptions(upsert: true),
+          ),
     );
     return path;
   }

@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:dzmarket/src/config/supabase_options.dart';
 import 'package:dzmarket/src/models/chat_message.dart';
 import 'package:dzmarket/src/models/conversation.dart';
+import 'package:dzmarket/src/services/i18n.dart';
+import 'package:dzmarket/src/services/locale_service.dart';
+import 'package:dzmarket/src/services/moderation_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -48,7 +51,9 @@ class ChatRepository {
         .map((rows) {
           final list = rows
               .map(ChatMessage.fromJson)
-              .where((m) => m.deletedAt == null)
+              .where(
+                (m) => m.deletedAt == null && m.moderationStatus != 'blocked',
+              )
               .toList();
           list.sort((a, b) {
             final at = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
@@ -66,6 +71,16 @@ class ChatRepository {
     Map<String, dynamic>? payload,
     String? dedupeKey,
   }) async {
+    if (type == 'text' && text.trim().isNotEmpty) {
+      final moderation = await ModerationService().moderateText(text);
+      if (!moderation.allowed) {
+        final locale =
+            LocaleService.instance.locale.value?.languageCode ?? 'fr';
+        throw FormatException(
+          L10n.trLocale(locale, 'moderation.blocked_message'),
+        );
+      }
+    }
     try {
       final result = await _client.rpc(
         'send_message',
@@ -82,7 +97,8 @@ class ChatRepository {
       }
       return ChatMessage.fromJson(result as Map<String, dynamic>);
     } on PostgrestException catch (e) {
-      final missingNewArgs = e.code == 'PGRST202' ||
+      final missingNewArgs =
+          e.code == 'PGRST202' ||
           e.code == '42883' ||
           e.message.contains('send_message') &&
               (e.message.contains('p_type') ||
@@ -91,10 +107,7 @@ class ChatRepository {
       if (!missingNewArgs) rethrow;
       final result = await _client.rpc(
         'send_message',
-        params: {
-          'p_conversation_id': conversationId,
-          'p_text': text,
-        },
+        params: {'p_conversation_id': conversationId, 'p_text': text},
       );
       if (result == null) {
         throw StateError('send_message returned null');
@@ -159,7 +172,8 @@ class ChatRepository {
       }
       return Conversation.fromJson(result as Map<String, dynamic>);
     } on PostgrestException catch (e) {
-      final missingFn = e.code == 'PGRST202' ||
+      final missingFn =
+          e.code == 'PGRST202' ||
           e.code == '42883' ||
           e.message.contains('ensure_order_conversation');
       if (!missingFn) rethrow;
@@ -224,7 +238,9 @@ class ChatRepository {
       return;
     } on PostgrestException catch (e) {
       final missingFn =
-          e.code == 'PGRST202' || e.code == '42883' || e.message.contains('post_order_event');
+          e.code == 'PGRST202' ||
+          e.code == '42883' ||
+          e.message.contains('post_order_event');
       if (!missingFn) {
         // RPC exists but failed; fall back to send_message with dedupe.
       }
@@ -242,7 +258,8 @@ class ChatRepository {
       );
       return;
     } on PostgrestException catch (e) {
-      final missingUnique = e.code == '42P10' ||
+      final missingUnique =
+          e.code == '42P10' ||
           e.message.contains('no unique or exclusion constraint');
       if (!missingUnique && dedupeKey != null && dedupeKey.isNotEmpty) {
         return;
@@ -268,10 +285,13 @@ class ChatRepository {
     }
 
     try {
-      await _client.from(SupabaseTables.conversations).update({
-        'last_message_at': DateTime.now().toIso8601String(),
-        'last_message_text': text,
-      }).eq('id', conv.id);
+      await _client
+          .from(SupabaseTables.conversations)
+          .update({
+            'last_message_at': DateTime.now().toIso8601String(),
+            'last_message_text': text,
+          })
+          .eq('id', conv.id);
     } catch (_) {}
   }
 
@@ -287,10 +307,12 @@ class ChatRepository {
         .eq('user_id', userId)
         .order('last_read_at', ascending: false)
         .limit(200)
-        .map((rows) => {
-              for (final row in rows)
-                row['conversation_id'].toString(): ReadState.fromJson(row)
-            });
+        .map(
+          (rows) => {
+            for (final row in rows)
+              row['conversation_id'].toString(): ReadState.fromJson(row),
+          },
+        );
   }
 }
 

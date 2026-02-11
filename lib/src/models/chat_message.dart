@@ -8,6 +8,7 @@ class ChatMessage {
     required this.text,
     required this.type,
     this.payload,
+    this.moderationStatus,
     this.createdAt,
     this.deletedAt,
   });
@@ -18,13 +19,15 @@ class ChatMessage {
   final String text;
   final ChatMessageType type;
   final Map<String, dynamic>? payload;
+  final String? moderationStatus;
   final DateTime? createdAt;
   final DateTime? deletedAt;
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
     final typeString = (json['type'] as String?) ?? 'text';
     final payload = (json['payload'] as Map?)?.cast<String, dynamic>();
-    final inferredSystem = payload != null &&
+    final inferredSystem =
+        payload != null &&
         (payload.containsKey('status') ||
             payload.containsKey('tracking_number') ||
             payload.containsKey('label_url') ||
@@ -41,6 +44,7 @@ class ChatMessage {
       text: json['text']?.toString() ?? '',
       type: type,
       payload: payload,
+      moderationStatus: json['moderation_status']?.toString(),
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'] as String)
           : null,

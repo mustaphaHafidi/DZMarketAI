@@ -18,21 +18,29 @@ class ProductService {
       () => supabase
           .from(SupabaseTables.products)
           .stream(primaryKey: ['id'])
+          .eq('moderation_status', 'approved')
           .order('created_at'),
     );
     if (userId == null) {
       return base
           .map((rows) => rows.map(Product.fromJson).toList())
-          .map((list) =>
-              list.where((p) => !p.isArchived && p.stockQuantity > 0).toList());
+          .map(
+            (list) => list
+                .where((p) => !p.isArchived && p.stockQuantity > 0)
+                .toList(),
+          );
     }
     // Filter out own products client-side if filter helper isn't available.
     return base
         .map((rows) => rows.map(Product.fromJson).toList())
-        .map((list) => list
-            .where((p) =>
-                p.ownerId != userId && !p.isArchived && p.stockQuantity > 0)
-            .toList());
+        .map(
+          (list) => list
+              .where(
+                (p) =>
+                    p.ownerId != userId && !p.isArchived && p.stockQuantity > 0,
+              )
+              .toList(),
+        );
   }
 
   Stream<List<Product>> streamProductsForOwner(String ownerId) {
@@ -66,15 +74,21 @@ class ProductService {
   }) async {
     final userId = supabase.auth.currentUser?.id;
     final q = InputSanitizer.sanitizeSearchQuery(search ?? '').toLowerCase();
-    final safeCategoryId =
-        InputSanitizer.sanitizeOptionalText(categoryId, maxLength: 20);
-    final safeCondition =
-        InputSanitizer.sanitizeOptionalText(condition, maxLength: 20);
+    final safeCategoryId = InputSanitizer.sanitizeOptionalText(
+      categoryId,
+      maxLength: 20,
+    );
+    final safeCondition = InputSanitizer.sanitizeOptionalText(
+      condition,
+      maxLength: 20,
+    );
     final safeBrand = InputSanitizer.sanitizeOptionalText(brand, maxLength: 40);
     final safeSize = InputSanitizer.sanitizeOptionalText(size, maxLength: 40);
     final safeColor = InputSanitizer.sanitizeOptionalText(color, maxLength: 40);
-    final safeNearbyWilaya =
-        InputSanitizer.sanitizeOptionalText(nearbyWilaya, maxLength: 60);
+    final safeNearbyWilaya = InputSanitizer.sanitizeOptionalText(
+      nearbyWilaya,
+      maxLength: 60,
+    );
     final key = [
       'q=$q',
       'cat=${safeCategoryId ?? ''}',
@@ -104,6 +118,7 @@ class ProductService {
     var filtered = query;
     filtered = filtered.eq('is_archived', false);
     filtered = filtered.gt('stock_quantity', 0);
+    filtered = filtered.eq('moderation_status', 'approved');
     if (excludeOwner && userId != null) {
       filtered = filtered.neq('owner_id', userId);
     }
@@ -199,21 +214,35 @@ class ProductService {
         L10n.trLocale(locale, 'listing.add.error_add_title'),
       );
     }
-    final safeDescription =
-        InputSanitizer.sanitizeOptionalText(description, maxLength: 1200, allowNewlines: true);
+    final safeDescription = InputSanitizer.sanitizeOptionalText(
+      description,
+      maxLength: 1200,
+      allowNewlines: true,
+    );
     final safeImageUrl = InputSanitizer.sanitizeUrl(imageUrl);
-    final safeImageUrls = InputSanitizer.sanitizeUrlList(imageUrls, maxItems: 10);
-    final safeCategoryId =
-        InputSanitizer.sanitizeOptionalText(categoryId, maxLength: 20);
-    final safeCondition =
-        InputSanitizer.sanitizeOptionalText(condition, maxLength: 20);
+    final safeImageUrls = InputSanitizer.sanitizeUrlList(
+      imageUrls,
+      maxItems: 10,
+    );
+    final safeCategoryId = InputSanitizer.sanitizeOptionalText(
+      categoryId,
+      maxLength: 20,
+    );
+    final safeCondition = InputSanitizer.sanitizeOptionalText(
+      condition,
+      maxLength: 20,
+    );
     final safeBrand = InputSanitizer.sanitizeOptionalText(brand, maxLength: 40);
     final safeSize = InputSanitizer.sanitizeOptionalText(size, maxLength: 40);
     final safeColor = InputSanitizer.sanitizeOptionalText(color, maxLength: 40);
-    final safeWilaya =
-        InputSanitizer.sanitizeOptionalText(locationWilaya, maxLength: 60);
-    final safeDaira =
-        InputSanitizer.sanitizeOptionalText(locationDaira, maxLength: 60);
+    final safeWilaya = InputSanitizer.sanitizeOptionalText(
+      locationWilaya,
+      maxLength: 60,
+    );
+    final safeDaira = InputSanitizer.sanitizeOptionalText(
+      locationDaira,
+      maxLength: 60,
+    );
     final safeCostPrice = costPrice;
     if (safeCostPrice != null && safeCostPrice < 0) {
       throw FormatException(
@@ -239,33 +268,34 @@ class ProductService {
     await RateLimiter.instance.run(
       'products.insert',
       () => supabase.from(SupabaseTables.products).insert({
-      'title': safeTitle,
-      'price': price,
-      'description': safeDescription,
-      'image_url': safeImageUrl,
-      'image_urls': safeImageUrls,
-      'category_id': safeCategoryId != null
-          ? int.tryParse(safeCategoryId) ?? safeCategoryId
-          : null,
-      'condition': safeCondition,
-      'brand': safeBrand,
-      'size': safeSize,
-      'color': safeColor,
-      'location_wilaya': safeWilaya,
-      'location_daira': safeDaira,
-      'delivery_options': safeDelivery,
-      'shipping_free': shippingFree,
-      'exchange_after_delivery': exchangeAfterDelivery,
-      'insurance_active': insuranceActive,
-      'declared_value': safeDeclaredValue,
-      'weight_kg': safeWeight,
-      'height_cm': safeHeight,
-      'width_cm': safeWidth,
-      'length_cm': safeLength,
-      'allow_stopdesk': safeAllowStopdesk,
-      'owner_id': userId,
-      'stock_quantity': stockQuantity,
-      'cost_price': safeCostPrice,
+        'title': safeTitle,
+        'price': price,
+        'description': safeDescription,
+        'image_url': safeImageUrl,
+        'image_urls': safeImageUrls,
+        'category_id': safeCategoryId != null
+            ? int.tryParse(safeCategoryId) ?? safeCategoryId
+            : null,
+        'condition': safeCondition,
+        'brand': safeBrand,
+        'size': safeSize,
+        'color': safeColor,
+        'location_wilaya': safeWilaya,
+        'location_daira': safeDaira,
+        'delivery_options': safeDelivery,
+        'shipping_free': shippingFree,
+        'exchange_after_delivery': exchangeAfterDelivery,
+        'insurance_active': insuranceActive,
+        'declared_value': safeDeclaredValue,
+        'weight_kg': safeWeight,
+        'height_cm': safeHeight,
+        'width_cm': safeWidth,
+        'length_cm': safeLength,
+        'allow_stopdesk': safeAllowStopdesk,
+        'owner_id': userId,
+        'stock_quantity': stockQuantity,
+        'cost_price': safeCostPrice,
+        'moderation_status': 'approved',
       }),
     );
   }
@@ -312,20 +342,31 @@ class ProductService {
     final safeId = InputSanitizer.sanitizeId(id, maxLength: 64);
     final payload = <String, dynamic>{};
     final safeTitle = InputSanitizer.sanitizeOptionalText(title, maxLength: 80);
-    final safeDesc =
-        InputSanitizer.sanitizeOptionalText(description, maxLength: 1200, allowNewlines: true);
+    final safeDesc = InputSanitizer.sanitizeOptionalText(
+      description,
+      maxLength: 1200,
+      allowNewlines: true,
+    );
     final safeImageUrl = InputSanitizer.sanitizeUrl(imageUrl);
-    final safeCategoryId =
-        InputSanitizer.sanitizeOptionalText(categoryId, maxLength: 20);
-    final safeCondition =
-        InputSanitizer.sanitizeOptionalText(condition, maxLength: 20);
+    final safeCategoryId = InputSanitizer.sanitizeOptionalText(
+      categoryId,
+      maxLength: 20,
+    );
+    final safeCondition = InputSanitizer.sanitizeOptionalText(
+      condition,
+      maxLength: 20,
+    );
     final safeBrand = InputSanitizer.sanitizeOptionalText(brand, maxLength: 40);
     final safeSize = InputSanitizer.sanitizeOptionalText(size, maxLength: 40);
     final safeColor = InputSanitizer.sanitizeOptionalText(color, maxLength: 40);
-    final safeWilaya =
-        InputSanitizer.sanitizeOptionalText(locationWilaya, maxLength: 60);
-    final safeDaira =
-        InputSanitizer.sanitizeOptionalText(locationDaira, maxLength: 60);
+    final safeWilaya = InputSanitizer.sanitizeOptionalText(
+      locationWilaya,
+      maxLength: 60,
+    );
+    final safeDaira = InputSanitizer.sanitizeOptionalText(
+      locationDaira,
+      maxLength: 60,
+    );
     if (stockQuantity != null && stockQuantity < 0) {
       throw FormatException(
         L10n.trLocale(locale, 'listing.add.error_invalid_stock'),
@@ -341,7 +382,10 @@ class ProductService {
     if (safeDesc != null) payload['description'] = safeDesc;
     if (safeImageUrl != null) payload['image_url'] = safeImageUrl;
     if (imageUrls != null) {
-      payload['image_urls'] = InputSanitizer.sanitizeUrlList(imageUrls, maxItems: 10);
+      payload['image_urls'] = InputSanitizer.sanitizeUrlList(
+        imageUrls,
+        maxItems: 10,
+      );
     }
     if (safeCategoryId != null) {
       payload['category_id'] = int.tryParse(safeCategoryId) ?? safeCategoryId;
@@ -387,7 +431,8 @@ class ProductService {
 
   Future<void> deleteProduct(dynamic id) async {
     final userId = supabase.auth.currentUser?.id;
-    if (userId == null) throw StateError('User must be signed in to delete products.');
+    if (userId == null)
+      throw StateError('User must be signed in to delete products.');
     final safeId = InputSanitizer.sanitizeId(id.toString(), maxLength: 64);
     final dynamic productId = id is int ? id : int.tryParse(safeId) ?? safeId;
     await RateLimiter.instance.run(

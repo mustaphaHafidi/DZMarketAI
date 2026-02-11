@@ -1989,6 +1989,11 @@ create table if not exists public.products (
     brand text,
     size text,
     color text,
+    moderation_status text not null default 'approved',
+    moderation_reason text,
+    moderation_score numeric(6,4),
+    moderation_labels jsonb,
+    moderation_updated_at timestamptz,
     status text not null default 'active' check (status in ('active','paused','sold')),
     stock_quantity int not null default 1 check (stock_quantity >= 0),
     sold_count int not null default 0 check (sold_count >= 0),
@@ -2033,6 +2038,16 @@ alter table public.products
   add column if not exists width_cm int default 0;
 alter table public.products
   add column if not exists length_cm int default 0;
+alter table public.products
+  add column if not exists moderation_status text default 'approved';
+alter table public.products
+  add column if not exists moderation_reason text;
+alter table public.products
+  add column if not exists moderation_score numeric(6,4);
+alter table public.products
+  add column if not exists moderation_labels jsonb;
+alter table public.products
+  add column if not exists moderation_updated_at timestamptz;
 alter table public.products enable row level security;
 drop policy if exists "products readable by all" on public.products;
 drop policy if exists "products insert by seller" on public.products;
@@ -2070,6 +2085,7 @@ create index if not exists products_owner_idx on public.products (owner_id);
 create index if not exists products_category_slug_idx on public.products (category_slug);
 create index if not exists products_category_id_idx on public.products (category_id);
 create index if not exists products_status_created_idx on public.products (status, created_at desc);
+create index if not exists products_moderation_status_idx on public.products (moderation_status);
 
 -- Favorites ------------------------------------------------------------------
 create table if not exists public.favorites (
@@ -2839,12 +2855,22 @@ CREATE TABLE IF NOT EXISTS public.messages (
   payload jsonb,
   dedupe_key text,
   created_at timestamptz DEFAULT now(),
-  deleted_at timestamptz
+  deleted_at timestamptz,
+  moderation_status text default 'approved',
+  moderation_reason text,
+  moderation_score numeric(6,4),
+  moderation_labels jsonb,
+  moderation_updated_at timestamptz
 );
 ALTER TABLE public.messages
   ADD COLUMN IF NOT EXISTS type text default 'text',
   ADD COLUMN IF NOT EXISTS payload jsonb,
-  ADD COLUMN IF NOT EXISTS dedupe_key text;
+  ADD COLUMN IF NOT EXISTS dedupe_key text,
+  ADD COLUMN IF NOT EXISTS moderation_status text default 'approved',
+  ADD COLUMN IF NOT EXISTS moderation_reason text,
+  ADD COLUMN IF NOT EXISTS moderation_score numeric(6,4),
+  ADD COLUMN IF NOT EXISTS moderation_labels jsonb,
+  ADD COLUMN IF NOT EXISTS moderation_updated_at timestamptz;
 DROP INDEX IF EXISTS public.messages_dedupe_uniq;
 CREATE UNIQUE INDEX IF NOT EXISTS messages_dedupe_uniq
   ON public.messages(conversation_id, dedupe_key);
