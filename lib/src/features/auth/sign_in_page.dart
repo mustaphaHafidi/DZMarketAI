@@ -162,6 +162,18 @@ class _SignInPageState extends State<SignInPage> {
                               prefixIcon: const Icon(Icons.lock_outline),
                             ),
                           ),
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: _loading
+                                  ? null
+                                  : () => context.go('/reset-password'),
+                              child: Text(
+                                L10n.tr(context, 'auth.forgot_password'),
+                              ),
+                            ),
+                          ),
                           const SizedBox(height: 12),
                           if (_error != null)
                             Text(
