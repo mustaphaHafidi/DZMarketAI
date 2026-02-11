@@ -424,6 +424,8 @@
     "auth.reset_password.new_password":  "كلمة المرور الجديدة",
     "auth.reset_password.confirm_password":  "تأكيد كلمة المرور",
     "auth.reset_password.update":  "تحديث",
+    "auth.reset_password.email_invalid_provider":  "البريد غير صالح أو الإرسال معطّل. تحقق من تفعيل البريد/SMTP.",
+    "auth.reset_password.smtp_required":  "إرسال البريد غير مُهيّأ. تحقق من إعدادات SMTP في Supabase.",
     "auth.reset_password.mismatch":  "كلمتا المرور غير متطابقتين.",
     "auth.reset_password.success":  "تم تحديث كلمة المرور.",
     "checkout.error_height_invalid":  "ارتفاع غير صالح.",

@@ -45,7 +45,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
     } on FormatException catch (e) {
       setState(() => _error = e.message);
     } on AuthException catch (e) {
-      setState(() => _error = e.message);
+      setState(() => _error = _mapAuthError(e));
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
@@ -75,12 +75,23 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
     } on FormatException catch (e) {
       setState(() => _error = e.message);
     } on AuthException catch (e) {
-      setState(() => _error = e.message);
+      setState(() => _error = _mapAuthError(e));
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  String _mapAuthError(AuthException e) {
+    final message = e.message.toLowerCase();
+    if (message.contains('email address') && message.contains('invalid')) {
+      return L10n.tr(context, 'auth.reset_password.email_invalid_provider');
+    }
+    if (message.contains('smtp') || message.contains('mail')) {
+      return L10n.tr(context, 'auth.reset_password.smtp_required');
+    }
+    return e.message;
   }
 
   @override
