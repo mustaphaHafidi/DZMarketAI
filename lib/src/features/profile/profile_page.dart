@@ -244,8 +244,6 @@ class _ProfilePageState extends State<ProfilePage> {
     switch (role) {
       case UserRole.superadmin:
         return 'superadmin';
-      case UserRole.admin:
-        return 'admin';
       case UserRole.seller:
       case UserRole.buyer:
       case null:
@@ -516,9 +514,6 @@ class _ProfilePageState extends State<ProfilePage> {
 
     final safeAvatar = InputSanitizer.safeUrl(_avatarUrl);
     final isSeller = _isSeller;
-    final isAdmin =
-        _profile?.role == UserRole.admin ||
-        _profile?.role == UserRole.superadmin;
     final isSuperAdmin = _profile?.role == UserRole.superadmin;
 
     return Scaffold(
@@ -840,8 +835,8 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                   child: Column(
                     children: [
-                      if (isAdmin) const Divider(height: 1),
-                      if (isAdmin)
+                      if (isSuperAdmin) const Divider(height: 1),
+                      if (isSuperAdmin)
                         ListTile(
                           leading: const Icon(
                             Icons.admin_panel_settings_outlined,

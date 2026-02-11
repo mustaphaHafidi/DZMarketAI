@@ -1,4 +1,4 @@
-enum UserRole { buyer, seller, admin, superadmin }
+enum UserRole { buyer, seller, superadmin }
 
 enum UserStatus { active, suspended, banned }
 
@@ -67,7 +67,8 @@ class Profile {
       case 'seller':
         return UserRole.seller;
       case 'admin':
-        return UserRole.admin;
+        // Backward compatibility: legacy "admin" is treated as superadmin.
+        return UserRole.superadmin;
       case 'superadmin':
         return UserRole.superadmin;
       default:
