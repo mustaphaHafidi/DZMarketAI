@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dzmarket/src/features/chat/chat_room_page.dart';
 import 'package:dzmarket/src/models/chat_message.dart';
 import 'package:dzmarket/src/models/conversation.dart';
@@ -21,12 +24,16 @@ class _ChatHubPageState extends State<ChatHubPage> {
   final ConversationMetaService _metaService = ConversationMetaService();
   final TextEditingController _searchCtrl = TextEditingController();
   String _query = '';
+  Timer? _searchDebounce;
   final RefreshController _refreshController = RefreshController();
   static const int _maxConversations = 30;
+  Future<Map<String, ConversationMeta>>? _metaFuture;
+  String _metaKey = '';
 
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _searchDebounce?.cancel();
     super.dispose();
   }
 
@@ -69,8 +76,13 @@ class _ChatHubPageState extends State<ChatHubPage> {
                     borderSide: BorderSide.none,
                   ),
                 ),
-                onChanged: (v) =>
-                    setState(() => _query = v.trim().toLowerCase()),
+                onChanged: (v) {
+                  _searchDebounce?.cancel();
+                  _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+                    if (!mounted) return;
+                    setState(() => _query = v.trim().toLowerCase());
+                  });
+                },
               ),
             ),
             Expanded(
@@ -102,10 +114,17 @@ class _ChatHubPageState extends State<ChatHubPage> {
                     stream: _repo.watchReadStates(),
                     builder: (context, readSnap) {
                       final readMap = readSnap.data ?? const {};
+                      final nextKey = conversations
+                          .map((c) => c.id)
+                          .toList()
+                          .join(',');
+                      if (_metaFuture == null || _metaKey != nextKey) {
+                        _metaFuture =
+                            _metaService.fetchManyForConversations(conversations);
+                        _metaKey = nextKey;
+                      }
                       return FutureBuilder<Map<String, ConversationMeta>>(
-                        future: _metaService.fetchManyForConversations(
-                          conversations,
-                        ),
+                        future: _metaFuture,
                         builder: (context, metaSnap) {
                           final metaMap = metaSnap.data ?? const {};
                           final visible = conversations
@@ -197,11 +216,27 @@ class _ChatHubPageState extends State<ChatHubPage> {
                                         ? ClipRRect(
                                             borderRadius:
                                                 BorderRadius.circular(8),
-                                            child: Image.network(
-                                              meta!.productImage!,
+                                            child: CachedNetworkImage(
+                                              imageUrl: meta!.productImage!,
                                               width: 48,
                                               height: 48,
                                               fit: BoxFit.cover,
+                                              placeholder: (context, _) =>
+                                                  Container(
+                                                width: 48,
+                                                height: 48,
+                                                color: Colors.grey.shade300,
+                                              ),
+                                              errorWidget:
+                                                  (context, _, __) =>
+                                                      Container(
+                                                width: 48,
+                                                height: 48,
+                                                color: Colors.grey.shade300,
+                                                child: const Icon(
+                                                  Icons.image_not_supported,
+                                                ),
+                                              ),
                                             ),
                                           )
                                         : const Icon(

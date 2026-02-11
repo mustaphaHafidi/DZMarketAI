@@ -549,6 +549,7 @@
     "auth.phone_invalid":  "رقم الهاتف غير صالح",
     "checkout.width_cm":  "العرض (سم)",
     "common.offline_banner":  "انقطع الاتصال. بعض الإجراءات معلّقة.",
+    "common.offline_action":  "لا يوجد اتصال. حاول مرة أخرى.",
     "shipments.created_label":  "تم الإنشاء في {date}",
     "listing.add.step_location":  "الموقع",
     "orders.review_rating":  "التقييم: {rating}",

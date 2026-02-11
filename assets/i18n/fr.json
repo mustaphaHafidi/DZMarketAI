@@ -260,6 +260,7 @@
     "courier_settings.login_required":  "Connectez-vous pour enregistrer vos transporteurs.",
     "chat.new_contact":  "Nouveau contact",
     "common.offline_banner":  "Connexion interrompue. Certaines actions sont en attente.",
+    "common.offline_action":  "Pas de connexion. Réessaye.",
     "listing.add.step_delivery":  "Livraison",
     "listing.add.step_shipping":  "Expédition",
     "checkout.confirm":  "Valider et payer",

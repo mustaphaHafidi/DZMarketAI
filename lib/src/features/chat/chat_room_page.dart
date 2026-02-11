@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dzmarket/src/features/listings/product_detail_page.dart';
 import 'package:dzmarket/src/models/chat_message.dart';
 import 'package:dzmarket/src/services/chat_repository.dart';
@@ -281,12 +282,17 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                               child: const Icon(Icons.image_not_supported),
                             );
                           }
-                          return Image.network(
-                            imageUrl,
+                          return CachedNetworkImage(
+                            imageUrl: imageUrl,
                             width: 56,
                             height: 56,
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
+                            placeholder: (context, _) => Container(
+                              width: 56,
+                              height: 56,
+                              color: Colors.grey.shade300,
+                            ),
+                            errorWidget: (context, _, __) {
                               return Container(
                                 width: 56,
                                 height: 56,
