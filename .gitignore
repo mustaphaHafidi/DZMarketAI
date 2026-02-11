@@ -50,3 +50,7 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 /android/key.properties
+
+# Local history logs
+/historique IA/
+rollout-*.jsonl
