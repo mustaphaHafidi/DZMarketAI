@@ -1,4 +1,4 @@
-﻿// ignore_for_file: deprecated_member_use
+// ignore_for_file: deprecated_member_use
 import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -143,18 +143,19 @@ class _ListingsPageState extends State<ListingsPage> {
             ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                ActionChip(
-                  avatar: const Icon(Icons.tune, size: 18),
-                  label: Text(L10n.tr(context, 'listing.filters.all_filters')),
-                  onPressed: () => _showFilters(context),
-                ),
-                ActionChip(
-                  label: Text(
-                    _category == 'any'
+            child: SizedBox(
+              height: 44,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  _FilterPill(
+                    icon: Icons.tune,
+                    label: _allFiltersLabel(context),
+                    onPressed: () => _showFilters(context),
+                  ),
+                  const SizedBox(width: 8),
+                  _FilterPill(
+                    label: _category == 'any'
                         ? L10n.tr(context, 'listing.filters.all_categories')
                         : _categoryLabel(
                             context,
@@ -163,32 +164,45 @@ class _ListingsPageState extends State<ListingsPage> {
                               orElse: () => {'id': _category},
                             ),
                           ),
+                    onPressed: () => _openCategoryQuick(context),
                   ),
-                  onPressed: () => _openCategoryQuick(context),
-                ),
-                ActionChip(
-                  label: Text(_formatPriceQuickLabel(context)),
-                  onPressed: () => _openPriceQuick(context),
-                ),
-                FilterChip(
-                  label: Text(L10n.tr(context, 'listing.filters.nearby')),
-                  selected: _nearbyOnly,
-                  onSelected: (value) {
-                    if (_buyerWilaya == null || _buyerWilaya!.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            L10n.tr(context, 'listing.filters.nearby_unavailable'),
+                  const SizedBox(width: 8),
+                  _FilterPill(
+                    label: _formatPriceQuickLabel(context),
+                    onPressed: () => _openPriceQuick(context),
+                  ),
+                  const SizedBox(width: 8),
+                  FilterChip(
+                    label: Text(L10n.tr(context, 'listing.filters.nearby')),
+                    selected: _nearbyOnly,
+                    onSelected: (value) {
+                      if (_buyerWilaya == null || _buyerWilaya!.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              L10n.tr(
+                                context,
+                                'listing.filters.nearby_unavailable',
+                              ),
+                            ),
                           ),
-                        ),
-                      );
-                      return;
-                    }
-                    setState(() => _nearbyOnly = value);
-                    _refresh();
-                  },
-                ),
-              ],
+                        );
+                        return;
+                      }
+                      setState(() => _nearbyOnly = value);
+                      _refresh();
+                    },
+                  ),
+                  if (_hasActiveFilters()) ...[
+                    const SizedBox(width: 8),
+                    _FilterPill(
+                      icon: Icons.clear_all,
+                      label: L10n.tr(context, 'common.reset'),
+                      onPressed: _clearFilters,
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
           Expanded(
@@ -207,7 +221,6 @@ class _ListingsPageState extends State<ListingsPage> {
                     crossAxisCount,
                   ),
                 );
-
               },
             ),
           ),
@@ -254,11 +267,13 @@ class _ListingsPageState extends State<ListingsPage> {
   String _safeColor() =>
       InputSanitizer.sanitizeText(_color.text, maxLength: 40);
 
-  double? _safeMinPrice() =>
-      double.tryParse(InputSanitizer.sanitizeText(_priceMin.text, maxLength: 16));
+  double? _safeMinPrice() => double.tryParse(
+    InputSanitizer.sanitizeText(_priceMin.text, maxLength: 16),
+  );
 
-  double? _safeMaxPrice() =>
-      double.tryParse(InputSanitizer.sanitizeText(_priceMax.text, maxLength: 16));
+  double? _safeMaxPrice() => double.tryParse(
+    InputSanitizer.sanitizeText(_priceMax.text, maxLength: 16),
+  );
 
   String _queryKey() {
     final userId = supabase.auth.currentUser?.id ?? '';
@@ -398,11 +413,7 @@ class _ListingsPageState extends State<ListingsPage> {
       return const _GridSkeleton();
     }
     if (filtered.isEmpty) {
-      return Center(
-        child: Text(
-          L10n.tr(context, 'listing.empty'),
-        ),
-      );
+      return Center(child: Text(L10n.tr(context, 'listing.empty')));
     }
     final showLoader = _loading && _products.isNotEmpty;
     final itemCount = filtered.length + (showLoader ? 1 : 0);
@@ -430,9 +441,9 @@ class _ListingsPageState extends State<ListingsPage> {
             onFavoriteToggle: userId == null
                 ? null
                 : () => FavoriteService().toggleFavorite(
-                      productId: product.id,
-                      isFav: isFav,
-                    ),
+                    productId: product.id,
+                    isFav: isFav,
+                  ),
           );
         },
       ),
@@ -561,193 +572,267 @@ class _ListingsPageState extends State<ListingsPage> {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      showDragHandle: true,
       builder: (context) {
-        return SafeArea(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-              left: 16,
-              right: 16,
-              top: 16,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            void updateFilters(VoidCallback fn) {
+              setState(fn);
+              setModalState(fn);
+            }
+
+            void resetLocal() {
+              updateFilters(() {
+                _condition = 'any';
+                _category = 'any';
+                _priceMin.clear();
+                _priceMax.clear();
+                _brand.clear();
+                _size.clear();
+                _color.clear();
+                _sort = 'newest';
+                _showFavoritesOnly = false;
+                _nearbyOnly = false;
+              });
+            }
+
+            return SafeArea(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                  left: 16,
+                  right: 16,
+                  top: 8,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Row(
+                      children: [
+                        Text(
+                          L10n.tr(context, 'listing.filters.title'),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: resetLocal,
+                          child: Text(L10n.tr(context, 'common.reset')),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
                     Text(
-                      L10n.tr(context, 'listing.filters.title'),
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      L10n.tr(context, 'listing.add.condition_label'),
+                      style: Theme.of(context).textTheme.labelLarge,
                     ),
-                    const Spacer(),
-                    TextButton(
-                      onPressed: _clearFilters,
-                      child: Text(L10n.tr(context, 'common.reset')),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _conditions
+                          .map(
+                            (c) => ChoiceChip(
+                              label: Text(_conditionLabel(context, c)),
+                              selected: _condition == c,
+                              onSelected: (_) =>
+                                  updateFilters(() => _condition = c),
+                            ),
+                          )
+                          .toList(),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _conditions
-                      .map(
-                        (c) => ChoiceChip(
-                          label: Text(_conditionLabel(context, c)),
-                          selected: _condition == c,
-                          onSelected: (_) => setState(() => _condition = c),
-                        ),
-                      )
-                      .toList(),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _categories
-                      .map(
-                        (c) => ChoiceChip(
-                          label: Text(
-                            c['id'] == 'any'
-                                ? L10n.tr(
-                                    context,
-                                    'listing.filters.all_categories',
-                                  )
-                                : _categoryLabel(context, c),
-                          ),
-                          selected: _category == c['id'],
-                          onSelected: (_) =>
-                              setState(() => _category = c['id'] ?? 'any'),
-                        ),
-                      )
-                      .toList(),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _priceMin,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: L10n.tr(context, 'listing.filters.min_price'),
-                        ),
-                        onChanged: (_) => setState(() {}),
-                      ),
+                    const SizedBox(height: 12),
+                    Text(
+                      L10n.tr(context, 'listing.filters.category_quick'),
+                      style: Theme.of(context).textTheme.labelLarge,
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: _priceMax,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: L10n.tr(context, 'listing.filters.max_price'),
-                        ),
-                        onChanged: (_) => setState(() {}),
-                      ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _categories
+                          .map(
+                            (c) => ChoiceChip(
+                              label: Text(
+                                c['id'] == 'any'
+                                    ? L10n.tr(
+                                        context,
+                                        'listing.filters.all_categories',
+                                      )
+                                    : _categoryLabel(context, c),
+                              ),
+                              selected: _category == c['id'],
+                              onSelected: (_) => updateFilters(
+                                () => _category = c['id'] ?? 'any',
+                              ),
+                            ),
+                          )
+                          .toList(),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _brand,
-                  decoration: InputDecoration(
-                    labelText: L10n.tr(context, 'listing.filters.brand'),
-                  ),
-                  onChanged: (_) => setState(() {}),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _size,
-                  decoration: InputDecoration(
-                    labelText: L10n.tr(context, 'listing.filters.size'),
-                  ),
-                  onChanged: (_) => setState(() {}),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _color,
-                  decoration: InputDecoration(
-                    labelText: L10n.tr(context, 'listing.filters.color'),
-                  ),
-                  onChanged: (_) => setState(() {}),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: _sort,
-                  decoration: InputDecoration(
-                    labelText: L10n.tr(context, 'listing.filters.sort'),
-                  ),
-                  items: [
-                    DropdownMenuItem(
-                      value: 'newest',
-                      child: Text(
-                        L10n.tr(context, 'listing.sort.newest'),
-                      ),
+                    const SizedBox(height: 12),
+                    Text(
+                      L10n.tr(context, 'listing.filters.price_quick'),
+                      style: Theme.of(context).textTheme.labelLarge,
                     ),
-                    DropdownMenuItem(
-                      value: 'price_low',
-                      child: Text(
-                        L10n.tr(context, 'listing.sort.price_low'),
-                      ),
-                    ),
-                    DropdownMenuItem(
-                      value: 'price_high',
-                      child: Text(
-                        L10n.tr(context, 'listing.sort.price_high'),
-                      ),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() => _sort = value);
-                  },
-                ),
-                const SizedBox(height: 12),
-                SwitchListTile(
-                  value: _nearbyOnly,
-                  onChanged: (value) {
-                    if (_buyerWilaya == null || _buyerWilaya!.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            L10n.tr(context, 'listing.filters.nearby_unavailable'),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _priceMin,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: L10n.tr(
+                                context,
+                                'listing.filters.min_price',
+                              ),
+                            ),
+                            onChanged: (_) => setModalState(() {}),
                           ),
                         ),
-                      );
-                      return;
-                    }
-                    setState(() => _nearbyOnly = value);
-                  },
-                  title: Text(L10n.tr(context, 'listing.filters.nearby')),
-                  subtitle: Text(
-                    L10n.tr(
-                      context,
-                      'listing.filters.nearby_hint',
-                      params: {'wilaya': _buyerWilaya ?? '-'},
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _priceMax,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: L10n.tr(
+                                context,
+                                'listing.filters.max_price',
+                              ),
+                            ),
+                            onChanged: (_) => setModalState(() {}),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      _refresh();
-                    },
-                    child: Text(
-                      L10n.tr(context, 'listing.filters.show_results'),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: _sort,
+                      decoration: InputDecoration(
+                        labelText: L10n.tr(context, 'listing.filters.sort'),
+                      ),
+                      items: [
+                        DropdownMenuItem(
+                          value: 'newest',
+                          child: Text(L10n.tr(context, 'listing.sort.newest')),
+                        ),
+                        DropdownMenuItem(
+                          value: 'price_low',
+                          child: Text(
+                            L10n.tr(context, 'listing.sort.price_low'),
+                          ),
+                        ),
+                        DropdownMenuItem(
+                          value: 'price_high',
+                          child: Text(
+                            L10n.tr(context, 'listing.sort.price_high'),
+                          ),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) return;
+                        updateFilters(() => _sort = value);
+                      },
                     ),
-                  ),
+                    const SizedBox(height: 12),
+                    SwitchListTile(
+                      value: _nearbyOnly,
+                      onChanged: (value) {
+                        if (_buyerWilaya == null || _buyerWilaya!.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                L10n.tr(
+                                  context,
+                                  'listing.filters.nearby_unavailable',
+                                ),
+                              ),
+                            ),
+                          );
+                          return;
+                        }
+                        updateFilters(() => _nearbyOnly = value);
+                      },
+                      title: Text(L10n.tr(context, 'listing.filters.nearby')),
+                      subtitle: Text(
+                        L10n.tr(
+                          context,
+                          'listing.filters.nearby_hint',
+                          params: {'wilaya': _buyerWilaya ?? '-'},
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    ExpansionTile(
+                      tilePadding: EdgeInsets.zero,
+                      title: Text(
+                        L10n.tr(context, 'listing.filters.more'),
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      children: [
+                        TextField(
+                          controller: _brand,
+                          decoration: InputDecoration(
+                            labelText: L10n.tr(
+                              context,
+                              'listing.filters.brand',
+                            ),
+                          ),
+                          onChanged: (_) => setModalState(() {}),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _size,
+                          decoration: InputDecoration(
+                            labelText: L10n.tr(context, 'listing.filters.size'),
+                          ),
+                          onChanged: (_) => setModalState(() {}),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _color,
+                          decoration: InputDecoration(
+                            labelText: L10n.tr(
+                              context,
+                              'listing.filters.color',
+                            ),
+                          ),
+                          onChanged: (_) => setModalState(() {}),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: resetLocal,
+                            child: Text(L10n.tr(context, 'common.reset')),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              _refresh();
+                            },
+                            child: Text(
+                              L10n.tr(context, 'listing.filters.show_results'),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -798,6 +883,27 @@ class _ListingsPageState extends State<ListingsPage> {
       return '${L10n.tr(context, 'listing.filters.min_price')}: ${min.toStringAsFixed(0)}';
     }
     return '${L10n.tr(context, 'listing.filters.max_price')}: ${max!.toStringAsFixed(0)}';
+  }
+
+  int _activeFilterCount() {
+    var count = 0;
+    if (_safeCondition() != 'any') count++;
+    if (_safeCategory() != 'any') count++;
+    if (_safeMinPrice() != null || _safeMaxPrice() != null) count++;
+    if (_safeBrand().isNotEmpty) count++;
+    if (_safeSize().isNotEmpty) count++;
+    if (_safeColor().isNotEmpty) count++;
+    if (_sort != 'newest') count++;
+    if (_nearbyOnly) count++;
+    return count;
+  }
+
+  bool _hasActiveFilters() => _activeFilterCount() > 0;
+
+  String _allFiltersLabel(BuildContext context) {
+    final base = L10n.tr(context, 'listing.filters.all_filters');
+    final count = _activeFilterCount();
+    return count > 0 ? '$base ($count)' : base;
   }
 
   Future<void> _openCategoryQuick(BuildContext context) async {
@@ -878,8 +984,10 @@ class _ListingsPageState extends State<ListingsPage> {
                         controller: minCtrl,
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
-                          labelText:
-                              L10n.tr(context, 'listing.filters.min_price'),
+                          labelText: L10n.tr(
+                            context,
+                            'listing.filters.min_price',
+                          ),
                         ),
                       ),
                     ),
@@ -889,8 +997,10 @@ class _ListingsPageState extends State<ListingsPage> {
                         controller: maxCtrl,
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
-                          labelText:
-                              L10n.tr(context, 'listing.filters.max_price'),
+                          labelText: L10n.tr(
+                            context,
+                            'listing.filters.max_price',
+                          ),
                         ),
                       ),
                     ),
@@ -942,9 +1052,9 @@ class _ListingsPageState extends State<ListingsPage> {
   }
 
   Future<void> _openAddListing(BuildContext context) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const AddListingPage()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const AddListingPage()));
   }
 }
 
@@ -1059,21 +1169,21 @@ class _ProductCard extends StatelessWidget {
                 child: Stack(
                   children: [
                     Positioned.fill(
-                        child: CachedNetworkImage(
-                          imageUrl: firstImage,
-                          fit: BoxFit.cover,
-                          imageRenderMethodForWeb:
-                              ImageRenderMethodForWeb.HtmlImage,
-                          errorWidget: (_, __, ___) => Container(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .surfaceContainerHighest,
-                            child: const Center(
-                              child: Icon(Icons.image_not_supported),
-                            ),
+                      child: CachedNetworkImage(
+                        imageUrl: firstImage,
+                        fit: BoxFit.cover,
+                        imageRenderMethodForWeb:
+                            ImageRenderMethodForWeb.HtmlImage,
+                        errorWidget: (_, __, ___) => Container(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerHighest,
+                          child: const Center(
+                            child: Icon(Icons.image_not_supported),
                           ),
                         ),
                       ),
+                    ),
                     Positioned(
                       top: 8,
                       right: 8,
@@ -1098,16 +1208,15 @@ class _ProductCard extends StatelessWidget {
                       child: IconButton(
                         onPressed: onFavoriteToggle,
                         icon: Icon(
-                          isFavorite
-                              ? Icons.favorite
-                              : Icons.favorite_border,
+                          isFavorite ? Icons.favorite : Icons.favorite_border,
                           color: isFavorite
                               ? Colors.redAccent
                               : Theme.of(context).colorScheme.onSurface,
                         ),
                         style: IconButton.styleFrom(
-                          backgroundColor:
-                              Theme.of(context).colorScheme.surface,
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.surface,
                         ),
                       ),
                     ),
@@ -1187,6 +1296,23 @@ class _SearchBar extends StatelessWidget {
   }
 }
 
+class _FilterPill extends StatelessWidget {
+  const _FilterPill({required this.label, this.icon, this.onPressed});
+
+  final String label;
+  final IconData? icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return ActionChip(
+      avatar: icon == null ? null : Icon(icon, size: 18),
+      label: Text(label),
+      onPressed: onPressed,
+    );
+  }
+}
+
 class _FavoritesBadge extends StatelessWidget {
   const _FavoritesBadge({
     required this.countStream,
@@ -1209,9 +1335,7 @@ class _FavoritesBadge extends StatelessWidget {
           children: [
             IconButton(
               onPressed: onPressed,
-              icon: Icon(
-                enabled ? Icons.favorite : Icons.favorite_border,
-              ),
+              icon: Icon(enabled ? Icons.favorite : Icons.favorite_border),
               tooltip: L10n.tr(context, 'listing.favorites'),
             ),
             if (count > 0)
@@ -1219,8 +1343,10 @@ class _FavoritesBadge extends StatelessWidget {
                 top: 6,
                 right: 6,
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.redAccent,
                     borderRadius: BorderRadius.circular(12),
@@ -1284,14 +1410,3 @@ class _GridLoader extends StatelessWidget {
     );
   }
 }
-
-
-
-
-
-
-
-
-
-
-

@@ -53,6 +53,13 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_title(window, "dzmarket");
   }
 
+  // Load app icon from the bundled data directory (if present).
+  gchar* icon_path = g_build_filename(g_get_current_dir(), "data", "app_icon.png", nullptr);
+  if (g_file_test(icon_path, G_FILE_TEST_EXISTS)) {
+    gtk_window_set_icon_from_file(window, icon_path, nullptr);
+  }
+  g_free(icon_path);
+
   gtk_window_set_default_size(window, 1280, 720);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
