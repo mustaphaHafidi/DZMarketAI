@@ -1,4 +1,4 @@
-﻿// ignore_for_file: deprecated_member_use
+// ignore_for_file: deprecated_member_use
 import 'dart:convert';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -52,6 +52,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     super.initState();
     _load();
   }
+
   Future<void> _reportListing(BuildContext context, Product product) async {
     final reasonController = TextEditingController();
     const reasonOptions = [
@@ -134,20 +135,23 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     : '[$reasonLabel] $details';
                 final userId = supabase.auth.currentUser?.id;
                 if (userId == null) return;
-                await RateLimiter.instance.run(
-                  'reports.insert',
-                  () => supabase.from('reports').insert({
-                    'product_id': product.id,
-                    'reporter_id': userId,
-                    'reason': reason,
-                  }),
+                final result = await RateLimiter.instance.run(
+                  'reports.submit',
+                  () => supabase.rpc(
+                    'submit_listing_report',
+                    params: {'p_product_id': product.id, 'p_reason': reason},
+                  ),
                 );
                 if (context.mounted) Navigator.of(context).pop();
                 if (context.mounted) {
+                  final status = (result as Map?)?['status']?.toString() ?? '';
+                  final isMasked = status == 'masked' || status == 'blocked';
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        L10n.tr(context, 'report.sent'),
+                        isMasked
+                            ? L10n.tr(context, 'report.sent_masked')
+                            : L10n.tr(context, 'report.sent'),
                       ),
                     ),
                   );
@@ -211,8 +215,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   Future<void> _load() async {
-    final safeProductId =
-        InputSanitizer.sanitizeId(widget.productId, maxLength: 64);
+    final safeProductId = InputSanitizer.sanitizeId(
+      widget.productId,
+      maxLength: 64,
+    );
     final data = await RateLimiter.instance.run(
       'products.detail.select',
       () => supabase
@@ -284,10 +290,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (!mounted) return;
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => ChatRoomPage(
-          conversationId: conv.id,
-          productId: _product!.id,
-        ),
+        builder: (_) =>
+            ChatRoomPage(conversationId: conv.id, productId: _product!.id),
       ),
     );
   }
@@ -343,8 +347,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               groupValue: method,
               onChanged: allowPickup ? (v) => method = v ?? method : null,
               title: Text(L10n.tr(context, 'checkout.delivery_pickup_title')),
-              subtitle:
-                  Text(L10n.tr(context, 'checkout.delivery_pickup_desc')),
+              subtitle: Text(L10n.tr(context, 'checkout.delivery_pickup_desc')),
               enabled: allowPickup,
             ),
             RadioListTile<String>(
@@ -383,7 +386,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (!mounted) return;
     if (deliveryChoice == 'pickup') {
       final agreed =
-          _acceptedOffer?.agreedAmount ?? _acceptedOffer?.amount ?? _product?.price;
+          _acceptedOffer?.agreedAmount ??
+          _acceptedOffer?.amount ??
+          _product?.price;
       final confirmed = await _confirmCheckoutSummary(
         price: agreed ?? 0,
         shippingOption: 'pickup',
@@ -403,9 +408,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(L10n.tr(context, 'order.created.pickup')),
-          ),
+          SnackBar(content: Text(L10n.tr(context, 'order.created.pickup'))),
         );
       }
       if (orderId != null) {
@@ -417,7 +420,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     final shippingService = ShippingService();
     final sellerId = _product!.ownerId;
     final agreed =
-        _acceptedOffer?.agreedAmount ?? _acceptedOffer?.amount ?? _product?.price;
+        _acceptedOffer?.agreedAmount ??
+        _acceptedOffer?.amount ??
+        _product?.price;
     final selection = await _pickCourierAndAddress(
       sellerId,
       price: agreed ?? 0,
@@ -427,9 +432,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (!mounted) return;
     final courierId = selection['courierId'] as String?;
     final courierName = selection['courierName'] as String?;
-    final isYalidine = courierId?.toLowerCase().contains('yalidine') == true ||
+    final isYalidine =
+        courierId?.toLowerCase().contains('yalidine') == true ||
         courierName?.toLowerCase().contains('yalidine') == true;
-    final isEcotrack = courierId?.toLowerCase().contains('ecotrack') == true ||
+    final isEcotrack =
+        courierId?.toLowerCase().contains('ecotrack') == true ||
         courierName?.toLowerCase().contains('ecotrack') == true;
     final isZrExpress = ShippingService.isZrExpressCourier(
       courierId: courierId,
@@ -442,21 +449,21 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     final double? shippingCost = freeShipping
         ? 0.0
         : (isYalidine || isEcotrack || isZrExpress
-            ? (selection['estimatedFee'] as num?)?.toDouble()
-            : shippingService.estimateCost(
-                buyerWilaya: _buyerWilaya,
-                sellerWilaya: _sellerWilaya,
-              ));
+              ? (selection['estimatedFee'] as num?)?.toDouble()
+              : shippingService.estimateCost(
+                  buyerWilaya: _buyerWilaya,
+                  sellerWilaya: _sellerWilaya,
+                ));
     final etaLabel = isYalidine
         ? L10n.tr(context, 'checkout.eta_yalidine')
         : isEcotrack
-            ? L10n.tr(context, 'checkout.eta_ecotrack')
-            : isZrExpress
-                ? L10n.tr(context, 'checkout.eta_zrexpress')
-            : shippingService.estimateEtaLabel(
-                courierName: courierName,
-                courierId: courierId,
-              );
+        ? L10n.tr(context, 'checkout.eta_ecotrack')
+        : isZrExpress
+        ? L10n.tr(context, 'checkout.eta_zrexpress')
+        : shippingService.estimateEtaLabel(
+            courierName: courierName,
+            courierId: courierId,
+          );
     final confirmed = await _confirmCheckoutSummary(
       price: agreed ?? 0,
       shippingOption: shippingOption ?? '',
@@ -514,7 +521,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             context,
             'order.created.delivery',
             params: {
-              'courier': courierName ?? L10n.tr(context, 'order.delivery.generic'),
+              'courier':
+                  courierName ?? L10n.tr(context, 'order.delivery.generic'),
             },
           ),
         ),
@@ -526,9 +534,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   Future<void> _openOrderChat(String orderId) async {
     if (!mounted) return;
     await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => OrderChatGatePage(orderId: orderId),
-      ),
+      MaterialPageRoute(builder: (_) => OrderChatGatePage(orderId: orderId)),
     );
   }
 
@@ -539,7 +545,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }) async {
     final shippingService = ShippingService();
     final lastCheckout = await _loadLastCheckout();
-    final enabled = await shippingService.fetchEnabledCouriersForSeller(sellerId);
+    final enabled = await shippingService.fetchEnabledCouriersForSeller(
+      sellerId,
+    );
     if (enabled.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -554,7 +562,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (courier == null) return null;
     if (!mounted) return null;
     final courierId = courier['courier_id']?.toString() ?? '';
-    final courierName = courier['courier_name']?.toString() ??
+    final courierName =
+        courier['courier_name']?.toString() ??
         L10n.tr(context, 'checkout.courier_placeholder');
     return showModalBottomSheet<Map<String, dynamic>>(
       context: context,
@@ -594,9 +603,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         child: ListView(
           shrinkWrap: true,
           children: [
-            ListTile(
-              title: Text(L10n.tr(context, 'checkout.choose_courier')),
-            ),
+            ListTile(title: Text(L10n.tr(context, 'checkout.choose_courier'))),
             ...enabled.map(
               (c) => ListTile(
                 title: Text(
@@ -654,7 +661,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     ),
                     _SummaryRow(
                       label: L10n.tr(context, 'checkout.mode'),
-                      value: deliveryMode ??
+                      value:
+                          deliveryMode ??
                           L10n.tr(context, 'checkout.delivery_standard'),
                     ),
                     _SummaryRow(
@@ -689,9 +697,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         Expanded(
                           child: FilledButton(
                             onPressed: () => Navigator.pop(context, true),
-                            child: Text(
-                              L10n.tr(context, 'checkout.confirm'),
-                            ),
+                            child: Text(L10n.tr(context, 'checkout.confirm')),
                           ),
                         ),
                       ],
@@ -739,8 +745,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           TextButton(
             onPressed: () async {
               try {
-                final amount =
-                    InputSanitizer.parseAmount(amountController.text, min: 1);
+                final amount = InputSanitizer.parseAmount(
+                  amountController.text,
+                  min: 1,
+                );
                 final message = InputSanitizer.sanitizeOptionalText(
                   messageController.text,
                   maxLength: 240,
@@ -754,9 +762,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 if (context.mounted) Navigator.of(context).pop();
               } on FormatException catch (e) {
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(e.message)),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(e.message)));
               }
             },
             child: Text(L10n.tr(context, 'common.send')),
@@ -775,11 +783,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     }
     if (_product == null) {
       return Scaffold(
-        body: Center(
-          child: Text(
-            L10n.tr(context, 'listing.not_found'),
-          ),
-        ),
+        body: Center(child: Text(L10n.tr(context, 'listing.not_found'))),
       );
     }
 
@@ -789,7 +793,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         ? _product!.imageUrls
         : [_product!.imageUrl ?? fallbackImage];
     final agreedPrice =
-        _acceptedOffer?.agreedAmount ?? _acceptedOffer?.amount ?? _product!.price;
+        _acceptedOffer?.agreedAmount ??
+        _acceptedOffer?.amount ??
+        _product!.price;
     final isOwner = _isOwner;
     final outOfStock =
         (_product?.stockQuantity ?? 0) <= 0 || _product?.isArchived == true;
@@ -800,10 +806,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             params: {'price': agreedPrice.toStringAsFixed(0)},
           )
         : isOwner
-            ? L10n.tr(context, 'cta.own_listing')
-            : outOfStock
-                ? L10n.tr(context, 'cta.out_of_stock')
-                : L10n.tr(context, 'cta.buy_now');
+        ? L10n.tr(context, 'cta.own_listing')
+        : outOfStock
+        ? L10n.tr(context, 'cta.out_of_stock')
+        : L10n.tr(context, 'cta.buy_now');
 
     return Scaffold(
       body: CustomScrollView(
@@ -819,8 +825,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               IconButton(icon: const Icon(Icons.share), onPressed: () {}),
               if (supabase.auth.currentUser?.id != null)
                 StreamBuilder<Set<String>>(
-                  stream: FavoriteService()
-                      .streamFavorites(supabase.auth.currentUser!.id),
+                  stream: FavoriteService().streamFavorites(
+                    supabase.auth.currentUser!.id,
+                  ),
                   builder: (context, snapshot) {
                     final isFav =
                         snapshot.data?.contains(_product?.id ?? '') ?? false;
@@ -832,9 +839,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       onPressed: _product == null
                           ? null
                           : () => FavoriteService().toggleFavorite(
-                                productId: _product!.id,
-                                isFav: isFav,
-                              ),
+                              productId: _product!.id,
+                              isFav: isFav,
+                            ),
                     );
                   },
                 )
@@ -850,9 +857,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 itemBuilder: (context) => [
                   PopupMenuItem(
                     value: 'report',
-                    child: Text(
-                      L10n.tr(context, 'report.menu'),
-                    ),
+                    child: Text(L10n.tr(context, 'report.menu')),
                   ),
                 ],
               ),
@@ -880,9 +885,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         Padding(
                           padding: const EdgeInsets.only(left: 8),
                           child: Chip(
-                            label: Text(
-                              L10n.tr(context, 'offer.agreed'),
-                            ),
+                            label: Text(L10n.tr(context, 'offer.agreed')),
                             visualDensity: VisualDensity.compact,
                           ),
                         ),
@@ -932,9 +935,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                             L10n.tr(
                               context,
                               'listing.category',
-                              params: {
-                                'value': _resolveCategoryLabel(context),
-                              },
+                              params: {'value': _resolveCategoryLabel(context)},
                             ),
                           ),
                         ),
@@ -977,7 +978,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                               'listing.detail.delivery_pickup',
                                             ),
                                     )
-                                    .join(', ')
+                                    .join(', '),
                               },
                             ),
                           ),
@@ -988,8 +989,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   Text(
                     _product!.title,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Row(
@@ -1012,9 +1013,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                             L10n.tr(
                               context,
                               'listing.detail.sold',
-                              params: {
-                                'value': _product!.soldCount.toString(),
-                              },
+                              params: {'value': _product!.soldCount.toString()},
                             ),
                           ),
                         ),
@@ -1026,18 +1025,17 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     sellerName: _sellerProfile?['full_name']?.toString(),
                     sellerEmail: _sellerProfile?['email']?.toString(),
                     onContact: _contactSeller,
-                    onViewProfile:
-                        _sellerProfile?['is_public'] == true
-                            ? () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => PublicProfilePage(
-                                      sellerId: _product!.ownerId,
-                                    ),
-                                  ),
-                                );
-                              }
-                            : null,
+                    onViewProfile: _sellerProfile?['is_public'] == true
+                        ? () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => PublicProfilePage(
+                                  sellerId: _product!.ownerId,
+                                ),
+                              ),
+                            );
+                          }
+                        : null,
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -1088,8 +1086,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               OutlinedButton.icon(
                 onPressed: _makeOffer,
                 icon: const Icon(Icons.handshake_outlined),
-                label:
-                    Text(L10n.tr(context, 'offers.make_offer')),
+                label: Text(L10n.tr(context, 'offers.make_offer')),
               ),
             ],
           ),
@@ -1185,7 +1182,8 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
   @override
   void initState() {
     super.initState();
-    _isEcotrack = widget.courierId.toLowerCase().contains('ecotrack') ||
+    _isEcotrack =
+        widget.courierId.toLowerCase().contains('ecotrack') ||
         widget.courierName.toLowerCase().contains('ecotrack');
     _isZrExpress = ShippingService.isZrExpressCourier(
       courierId: widget.courierId,
@@ -1198,21 +1196,23 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
     _allowStopdesk = product?.allowStopdesk ?? true;
     _supportsStopdeskList = !_isEcotrack;
     final fullName = widget.buyerProfile?['full_name']?.toString() ?? '';
-    final nameParts =
-        fullName.split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
+    final nameParts = fullName
+        .split(RegExp(r'\s+'))
+        .where((e) => e.isNotEmpty)
+        .toList();
     final firstName = nameParts.isNotEmpty ? nameParts.first : '';
-    final familyName =
-        nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
+    final familyName = nameParts.length > 1
+        ? nameParts.sublist(1).join(' ')
+        : '';
     _firstNameCtrl = TextEditingController(
-      text: widget.lastCheckout?['firstname']?.toString() ??
-          firstName,
+      text: widget.lastCheckout?['firstname']?.toString() ?? firstName,
     );
     _familyNameCtrl = TextEditingController(
-      text: widget.lastCheckout?['familyname']?.toString() ??
-          familyName,
+      text: widget.lastCheckout?['familyname']?.toString() ?? familyName,
     );
     _phoneCtrl = TextEditingController(
-      text: widget.buyerProfile?['phone']?.toString() ??
+      text:
+          widget.buyerProfile?['phone']?.toString() ??
           widget.lastCheckout?['phone']?.toString() ??
           '',
     );
@@ -1223,7 +1223,8 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
       text: widget.lastCheckout?['address']?.toString() ?? '',
     );
     _dairaCtrl = TextEditingController(
-      text: widget.lastCheckout?['receiverDaira']?.toString() ??
+      text:
+          widget.lastCheckout?['receiverDaira']?.toString() ??
           widget.buyerProfile?['daira']?.toString() ??
           '',
     );
@@ -1231,35 +1232,29 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
       text: widget.lastCheckout?['zip']?.toString() ?? '',
     );
     _productListCtrl = TextEditingController(
-      text: widget.lastCheckout?['productList']?.toString() ??
+      text:
+          widget.lastCheckout?['productList']?.toString() ??
           widget.productTitle,
     );
     _orderNumberCtrl = TextEditingController(text: 'auto');
     _priceCtrl = TextEditingController(
-      text: (widget.lastCheckout?['price']?.toString() ??
-              widget.defaultPrice.toStringAsFixed(0))
-          .toString(),
+      text:
+          (widget.lastCheckout?['price']?.toString() ??
+                  widget.defaultPrice.toStringAsFixed(0))
+              .toString(),
     );
     final declaredValue = product?.declaredValue ?? widget.defaultPrice;
     _declaredValueCtrl = TextEditingController(
       text: declaredValue.toStringAsFixed(0),
     );
     final weightValue = product?.weightKg ?? 1;
-    _weightCtrl = TextEditingController(
-      text: weightValue.toString(),
-    );
+    _weightCtrl = TextEditingController(text: weightValue.toString());
     final heightValue = product?.heightCm ?? 0;
-    _heightCtrl = TextEditingController(
-      text: heightValue.toString(),
-    );
+    _heightCtrl = TextEditingController(text: heightValue.toString());
     final widthValue = product?.widthCm ?? 0;
-    _widthCtrl = TextEditingController(
-      text: widthValue.toString(),
-    );
+    _widthCtrl = TextEditingController(text: widthValue.toString());
     final lengthValue = product?.lengthCm ?? 0;
-    _lengthCtrl = TextEditingController(
-      text: lengthValue.toString(),
-    );
+    _lengthCtrl = TextEditingController(text: lengthValue.toString());
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -1298,6 +1293,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
     final normalized = rawId.padLeft(2, '0');
     return '$normalized - $name';
   }
+
   String _communeName(Map<String, String> c) => c['name'] ?? '';
   bool _communeHasStopdesk(Map<String, String> c) =>
       c['has_stop_desk'] == 'true' || c['has_stop_desk'] == '1';
@@ -1311,7 +1307,8 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
           (r) => {
             'id': r['code'] ?? '',
             'code': r['code'] ?? '',
-            'name': (locale == 'ar' ? r['name_ar'] : r['name_fr']) ??
+            'name':
+                (locale == 'ar' ? r['name_ar'] : r['name_fr']) ??
                 r['name_fr'] ??
                 r['name_ar'] ??
                 '',
@@ -1330,7 +1327,8 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
         .map(
           (r) => {
             'id': r['id'] ?? r['name_fr'] ?? r['name_ar'] ?? '',
-            'name': (locale == 'ar' ? r['name_ar'] : r['name_fr']) ??
+            'name':
+                (locale == 'ar' ? r['name_ar'] : r['name_fr']) ??
                 r['name_fr'] ??
                 r['name_ar'] ??
                 '',
@@ -1350,31 +1348,31 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
       _loadingWilayas = true;
       _loadError = null;
     });
-      try {
-        _wilayas = await _shippingService.fetchCourierWilayas(
-          courierId: widget.courierId,
-          sellerId: widget.sellerId,
-        );
-        if (_wilayas.isEmpty) {
-          final fallback = await LocationDataService.instance.fetchWilayas();
-          _wilayas = _mapFallbackWilayas(fallback, locale);
-        }
-        if (_wilayas.isNotEmpty) {
-          _wilayas.sort((a, b) {
-            final aNum = int.tryParse(_wilayaId(a));
-            final bNum = int.tryParse(_wilayaId(b));
-            if (aNum != null && bNum != null) {
-              return aNum.compareTo(bNum);
-            }
-            if (aNum != null) return -1;
-            if (bNum != null) return 1;
-            return _wilayaName(a).compareTo(_wilayaName(b));
-          });
-        }
-        if (_wilayas.isEmpty) {
-          _loadError = _isZrExpress
-              ? L10n.trLocale(locale, 'location.error_zr_locations')
-              : L10n.trLocale(locale, 'location.error_no_wilayas');
+    try {
+      _wilayas = await _shippingService.fetchCourierWilayas(
+        courierId: widget.courierId,
+        sellerId: widget.sellerId,
+      );
+      if (_wilayas.isEmpty) {
+        final fallback = await LocationDataService.instance.fetchWilayas();
+        _wilayas = _mapFallbackWilayas(fallback, locale);
+      }
+      if (_wilayas.isNotEmpty) {
+        _wilayas.sort((a, b) {
+          final aNum = int.tryParse(_wilayaId(a));
+          final bNum = int.tryParse(_wilayaId(b));
+          if (aNum != null && bNum != null) {
+            return aNum.compareTo(bNum);
+          }
+          if (aNum != null) return -1;
+          if (bNum != null) return 1;
+          return _wilayaName(a).compareTo(_wilayaName(b));
+        });
+      }
+      if (_wilayas.isEmpty) {
+        _loadError = _isZrExpress
+            ? L10n.trLocale(locale, 'location.error_zr_locations')
+            : L10n.trLocale(locale, 'location.error_no_wilayas');
       }
     } catch (_) {
       _loadError = _isZrExpress
@@ -1403,7 +1401,8 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
     }
 
     final receiverPrefId = widget.lastCheckout?['receiverWilayaId']?.toString();
-    final receiverPref = widget.lastCheckout?['receiverWilaya']?.toString() ??
+    final receiverPref =
+        widget.lastCheckout?['receiverWilaya']?.toString() ??
         widget.buyerProfile?['wilaya']?.toString();
     if (_wilayas.isNotEmpty) {
       Map<String, String> match = {};
@@ -1455,8 +1454,9 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
         final numeric = int.tryParse(wilayaId.trim());
         if (numeric != null) {
           final code = numeric.toString().padLeft(2, '0');
-          final fallback =
-              await LocationDataService.instance.fetchCommunes(code);
+          final fallback = await LocationDataService.instance.fetchCommunes(
+            code,
+          );
           _communes = _mapFallbackCommunes(fallback, code, locale);
         }
       }
@@ -1482,10 +1482,10 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
       }
     }
 
-    final preferredCommuneId =
-        widget.lastCheckout?['receiverCommuneId']?.toString();
-    final preferredCommuneName =
-        widget.lastCheckout?['receiverCommune']?.toString();
+    final preferredCommuneId = widget.lastCheckout?['receiverCommuneId']
+        ?.toString();
+    final preferredCommuneName = widget.lastCheckout?['receiverCommune']
+        ?.toString();
     if (_communes.isNotEmpty) {
       Map<String, String> match = {};
       if (preferredCommuneId != null && preferredCommuneId.isNotEmpty) {
@@ -1520,11 +1520,11 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
     if (livraison is! List) return;
     final receiverId = int.tryParse(_receiverWilayaId ?? '');
     final entry = livraison.cast<Map>().firstWhere(
-          (e) =>
-              receiverId != null &&
-              int.tryParse(e['wilaya_id']?.toString() ?? '') == receiverId,
-          orElse: () => {},
-        );
+      (e) =>
+          receiverId != null &&
+          int.tryParse(e['wilaya_id']?.toString() ?? '') == receiverId,
+      orElse: () => {},
+    );
     if (entry.isEmpty) return;
     final raw = _deliveryType == 'stopdesk'
         ? entry['tarif_stopdesk']
@@ -1559,16 +1559,17 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
     final phoneOk = _isZrExpress
         ? PhoneFormatter.isZrExpressCompatible(_phoneCtrl.text)
         : _isPhoneValid(_phoneCtrl.text);
-    final baseValid = !_loadingWilayas &&
+    final baseValid =
+        !_loadingWilayas &&
         !_loadingCommunes &&
         _loadError == null &&
         _senderWilayaName != null &&
         _receiverWilayaName != null &&
-      _receiverCommuneName != null &&
-      _dairaCtrl.text.trim().isNotEmpty &&
-      _firstNameCtrl.text.trim().isNotEmpty &&
-      _familyNameCtrl.text.trim().isNotEmpty &&
-      phoneOk &&
+        _receiverCommuneName != null &&
+        _dairaCtrl.text.trim().isNotEmpty &&
+        _firstNameCtrl.text.trim().isNotEmpty &&
+        _familyNameCtrl.text.trim().isNotEmpty &&
+        phoneOk &&
         _addressCtrl.text.trim().isNotEmpty &&
         _productListCtrl.text.trim().isNotEmpty &&
         _priceCtrl.text.trim().isNotEmpty &&
@@ -1600,8 +1601,9 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
 
     final phoneMain = _phoneCtrl.text.trim();
     final phone2 = _phone2Ctrl.text.trim();
-    final phoneE164 =
-        _isZrExpress ? PhoneFormatter.normalizeDzE164ForZr(phoneMain) : '';
+    final phoneE164 = _isZrExpress
+        ? PhoneFormatter.normalizeDzE164ForZr(phoneMain)
+        : '';
     final phone2E164 = _isZrExpress && phone2.isNotEmpty
         ? PhoneFormatter.normalizeDzE164ForZr(phone2)
         : '';
@@ -1609,17 +1611,17 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
         ? phoneE164
         : (phone2.isEmpty ? phoneMain : '$phoneMain,$phone2');
 
-      final selection = {
-        'courierId': widget.courierId,
-        'courierName': widget.courierName,
-        'deliveryType': _deliveryType,
-        'senderWilaya': _senderWilayaName,
-        'receiverWilaya': _receiverWilayaName,
-        'receiverWilayaId': _receiverWilayaId,
-        'receiverDaira': _dairaCtrl.text.trim(),
-        'receiverCommune': _receiverCommuneName,
-        'receiverCommuneId': _receiverCommuneId,
-        'wilayaCode': _receiverWilayaId,
+    final selection = {
+      'courierId': widget.courierId,
+      'courierName': widget.courierName,
+      'deliveryType': _deliveryType,
+      'senderWilaya': _senderWilayaName,
+      'receiverWilaya': _receiverWilayaName,
+      'receiverWilayaId': _receiverWilayaId,
+      'receiverDaira': _dairaCtrl.text.trim(),
+      'receiverCommune': _receiverCommuneName,
+      'receiverCommuneId': _receiverCommuneId,
+      'wilayaCode': _receiverWilayaId,
       'stopdeskId': _stopdeskId,
       'stopdeskCommune': _stopdeskCommuneName,
       'firstname': _firstNameCtrl.text.trim(),
@@ -1721,7 +1723,9 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                     _senderWilayaName = _wilayaName(match);
                   });
                 },
-                validator: (_) => _senderWilayaId == null ? L10n.tr(context, 'checkout.error_wilaya_required') : null,
+                validator: (_) => _senderWilayaId == null
+                    ? L10n.tr(context, 'checkout.error_wilaya_required')
+                    : null,
               ),
               const SizedBox(height: 12),
               Text(
@@ -1734,7 +1738,9 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                   labelText: L10n.tr(context, 'checkout.first_name'),
                 ),
                 onChanged: (_) => setState(() {}),
-                validator: (v) => v == null || v.trim().isEmpty ? L10n.tr(context, 'checkout.error_name_required') : null,
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? L10n.tr(context, 'checkout.error_name_required')
+                    : null,
               ),
               const SizedBox(height: 8),
               TextFormField(
@@ -1787,8 +1793,9 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                             context,
                             'checkout.zr_phone_preview',
                             params: {
-                              'value':
-                                  PhoneFormatter.normalizeDzE164(_phoneCtrl.text),
+                              'value': PhoneFormatter.normalizeDzE164(
+                                _phoneCtrl.text,
+                              ),
                             },
                           )
                         : L10n.tr(context, 'checkout.zrexpress_notice'),
@@ -1798,10 +1805,9 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
               const SizedBox(height: 8),
               TextFormField(
                 controller: _phone2Ctrl,
-                decoration:
-                    InputDecoration(
-                      labelText: L10n.tr(context, 'checkout.phone2_optional'),
-                    ),
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'checkout.phone2_optional'),
+                ),
                 keyboardType: TextInputType.phone,
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
@@ -1846,54 +1852,56 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                     await _loadCommunes(v);
                   }
                 },
-                validator: (_) => _receiverWilayaId == null ? L10n.tr(context, 'checkout.error_wilaya_required') : null,
+                validator: (_) => _receiverWilayaId == null
+                    ? L10n.tr(context, 'checkout.error_wilaya_required')
+                    : null,
               ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _dairaCtrl,
-                  decoration: InputDecoration(
-                    labelText: L10n.tr(context, 'checkout.receiver_daira'),
-                  ),
-                  onChanged: (_) => setState(() {}),
-                  validator: (v) => v == null || v.trim().isEmpty
-                      ? L10n.tr(context, 'checkout.error_daira_required')
-                      : null,
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _dairaCtrl,
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'checkout.receiver_daira'),
                 ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  value: _receiverCommuneName,
-                  decoration: InputDecoration(
-                    labelText: L10n.tr(context, 'checkout.receiver_commune'),
-                  ),
-                  items: _communes
-                      .map(
-                        (c) => DropdownMenuItem(
-                          value: _communeName(c),
-                          child: Text(_communeName(c)),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (v) {
-                    final match = _communes.firstWhere(
-                      (c) => _communeName(c) == v,
-                      orElse: () => {},
-                    );
-                    setState(() {
-                      _receiverCommuneName = v;
-                      _receiverCommuneId = match['id']?.toString();
-                    });
-                  },
-                  validator: (_) =>
-                      _receiverCommuneName == null ? L10n.tr(context, 'checkout.error_commune_required') : null,
+                onChanged: (_) => setState(() {}),
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? L10n.tr(context, 'checkout.error_daira_required')
+                    : null,
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: _receiverCommuneName,
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'checkout.receiver_commune'),
                 ),
+                items: _communes
+                    .map(
+                      (c) => DropdownMenuItem(
+                        value: _communeName(c),
+                        child: Text(_communeName(c)),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (v) {
+                  final match = _communes.firstWhere(
+                    (c) => _communeName(c) == v,
+                    orElse: () => {},
+                  );
+                  setState(() {
+                    _receiverCommuneName = v;
+                    _receiverCommuneId = match['id']?.toString();
+                  });
+                },
+                validator: (_) => _receiverCommuneName == null
+                    ? L10n.tr(context, 'checkout.error_commune_required')
+                    : null,
+              ),
               if (_allowStopdesk && _deliveryType == 'stopdesk') ...[
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   value: _stopdeskCommuneName,
-                  decoration:
-                      InputDecoration(
-                        labelText: L10n.tr(context, 'checkout.stopdesk_agency'),
-                      ),
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'checkout.stopdesk_agency'),
+                  ),
                   items: _stopdeskCommunes
                       .map(
                         (c) => DropdownMenuItem(
@@ -1902,22 +1910,22 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                         ),
                       )
                       .toList(),
-                    onChanged: (v) {
-                      final match = _stopdeskCommunes.firstWhere(
-                        (c) => _communeName(c) == v,
-                        orElse: () => {},
-                      );
-                      setState(() {
-                        _stopdeskCommuneName = v;
-                        _stopdeskId = _supportsStopdeskList
-                            ? match['stopdesk_id']?.toString()
-                            : null;
-                        if (v != null && v.isNotEmpty) {
-                          _receiverCommuneName = v;
-                          _receiverCommuneId = match['id']?.toString();
-                        }
-                      });
-                    },
+                  onChanged: (v) {
+                    final match = _stopdeskCommunes.firstWhere(
+                      (c) => _communeName(c) == v,
+                      orElse: () => {},
+                    );
+                    setState(() {
+                      _stopdeskCommuneName = v;
+                      _stopdeskId = _supportsStopdeskList
+                          ? match['stopdesk_id']?.toString()
+                          : null;
+                      if (v != null && v.isNotEmpty) {
+                        _receiverCommuneName = v;
+                        _receiverCommuneId = match['id']?.toString();
+                      }
+                    });
+                  },
                   validator: (_) => _stopdeskCommuneName == null
                       ? L10n.tr(context, 'checkout.error_agency_required')
                       : null,
@@ -2059,7 +2067,8 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                       context,
                       'checkout.overweight_label',
                       params: {
-                        'value': (int.tryParse(_weightCtrl.text.trim()) != null &&
+                        'value':
+                            (int.tryParse(_weightCtrl.text.trim()) != null &&
                                 int.parse(_weightCtrl.text.trim()) > 5)
                             ? L10n.tr(context, 'common.yes')
                             : L10n.tr(context, 'common.no'),
@@ -2080,9 +2089,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                       : L10n.tr(
                           context,
                           'checkout.fees_estimated',
-                          params: {
-                            'amount': _estimatedFee!.toStringAsFixed(0),
-                          },
+                          params: {'amount': _estimatedFee!.toStringAsFixed(0)},
                         ),
                 )
               else
@@ -2097,16 +2104,18 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
                     _loadError!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                   ),
                 ),
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerRight,
-                  child: ElevatedButton(
-                    onPressed: _canSubmit ? _submit : null,
-                    child: Text(L10n.tr(context, 'common.confirm')),
-                  ),
+                child: ElevatedButton(
+                  onPressed: _canSubmit ? _submit : null,
+                  child: Text(L10n.tr(context, 'common.confirm')),
+                ),
               ),
             ],
           ),
@@ -2115,6 +2124,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
     );
   }
 }
+
 class _ImageCarousel extends StatefulWidget {
   const _ImageCarousel({required this.controller, required this.images});
 
@@ -2221,8 +2231,10 @@ class _OffersSection extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(L10n.tr(context, 'offers.title'),
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              L10n.tr(context, 'offers.title'),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
             ...offers.map((o) {
               final canRespond = isSeller && o.status == OfferStatus.pending;
@@ -2235,9 +2247,10 @@ class _OffersSection extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          Text('DA ${o.amount.toStringAsFixed(0)}',
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold)),
+                          Text(
+                            'DA ${o.amount.toStringAsFixed(0)}',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
                           const Spacer(),
                           Chip(
                             label: Text(statusLabel),
@@ -2291,7 +2304,8 @@ class _OffersSection extends StatelessWidget {
                             TextButton(
                               onPressed: () async {
                                 final ctrl = TextEditingController(
-                                  text: o.counterAmount?.toStringAsFixed(0) ??
+                                  text:
+                                      o.counterAmount?.toStringAsFixed(0) ??
                                       o.amount.toStringAsFixed(0),
                                 );
                                 final val = await showDialog<double>(
@@ -2304,8 +2318,10 @@ class _OffersSection extends StatelessWidget {
                                       controller: ctrl,
                                       keyboardType: TextInputType.number,
                                       decoration: InputDecoration(
-                                        labelText:
-                                            L10n.tr(context, 'offers.amount_label'),
+                                        labelText: L10n.tr(
+                                          context,
+                                          'offers.amount_label',
+                                        ),
                                       ),
                                     ),
                                     actions: [
@@ -2320,19 +2336,23 @@ class _OffersSection extends StatelessWidget {
                                           try {
                                             final v =
                                                 InputSanitizer.parseAmount(
-                                              ctrl.text,
-                                              min: 1,
-                                            );
+                                                  ctrl.text,
+                                                  min: 1,
+                                                );
                                             Navigator.pop(context, v);
                                           } on FormatException catch (e) {
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              SnackBar(content: Text(e.message)),
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(e.message),
+                                              ),
                                             );
                                           }
                                         },
-                                        child:
-                                            Text(L10n.tr(context, 'common.send')),
+                                        child: Text(
+                                          L10n.tr(context, 'common.send'),
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -2341,8 +2361,9 @@ class _OffersSection extends StatelessWidget {
                                   onCounter(o, val);
                                 }
                               },
-                              child:
-                                  Text(L10n.tr(context, 'offer.counter_action')),
+                              child: Text(
+                                L10n.tr(context, 'offer.counter_action'),
+                              ),
                             ),
                           ],
                         ),
@@ -2385,8 +2406,8 @@ class _SellerRowFixed extends StatelessWidget {
         final displayName = (sellerName?.trim().isNotEmpty ?? false)
             ? sellerName!.trim()
             : (sellerEmail?.trim().isNotEmpty ?? false)
-                ? sellerEmail!.trim()
-                : fallbackName;
+            ? sellerEmail!.trim()
+            : fallbackName;
         return Row(
           children: [
             InkWell(
@@ -2454,18 +2475,12 @@ class _SummaryRow extends StatelessWidget {
           Text(label, style: Theme.of(context).textTheme.bodyMedium),
           Text(
             value,
-            style: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(fontWeight: FontWeight.bold),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
         ],
       ),
     );
   }
 }
-
-
-
-
-

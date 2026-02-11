@@ -1,4 +1,5 @@
 import 'package:dzmarket/src/services/input_sanitizer.dart';
+import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:dzmarket/src/models/profile.dart';
 import 'package:dzmarket/src/services/rate_limiter.dart';
@@ -14,20 +15,75 @@ class AuthService {
   Stream<AuthState> get authChanges => supabase.auth.onAuthStateChange;
 
   Future<AuthResponse> signIn(String email, String password) async {
-    final safeEmail = InputSanitizer.sanitizeEmail(email);
-    final safePassword = InputSanitizer.sanitizePassword(password);
-    final response = await RateLimiter.instance.run(
-      'auth.signIn',
-      () => supabase.auth.signInWithPassword(
-        email: safeEmail,
-        password: safePassword,
-      ),
-    );
+    final locale = LocaleService.instance.locale.value?.languageCode ?? 'fr';
+    late final String safeEmail;
+    late final String safePassword;
+
+    try {
+      safeEmail = InputSanitizer.sanitizeEmail(email);
+    } on FormatException {
+      throw FormatException(L10n.trLocale(locale, 'auth.error_invalid_email'));
+    }
+
+    try {
+      safePassword = InputSanitizer.sanitizePassword(password);
+    } on FormatException catch (e) {
+      final lower = e.message.toLowerCase();
+      if (lower.contains('too short')) {
+        throw FormatException(
+          L10n.trLocale(locale, 'auth.error_password_too_short'),
+        );
+      }
+      throw FormatException(L10n.trLocale(locale, 'auth.error_login_failed'));
+    }
+
+    late final AuthResponse response;
+    try {
+      response = await RateLimiter.instance.run(
+        'auth.signIn',
+        () => supabase.auth.signInWithPassword(
+          email: safeEmail,
+          password: safePassword,
+        ),
+      );
+    } on AuthException catch (e) {
+      throw FormatException(_mapSignInAuthError(e, locale));
+    } catch (_) {
+      throw FormatException(L10n.trLocale(locale, 'auth.error_login_failed'));
+    }
+
     final user = response.user;
     if (user != null) {
       await _ensureProfile(user);
+      final profile = await fetchProfile();
+      if (profile?.status == UserStatus.suspended) {
+        await signOut();
+        throw FormatException(L10n.trLocale(locale, 'auth.account_suspended'));
+      }
+      if (profile?.status == UserStatus.banned) {
+        await signOut();
+        throw FormatException(L10n.trLocale(locale, 'auth.account_banned'));
+      }
     }
     return response;
+  }
+
+  String _mapSignInAuthError(AuthException e, String locale) {
+    final message = e.message.toLowerCase();
+    if (message.contains('invalid login credentials') ||
+        message.contains('invalid_credentials') ||
+        message.contains('email or password')) {
+      return L10n.trLocale(locale, 'auth.error_invalid_credentials');
+    }
+    if (message.contains('email not confirmed') ||
+        message.contains('email_not_confirmed')) {
+      return L10n.trLocale(locale, 'auth.error_email_not_confirmed');
+    }
+    if (message.contains('too many requests') ||
+        message.contains('rate limit')) {
+      return L10n.trLocale(locale, 'auth.error_too_many_requests');
+    }
+    return L10n.trLocale(locale, 'auth.error_login_failed');
   }
 
   Future<AuthResponse> signUp(
@@ -38,8 +94,10 @@ class AuthService {
   }) async {
     final safeEmail = InputSanitizer.sanitizeEmail(email);
     final safePassword = InputSanitizer.sanitizePassword(password);
-    final safeFullName =
-        InputSanitizer.sanitizeOptionalText(fullName, maxLength: 80);
+    final safeFullName = InputSanitizer.sanitizeOptionalText(
+      fullName,
+      maxLength: 80,
+    );
     final safePhone = InputSanitizer.sanitizePhone(phone);
     final metadata = <String, dynamic>{};
     if (safeFullName != null) metadata['full_name'] = safeFullName;
@@ -81,11 +139,8 @@ class AuthService {
       await ensureProfileExists();
       final response = await RateLimiter.instance.run(
         'profiles.select',
-        () => supabase
-            .from('profiles')
-            .select()
-            .eq('id', user.id)
-            .maybeSingle(),
+        () =>
+            supabase.from('profiles').select().eq('id', user.id).maybeSingle(),
       );
       if (response == null) {
         // Ensure a profile exists if missing
@@ -104,7 +159,9 @@ class AuthService {
       return _applyProfileLocale(Profile.fromJson(response));
     } on PostgrestException catch (e) {
       // If the session expired or schema cache failed, sign out to force a clean state.
-      if (e.code == 'PGRST301' || e.message.contains('JWT') || e.message.contains('Expired')) {
+      if (e.code == 'PGRST301' ||
+          e.message.contains('JWT') ||
+          e.message.contains('Expired')) {
         await RateLimiter.instance.run(
           'auth.signOut',
           () => supabase.auth.signOut(),
@@ -117,17 +174,21 @@ class AuthService {
         () => supabase
             .from('profiles')
             .select(
-                'id,email,full_name,avatar_url,role,phone,wilaya,daira,location_lat,location_lng,bio,is_public,is_seller,preferences')
+              'id,email,full_name,avatar_url,role,status,phone,wilaya,daira,location_lat,location_lng,bio,is_public,is_seller,preferences',
+            )
             .eq('id', user.id)
             .maybeSingle(),
       );
       if (response == null) return null;
-      return _applyProfileLocale(Profile.fromJson({
-        ...response,
-        'lang': LocaleService.instance.locale.value?.languageCode ?? 'fr',
-        'role': response['role'] ?? 'buyer',
-        'is_seller': response['is_seller'] ?? false,
-      }));
+      return _applyProfileLocale(
+        Profile.fromJson({
+          ...response,
+          'lang': LocaleService.instance.locale.value?.languageCode ?? 'fr',
+          'role': response['role'] ?? 'buyer',
+          'status': response['status'] ?? 'active',
+          'is_seller': response['is_seller'] ?? false,
+        }),
+      );
     }
   }
 
@@ -153,20 +214,24 @@ class AuthService {
       // Always keep email to satisfy NOT NULL on upsert.
       'email': supabase.auth.currentUser?.email ?? '',
     };
-    final safeFullName =
-        InputSanitizer.sanitizeOptionalText(fullName, maxLength: 80);
+    final safeFullName = InputSanitizer.sanitizeOptionalText(
+      fullName,
+      maxLength: 80,
+    );
     final safeAvatar = InputSanitizer.sanitizeUrl(avatarUrl);
     final safePhone = InputSanitizer.sanitizePhone(phone);
-    final safeWilaya =
-        InputSanitizer.sanitizeOptionalText(wilaya, maxLength: 60);
-    final safeDaira =
-        InputSanitizer.sanitizeOptionalText(daira, maxLength: 60);
-    final safeBio =
-        InputSanitizer.sanitizeOptionalText(bio, maxLength: 240, allowNewlines: true);
-    final safeRole =
-        InputSanitizer.sanitizeOptionalText(role, maxLength: 20);
-    final safeLang =
-        InputSanitizer.sanitizeOptionalText(lang, maxLength: 8);
+    final safeWilaya = InputSanitizer.sanitizeOptionalText(
+      wilaya,
+      maxLength: 60,
+    );
+    final safeDaira = InputSanitizer.sanitizeOptionalText(daira, maxLength: 60);
+    final safeBio = InputSanitizer.sanitizeOptionalText(
+      bio,
+      maxLength: 240,
+      allowNewlines: true,
+    );
+    final safeRole = InputSanitizer.sanitizeOptionalText(role, maxLength: 20);
+    final safeLang = InputSanitizer.sanitizeOptionalText(lang, maxLength: 8);
     if (safeFullName != null) payload['full_name'] = safeFullName;
     if (safeAvatar != null) payload['avatar_url'] = safeAvatar;
     if (safePhone != null) payload['phone'] = safePhone;
@@ -179,10 +244,6 @@ class AuthService {
     if (isPublic != null) payload['is_public'] = isPublic;
     if (safeLang != null) payload['lang'] = safeLang;
     if (isSeller != null) payload['is_seller'] = isSeller;
-    // If caller provided seller flag but no role, align role with seller mode.
-    if (safeRole == null && isSeller != null) {
-      payload['role'] = isSeller ? 'seller' : 'buyer';
-    }
     if (preferences != null) payload['preferences'] = preferences;
     if (payload.length == 1) return; // only id present
     Future<void> attempt(Map<String, dynamic> data) async {
@@ -225,19 +286,19 @@ class AuthService {
     await RateLimiter.instance.run(
       'profiles.ensure.insert',
       () => supabase.from('profiles').insert({
-            'id': user.id,
-            'email': user.email ?? '',
-            'full_name': user.userMetadata?['full_name'] as String?,
-            'phone': user.userMetadata?['phone'] as String?,
-            'is_public': true,
-            'lang': LocaleService.instance.locale.value?.languageCode ?? 'fr',
-            'role': 'buyer',
-            'is_seller': false,
-            'daira': null,
-            'location_lat': null,
-            'location_lng': null,
-            'preferences': <String, dynamic>{},
-          }),
+        'id': user.id,
+        'email': user.email ?? '',
+        'full_name': user.userMetadata?['full_name'] as String?,
+        'phone': user.userMetadata?['phone'] as String?,
+        'is_public': true,
+        'lang': LocaleService.instance.locale.value?.languageCode ?? 'fr',
+        'role': 'buyer',
+        'is_seller': false,
+        'daira': null,
+        'location_lat': null,
+        'location_lng': null,
+        'preferences': <String, dynamic>{},
+      }),
     );
   }
 
@@ -261,13 +322,13 @@ class AuthService {
     await RateLimiter.instance.run(
       'profiles.exists.insert',
       () => supabase.from('profiles').insert({
-      'id': user.id,
-      'email': user.email ?? '',
-      'full_name': user.userMetadata?['full_name'] as String?,
-      'role': 'buyer',
-      'is_public': true,
-      'is_seller': false,
-      'lang': LocaleService.instance.locale.value?.languageCode ?? 'fr',
+        'id': user.id,
+        'email': user.email ?? '',
+        'full_name': user.userMetadata?['full_name'] as String?,
+        'role': 'buyer',
+        'is_public': true,
+        'is_seller': false,
+        'lang': LocaleService.instance.locale.value?.languageCode ?? 'fr',
       }),
     );
   }

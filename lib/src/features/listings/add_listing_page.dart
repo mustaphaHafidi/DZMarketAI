@@ -353,6 +353,10 @@ class _AddListingPageState extends State<AddListingPage> {
         }
         return true;
       case 5:
+        if (_isLargeVolumeListing()) {
+          _enforcePickupOnlyForLargeVolume();
+          return true;
+        }
         if (!_deliveryCod && !_deliveryPickup) {
           _setError(L10n.tr(context, 'listing.add.error_choose_delivery'));
           return false;
@@ -424,10 +428,40 @@ class _AddListingPageState extends State<AddListingPage> {
     return int.tryParse(digits);
   }
 
+  bool _isLargeVolumeListing() {
+    final weight = _parseDigitsNullable(_weightCtrl.text.trim()) ?? 0;
+    final height = _parseDigitsNullable(_heightCtrl.text.trim()) ?? 0;
+    final width = _parseDigitsNullable(_widthCtrl.text.trim()) ?? 0;
+    final length = _parseDigitsNullable(_lengthCtrl.text.trim()) ?? 0;
+    final volume = height * width * length;
+    final text = [
+      _titleCtrl.text,
+      _descCtrl.text,
+      _categoryNameFr,
+    ].whereType<String>().join(' ').toLowerCase();
+    final keywordMatch = RegExp(
+      r'(voiture|moto|camion|meuble|canape|armoire|frigo|refrigerateur|lave[- ]linge|machine[- ]a[- ]laver|climatiseur|lit|table|bureau|vehicle|furniture)',
+    ).hasMatch(text);
+    return weight > 15 ||
+        height > 120 ||
+        width > 120 ||
+        length > 200 ||
+        volume > 900000 ||
+        keywordMatch;
+  }
+
+  void _enforcePickupOnlyForLargeVolume() {
+    if (!_isLargeVolumeListing()) return;
+    _deliveryCod = false;
+    _deliveryPickup = true;
+    _allowStopdesk = false;
+  }
+
   void _next() {
     _clearError();
     if (!_validateStep(_step)) return;
     setState(() {
+      _enforcePickupOnlyForLargeVolume();
       _step = (_step + 1).clamp(0, 7);
     });
   }
@@ -444,6 +478,10 @@ class _AddListingPageState extends State<AddListingPage> {
     if (!_validateStep(6)) return;
     setState(() => _saving = true);
     try {
+      final blockedListingMessage = L10n.tr(
+        context,
+        'moderation.blocked_listing',
+      );
       final title = InputSanitizer.sanitizeText(_titleCtrl.text, maxLength: 80);
       final description = InputSanitizer.sanitizeOptionalText(
         _descCtrl.text,
@@ -509,8 +547,9 @@ class _AddListingPageState extends State<AddListingPage> {
       );
       if (!moderation.allowed) {
         await StorageService().deletePublicUrls(uploaded);
-        throw FormatException(L10n.tr(context, 'moderation.blocked_listing'));
+        throw FormatException(blockedListingMessage);
       }
+      _enforcePickupOnlyForLargeVolume();
       final deliveryOptions = <String>[
         if (_deliveryCod) 'cod',
         if (_deliveryPickup) 'pickup',
@@ -1063,26 +1102,39 @@ class _AddListingPageState extends State<AddListingPage> {
             isActive: _step >= 5,
             content: Column(
               children: [
+                if (_isLargeVolumeListing())
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      L10n.tr(context, 'listing.add.delivery_pickup_required'),
+                    ),
+                  ),
                 SwitchListTile(
-                  value: _deliveryCod,
-                  onChanged: (value) => setState(() => _deliveryCod = value),
+                  value: _isLargeVolumeListing() ? false : _deliveryCod,
+                  onChanged: _isLargeVolumeListing()
+                      ? null
+                      : (value) => setState(() => _deliveryCod = value),
                   title: Text(L10n.tr(context, 'listing.add.delivery_cod')),
                   subtitle: Text(
                     L10n.tr(context, 'listing.add.delivery_cod_hint'),
                   ),
                 ),
-                if (_courierCaps.supportsStopdesk)
-                  SwitchListTile(
-                    value: _deliveryPickup,
-                    onChanged: (value) =>
-                        setState(() => _deliveryPickup = value),
-                    title: Text(
-                      L10n.tr(context, 'listing.add.delivery_pickup'),
-                    ),
-                    subtitle: Text(
-                      L10n.tr(context, 'listing.add.delivery_pickup_hint'),
-                    ),
+                SwitchListTile(
+                  value: _isLargeVolumeListing() ? true : _deliveryPickup,
+                  onChanged: _isLargeVolumeListing()
+                      ? null
+                      : (value) => setState(() => _deliveryPickup = value),
+                  title: Text(L10n.tr(context, 'listing.add.delivery_pickup')),
+                  subtitle: Text(
+                    L10n.tr(context, 'listing.add.delivery_pickup_hint'),
                   ),
+                ),
               ],
             ),
           ),

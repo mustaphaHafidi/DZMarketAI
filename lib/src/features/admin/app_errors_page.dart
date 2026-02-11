@@ -13,7 +13,8 @@ class AppErrorsPage extends StatefulWidget {
 }
 
 class _AppErrorsPageState extends State<AppErrorsPage> {
-  late Future<List<Map<String, dynamic>>> _future;
+  static const _activeWindow = Duration(hours: 48);
+  late Future<_AppErrorsSnapshot> _future;
   final _dateFmt = DateFormat('dd/MM HH:mm');
 
   @override
@@ -22,13 +23,14 @@ class _AppErrorsPageState extends State<AppErrorsPage> {
     _future = _loadErrors();
   }
 
-  Future<List<Map<String, dynamic>>> _loadErrors() async {
+  Future<_AppErrorsSnapshot> _loadErrors() async {
     final response = await supabase
         .from('app_errors')
         .select('id,user_id,message,stack,context,platform,created_at')
         .order('created_at', ascending: false)
-        .limit(200);
-    return List<Map<String, dynamic>>.from(response as List);
+        .limit(600);
+    final rows = List<Map<String, dynamic>>.from(response as List);
+    return _partitionErrors(rows);
   }
 
   Future<void> _refresh() async {
@@ -43,6 +45,65 @@ class _AppErrorsPageState extends State<AppErrorsPage> {
       return raw.cast<String, dynamic>();
     }
     return const {};
+  }
+
+  _AppErrorsSnapshot _partitionErrors(List<Map<String, dynamic>> rows) {
+    final active = <Map<String, dynamic>>[];
+    final archive = <Map<String, dynamic>>[];
+    final seenFingerprints = <String>{};
+    final cutoff = DateTime.now().subtract(_activeWindow);
+
+    for (final row in rows) {
+      final context = _parseContext(row['context']);
+      final fingerprint = _fingerprint(row, context);
+      final createdAt = _parseDate(row['created_at']);
+      final isRecent = createdAt != null && createdAt.isAfter(cutoff);
+      if (_isArchivedContext(context)) {
+        archive.add(row);
+        continue;
+      }
+      if (!isRecent) {
+        archive.add(row);
+        continue;
+      }
+      if (seenFingerprints.add(fingerprint)) {
+        active.add(row);
+      } else {
+        archive.add(row);
+      }
+    }
+
+    return _AppErrorsSnapshot(
+      active: active,
+      archive: archive.take(30).toList(growable: false),
+    );
+  }
+
+  String _fingerprint(Map<String, dynamic> row, Map<String, dynamic> context) {
+    final message = (row['message']?.toString() ?? '').trim().toLowerCase();
+    final platform = (row['platform']?.toString() ?? '').trim().toLowerCase();
+    final code = (context['code']?.toString() ?? '').trim().toLowerCase();
+    return '$platform|$message|$code';
+  }
+
+  bool _isArchivedContext(Map<String, dynamic> context) {
+    final status = (context['status']?.toString() ?? '').toLowerCase();
+    final boolFlags = <dynamic>[
+      context['resolved'],
+      context['archived'],
+      context['fixed'],
+      context['is_resolved'],
+    ];
+    final hasTrueFlag = boolFlags.any((value) {
+      if (value is bool) return value;
+      if (value is String) {
+        final lowered = value.toLowerCase();
+        return lowered == 'true' || lowered == '1' || lowered == 'yes';
+      }
+      if (value is num) return value != 0;
+      return false;
+    });
+    return hasTrueFlag || status == 'resolved' || status == 'fixed';
   }
 
   DateTime? _parseDate(dynamic raw) {
@@ -119,6 +180,59 @@ class _AppErrorsPageState extends State<AppErrorsPage> {
     );
   }
 
+  Widget _buildErrorsList(
+    BuildContext context,
+    List<Map<String, dynamic>> rows, {
+    required String emptyKey,
+  }) {
+    if (rows.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _refresh,
+        child: _buildEmpty(context, L10n.tr(context, emptyKey)),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: ListView.separated(
+        itemCount: rows.length,
+        separatorBuilder: (_, __) => const Divider(height: 1),
+        itemBuilder: (context, index) {
+          final row = rows[index];
+          final ctx = _parseContext(row['context']);
+          final isFatal = ctx['fatal'] == true;
+          final message = row['message']?.toString() ?? '-';
+          final platform = row['platform']?.toString() ?? '-';
+          final uid = row['user_id']?.toString() ??
+              L10n.tr(context, 'admin.errors_unknown_user');
+          final createdAt = _parseDate(row['created_at']);
+          final timeLabel = createdAt == null ? '-' : _dateFmt.format(createdAt);
+          return ListTile(
+            leading: Icon(
+              isFatal ? Icons.error_outline : Icons.bug_report_outlined,
+              color: isFatal ? Theme.of(context).colorScheme.error : null,
+            ),
+            title: Text(message),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${L10n.tr(context, 'admin.errors_user')}: $uid'),
+                Text('${L10n.tr(context, 'admin.errors_platform')}: $platform'),
+                Text('${L10n.tr(context, 'admin.errors_time')}: $timeLabel'),
+                if (isFatal)
+                  Text(
+                    L10n.tr(context, 'admin.errors_fatal'),
+                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  ),
+              ],
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _showDetails(context, row),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final userId = supabase.auth.currentUser?.id;
@@ -129,88 +243,79 @@ class _AppErrorsPageState extends State<AppErrorsPage> {
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(L10n.tr(context, 'admin.errors_title')),
-      ),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        child: FutureBuilder<List<Map<String, dynamic>>>(
-          future: _future,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snapshot.hasError) {
-              return _buildEmpty(
-                context,
-                L10n.tr(
-                  context,
-                  'common.error_with',
-                  params: {'error': snapshot.error.toString()},
-                ),
-              );
-            }
-            final rows = snapshot.data ?? const [];
-            if (rows.isEmpty) {
-              return _buildEmpty(
-                context,
-                L10n.tr(context, 'admin.errors_empty'),
-              );
-            }
-            return ListView.separated(
-              itemCount: rows.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                final row = rows[index];
-                final ctx = _parseContext(row['context']);
-                final isFatal = ctx['fatal'] == true;
-                final message = row['message']?.toString() ?? '-';
-                final platform = row['platform']?.toString() ?? '-';
-                final uid = row['user_id']?.toString() ??
-                    L10n.tr(context, 'admin.errors_unknown_user');
-                final createdAt = _parseDate(row['created_at']);
-                final timeLabel =
-                    createdAt == null ? '-' : _dateFmt.format(createdAt);
-                return ListTile(
-                  leading: Icon(
-                    isFatal
-                        ? Icons.error_outline
-                        : Icons.bug_report_outlined,
-                    color: isFatal
-                        ? Theme.of(context).colorScheme.error
-                        : null,
+    return FutureBuilder<_AppErrorsSnapshot>(
+      future: _future,
+      builder: (context, snapshot) {
+        final activeCount = snapshot.data?.active.length ?? 0;
+        final archiveCount = snapshot.data?.archive.length ?? 0;
+
+        return DefaultTabController(
+          length: 2,
+          child: Scaffold(
+            appBar: AppBar(
+              title: Text(L10n.tr(context, 'admin.errors_title')),
+              bottom: TabBar(
+                tabs: [
+                  Tab(
+                    text:
+                        '${L10n.tr(context, 'admin.errors_current')} ($activeCount)',
                   ),
-                  title: Text(message),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${L10n.tr(context, 'admin.errors_user')}: $uid',
-                      ),
-                      Text(
-                        '${L10n.tr(context, 'admin.errors_platform')}: $platform',
-                      ),
-                      Text(
-                        '${L10n.tr(context, 'admin.errors_time')}: $timeLabel',
-                      ),
-                      if (isFatal)
-                        Text(
-                          L10n.tr(context, 'admin.errors_fatal'),
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                        ),
-                    ],
+                  Tab(
+                    text:
+                        '${L10n.tr(context, 'admin.errors_archive')} ($archiveCount)',
                   ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _showDetails(context, row),
+                ],
+              ),
+            ),
+            body: Builder(
+              builder: (context) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return RefreshIndicator(
+                    onRefresh: _refresh,
+                    child: _buildEmpty(
+                      context,
+                      L10n.tr(
+                        context,
+                        'common.error_with',
+                        params: {'error': snapshot.error.toString()},
+                      ),
+                    ),
+                  );
+                }
+                final data = snapshot.data ??
+                    const _AppErrorsSnapshot(active: [], archive: []);
+                return TabBarView(
+                  children: [
+                    _buildErrorsList(
+                      context,
+                      data.active,
+                      emptyKey: 'admin.errors_empty',
+                    ),
+                    _buildErrorsList(
+                      context,
+                      data.archive,
+                      emptyKey: 'admin.errors_archive_empty',
+                    ),
+                  ],
                 );
               },
-            );
-          },
-        ),
-      ),
+            ),
+          ),
+        );
+      },
     );
   }
+}
+
+class _AppErrorsSnapshot {
+  const _AppErrorsSnapshot({
+    required this.active,
+    required this.archive,
+  });
+
+  final List<Map<String, dynamic>> active;
+  final List<Map<String, dynamic>> archive;
 }

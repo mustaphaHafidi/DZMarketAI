@@ -431,8 +431,9 @@ class ProductService {
 
   Future<void> deleteProduct(dynamic id) async {
     final userId = supabase.auth.currentUser?.id;
-    if (userId == null)
+    if (userId == null) {
       throw StateError('User must be signed in to delete products.');
+    }
     final safeId = InputSanitizer.sanitizeId(id.toString(), maxLength: 64);
     final dynamic productId = id is int ? id : int.tryParse(safeId) ?? safeId;
     await RateLimiter.instance.run(

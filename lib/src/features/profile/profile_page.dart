@@ -1,7 +1,8 @@
-﻿// ignore_for_file: deprecated_member_use
+// ignore_for_file: deprecated_member_use
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cached_network_image_platform_interface/cached_network_image_platform_interface.dart';
 import 'package:dzmarket/src/features/admin/app_errors_page.dart';
+import 'package:dzmarket/src/features/admin/moderation_admin_page.dart';
 import 'package:dzmarket/src/features/orders/shipments_dashboard_page.dart';
 import 'package:dzmarket/src/features/orders/seller_orders_page.dart';
 import 'package:dzmarket/src/features/profile/courier_settings_page.dart';
@@ -104,7 +105,8 @@ class _ProfilePageState extends State<ProfilePage> {
       _avatarUrl = p.avatarUrl;
       _isSeller = p.isSeller || p.role == UserRole.seller;
       _isPublic = p.isPublic;
-      _lang = p.lang ?? LocaleService.instance.locale.value?.languageCode ?? 'fr';
+      _lang =
+          p.lang ?? LocaleService.instance.locale.value?.languageCode ?? 'fr';
       _lat = p.locationLat;
       _lng = p.locationLng;
       _syncLocationSelectionFromText();
@@ -133,14 +135,20 @@ class _ProfilePageState extends State<ProfilePage> {
       _error = null;
     });
     try {
-      final fullName =
-          InputSanitizer.sanitizeOptionalText(_nameCtrl.text, maxLength: 80);
+      final fullName = InputSanitizer.sanitizeOptionalText(
+        _nameCtrl.text,
+        maxLength: 80,
+      );
       final avatarUrl = InputSanitizer.safeUrl(_avatarUrl);
       final phone = InputSanitizer.sanitizePhone(_phoneCtrl.text);
-      final wilaya =
-          InputSanitizer.sanitizeOptionalText(_wilayaCtrl.text, maxLength: 60);
-      final daira =
-          InputSanitizer.sanitizeOptionalText(_dairaCtrl.text, maxLength: 60);
+      final wilaya = InputSanitizer.sanitizeOptionalText(
+        _wilayaCtrl.text,
+        maxLength: 60,
+      );
+      final daira = InputSanitizer.sanitizeOptionalText(
+        _dairaCtrl.text,
+        maxLength: 60,
+      );
       final bio = InputSanitizer.sanitizeOptionalText(
         _bioCtrl.text,
         maxLength: 240,
@@ -160,14 +168,12 @@ class _ProfilePageState extends State<ProfilePage> {
         isPublic: _isPublic,
         lang: lang,
         isSeller: _isSeller,
-        role: _isSeller ? 'seller' : 'buyer',
+        role: _profileRoleString(_profile?.role, _isSeller),
       );
       await LocaleService.instance.setLocale(_lang);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(L10n.tr(context, 'profile.updated')),
-        ),
+        SnackBar(content: Text(L10n.tr(context, 'profile.updated'))),
       );
       await _loadProfile();
     } catch (e) {
@@ -232,6 +238,19 @@ class _ProfilePageState extends State<ProfilePage> {
       }
     });
     _syncCommuneSelectionFromText();
+  }
+
+  String _profileRoleString(UserRole? role, bool isSeller) {
+    switch (role) {
+      case UserRole.superadmin:
+        return 'superadmin';
+      case UserRole.admin:
+        return 'admin';
+      case UserRole.seller:
+      case UserRole.buyer:
+      case null:
+        return isSeller ? 'seller' : 'buyer';
+    }
   }
 
   void _syncCommuneSelectionFromText() {
@@ -440,9 +459,9 @@ class _ProfilePageState extends State<ProfilePage> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -497,7 +516,10 @@ class _ProfilePageState extends State<ProfilePage> {
 
     final safeAvatar = InputSanitizer.safeUrl(_avatarUrl);
     final isSeller = _isSeller;
-    final isAdmin = _profile?.role == UserRole.admin;
+    final isAdmin =
+        _profile?.role == UserRole.admin ||
+        _profile?.role == UserRole.superadmin;
+    final isSuperAdmin = _profile?.role == UserRole.superadmin;
 
     return Scaffold(
       appBar: AppBar(title: Text(L10n.tr(context, 'profile.title'))),
@@ -514,8 +536,9 @@ class _ProfilePageState extends State<ProfilePage> {
                   children: [
                     CircleAvatar(
                       radius: 32,
-                      backgroundColor:
-                          Theme.of(context).colorScheme.secondaryContainer,
+                      backgroundColor: Theme.of(
+                        context,
+                      ).colorScheme.secondaryContainer,
                       backgroundImage: safeAvatar != null
                           ? CachedNetworkImageProvider(
                               safeAvatar,
@@ -562,7 +585,9 @@ class _ProfilePageState extends State<ProfilePage> {
                 const SizedBox(height: 16),
                 Card(
                   elevation: 2,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
@@ -581,7 +606,9 @@ class _ProfilePageState extends State<ProfilePage> {
                             OutlinedButton.icon(
                               onPressed: _saving ? null : _pickAvatar,
                               icon: const Icon(Icons.photo_camera_outlined),
-                              label: Text(L10n.tr(context, 'profile.photo_upload')),
+                              label: Text(
+                                L10n.tr(context, 'profile.photo_upload'),
+                              ),
                             ),
                             const SizedBox(width: 12),
                             if (safeAvatar != null)
@@ -622,18 +649,26 @@ class _ProfilePageState extends State<ProfilePage> {
                                     : () async {
                                         final selected =
                                             await _showLocationPicker(
-                                          context: context,
-                                          title:
-                                              L10n.tr(context, 'profile.wilaya'),
-                                          items: _wilayas,
-                                          itemLabel: (item) =>
-                                              _wilayaItemLabel(context, item),
-                                        );
-                                        if (!mounted || selected == null) return;
+                                              context: context,
+                                              title: L10n.tr(
+                                                context,
+                                                'profile.wilaya',
+                                              ),
+                                              items: _wilayas,
+                                              itemLabel: (item) =>
+                                                  _wilayaItemLabel(
+                                                    context,
+                                                    item,
+                                                  ),
+                                            );
+                                        if (!mounted || selected == null) {
+                                          return;
+                                        }
                                         final code = selected['code'] ?? '';
                                         setState(() {
-                                          _selectedWilayaCode =
-                                              code.isNotEmpty ? code : null;
+                                          _selectedWilayaCode = code.isNotEmpty
+                                              ? code
+                                              : null;
                                           _wilayaCtrl.text =
                                               selected['name_fr'] ?? code;
                                           _selectedCommuneId = null;
@@ -652,32 +687,40 @@ class _ProfilePageState extends State<ProfilePage> {
                                 label: L10n.tr(context, 'profile.daira'),
                                 value: _communeLabel(context),
                                 icon: Icons.place_outlined,
-                                onTap: (_loadingLocations ||
+                                onTap:
+                                    (_loadingLocations ||
                                         _selectedWilayaCode == null ||
                                         _communes.isEmpty)
                                     ? null
                                     : () async {
                                         final selected =
                                             await _showLocationPicker(
-                                          context: context,
-                                          title:
-                                              L10n.tr(context, 'profile.daira'),
-                                          items: _communes,
-                                          itemLabel: (item) =>
-                                              _communeItemLabel(context, item),
-                                        );
-                                        if (!mounted || selected == null) return;
+                                              context: context,
+                                              title: L10n.tr(
+                                                context,
+                                                'profile.daira',
+                                              ),
+                                              items: _communes,
+                                              itemLabel: (item) =>
+                                                  _communeItemLabel(
+                                                    context,
+                                                    item,
+                                                  ),
+                                            );
+                                        if (!mounted || selected == null) {
+                                          return;
+                                        }
                                         final communeId = selected['id'] ?? '';
                                         setState(() {
                                           _selectedCommuneId =
                                               communeId.isNotEmpty
-                                                  ? communeId
-                                                  : null;
+                                              ? communeId
+                                              : null;
                                           _dairaCtrl.text =
                                               selected['name_fr'] ??
-                                                  (communeId.isNotEmpty
-                                                      ? communeId
-                                                      : '');
+                                              (communeId.isNotEmpty
+                                                  ? communeId
+                                                  : '');
                                         });
                                       },
                               ),
@@ -728,15 +771,17 @@ class _ProfilePageState extends State<ProfilePage> {
                           value: _isPublic,
                           onChanged: (v) => setState(() => _isPublic = v),
                           title: Text(L10n.tr(context, 'profile.public')),
-                          subtitle:
-                              Text(L10n.tr(context, 'profile.public_hint')),
+                          subtitle: Text(
+                            L10n.tr(context, 'profile.public_hint'),
+                          ),
                         ),
                         SwitchListTile(
                           value: _isSeller,
                           onChanged: (v) => setState(() => _isSeller = v),
                           title: Text(L10n.tr(context, 'profile.seller_mode')),
-                          subtitle:
-                              Text(L10n.tr(context, 'profile.seller_mode_hint')),
+                          subtitle: Text(
+                            L10n.tr(context, 'profile.seller_mode_hint'),
+                          ),
                         ),
                         const SizedBox(height: 12),
                         ElevatedButton.icon(
@@ -751,8 +796,12 @@ class _ProfilePageState extends State<ProfilePage> {
                           icon: const Icon(Icons.logout),
                           label: Text(L10n.tr(context, 'auth.sign_out')),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Theme.of(context).colorScheme.error,
-                            foregroundColor: Theme.of(context).colorScheme.onError,
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.error,
+                            foregroundColor: Theme.of(
+                              context,
+                            ).colorScheme.onError,
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -762,7 +811,9 @@ class _ProfilePageState extends State<ProfilePage> {
                               ? const SizedBox(
                                   width: 16,
                                   height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : const Icon(Icons.save_outlined),
                           label: Text(
@@ -784,21 +835,42 @@ class _ProfilePageState extends State<ProfilePage> {
                 const SizedBox(height: 16),
                 Card(
                   elevation: 1,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                   child: Column(
                     children: [
                       if (isAdmin) const Divider(height: 1),
                       if (isAdmin)
                         ListTile(
-                          leading:
-                              const Icon(Icons.admin_panel_settings_outlined),
+                          leading: const Icon(
+                            Icons.admin_panel_settings_outlined,
+                          ),
                           title: Text(L10n.tr(context, 'admin.errors_title')),
-                          subtitle:
-                              Text(L10n.tr(context, 'admin.errors_subtitle')),
+                          subtitle: Text(
+                            L10n.tr(context, 'admin.errors_subtitle'),
+                          ),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () => Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (_) => const AppErrorsPage(),
+                            ),
+                          ),
+                        ),
+                      if (isSuperAdmin) const Divider(height: 1),
+                      if (isSuperAdmin)
+                        ListTile(
+                          leading: const Icon(Icons.gpp_good_outlined),
+                          title: Text(
+                            L10n.tr(context, 'admin.moderation.title'),
+                          ),
+                          subtitle: Text(
+                            L10n.tr(context, 'admin.moderation.subtitle'),
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const ModerationAdminPage(),
                             ),
                           ),
                         ),
@@ -809,7 +881,9 @@ class _ProfilePageState extends State<ProfilePage> {
                           title: Text(L10n.tr(context, 'seller_orders.title')),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const SellerOrdersPage()),
+                            MaterialPageRoute(
+                              builder: (_) => const SellerOrdersPage(),
+                            ),
                           ),
                         ),
                       if (isSeller) const Divider(height: 1),
@@ -831,28 +905,39 @@ class _ProfilePageState extends State<ProfilePage> {
                           title: Text(L10n.tr(context, 'profile.my_listings')),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const MyListingsPage()),
+                            MaterialPageRoute(
+                              builder: (_) => const MyListingsPage(),
+                            ),
                           ),
                         ),
                       if (isSeller) const Divider(height: 1),
                       if (isSeller)
                         ListTile(
                           leading: const Icon(Icons.local_shipping_outlined),
-                          title:
-                              Text(L10n.tr(context, 'profile.shipments_board')),
+                          title: Text(
+                            L10n.tr(context, 'profile.shipments_board'),
+                          ),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const ShipmentsDashboardPage()),
+                            MaterialPageRoute(
+                              builder: (_) => const ShipmentsDashboardPage(),
+                            ),
                           ),
                         ),
                       if (isSeller) const Divider(height: 1),
                       if (isSeller)
                         ListTile(
-                          leading: const Icon(Icons.settings_applications_outlined),
-                          title: Text(L10n.tr(context, 'profile.courier_settings')),
+                          leading: const Icon(
+                            Icons.settings_applications_outlined,
+                          ),
+                          title: Text(
+                            L10n.tr(context, 'profile.courier_settings'),
+                          ),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const CourierSettingsPage()),
+                            MaterialPageRoute(
+                              builder: (_) => const CourierSettingsPage(),
+                            ),
                           ),
                         ),
                     ],
@@ -878,6 +963,3 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 }
-
-
-

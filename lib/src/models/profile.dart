@@ -1,4 +1,6 @@
-enum UserRole { buyer, seller, admin }
+enum UserRole { buyer, seller, admin, superadmin }
+
+enum UserStatus { active, suspended, banned }
 
 class Profile {
   const Profile({
@@ -17,6 +19,7 @@ class Profile {
     this.isSeller = false,
     this.preferences = const {},
     required this.role,
+    this.status = UserStatus.active,
   });
 
   final String id;
@@ -34,6 +37,7 @@ class Profile {
   final bool isSeller;
   final Map<String, dynamic> preferences;
   final UserRole role;
+  final UserStatus status;
 
   factory Profile.fromJson(Map<String, dynamic> json) {
     final roleString = (json['role'] as String?) ?? 'buyer';
@@ -51,8 +55,10 @@ class Profile {
       lang: json['lang'] as String?,
       isPublic: json['is_public'] as bool? ?? true,
       isSeller: json['is_seller'] as bool? ?? false,
-      preferences: (json['preferences'] as Map?)?.cast<String, dynamic>() ?? const {},
+      preferences:
+          (json['preferences'] as Map?)?.cast<String, dynamic>() ?? const {},
       role: _roleFromString(roleString),
+      status: _statusFromString((json['status'] as String?) ?? 'active'),
     );
   }
 
@@ -62,8 +68,21 @@ class Profile {
         return UserRole.seller;
       case 'admin':
         return UserRole.admin;
+      case 'superadmin':
+        return UserRole.superadmin;
       default:
         return UserRole.buyer;
+    }
+  }
+
+  static UserStatus _statusFromString(String value) {
+    switch (value) {
+      case 'suspended':
+        return UserStatus.suspended;
+      case 'banned':
+        return UserStatus.banned;
+      default:
+        return UserStatus.active;
     }
   }
 }

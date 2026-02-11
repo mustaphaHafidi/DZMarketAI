@@ -1,6 +1,5 @@
 import 'package:dzmarket/src/services/auth_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
-import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -28,13 +27,22 @@ class _SignInPageState extends State<SignInPage> {
   }
 
   Future<void> _signIn() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    if (email.isEmpty) {
+      setState(() => _error = L10n.tr(context, 'auth.error_email_required'));
+      return;
+    }
+    if (password.isEmpty) {
+      setState(() => _error = L10n.tr(context, 'auth.error_password_required'));
+      return;
+    }
+
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final email = InputSanitizer.sanitizeEmail(_emailController.text);
-      final password = InputSanitizer.sanitizePassword(_passwordController.text);
       await AuthService.instance.signIn(
         email,
         password,
@@ -163,8 +171,7 @@ class _SignInPageState extends State<SignInPage> {
                             ),
                           ),
                           const SizedBox(height: 8),
-                          Align(
-                            alignment: Alignment.centerRight,
+                          Center(
                             child: TextButton(
                               onPressed: _loading
                                   ? null
