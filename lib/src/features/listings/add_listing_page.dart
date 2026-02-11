@@ -986,7 +986,7 @@ class _AddListingPageState extends State<AddListingPage> {
                                       ),
                                       items: _wilayas,
                                       itemLabel: (w) =>
-                                          '${w['code']} - ${_wilayaItemLabel(context, w)}',
+                                          _wilayaItemLabel(context, w),
                                     );
                                     if (picked != null) {
                                       _onWilayaSelected(picked['code']);

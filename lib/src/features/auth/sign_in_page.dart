@@ -1,7 +1,9 @@
-﻿import 'package:dzmarket/src/services/auth_service.dart';
+import 'package:dzmarket/src/services/auth_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
+import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -56,8 +58,14 @@ class _SignInPageState extends State<SignInPage> {
     }
   }
 
+  Future<void> _setLocale(String code) async {
+    await LocaleService.instance.setLocale(code);
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
+    final lang = LocaleService.instance.locale.value?.languageCode ?? 'fr';
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -68,6 +76,13 @@ class _SignInPageState extends State<SignInPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  SvgPicture.asset(
+                    'assets/branding/dzmarket_logo.svg',
+                    height: 72,
+                    width: 72,
+                    fit: BoxFit.contain,
+                  ),
+                  const SizedBox(height: 12),
                   Text(
                     'DZMarket',
                     textAlign: TextAlign.center,
@@ -75,10 +90,49 @@ class _SignInPageState extends State<SignInPage> {
                           fontWeight: FontWeight.bold,
                         ),
                   ),
+                  const SizedBox(height: 6),
+                  Text(
+                    L10n.tr(context, 'auth.brand.tagline'),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      TextButton(
+                        onPressed: () => _setLocale('fr'),
+                        child: Text(
+                          L10n.tr(context, 'profile.lang_fr'),
+                          style: TextStyle(
+                            fontWeight:
+                                lang == 'fr' ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                      const Text('•'),
+                      TextButton(
+                        onPressed: () => _setLocale('ar'),
+                        child: Text(
+                          L10n.tr(context, 'profile.lang_ar'),
+                          style: TextStyle(
+                            fontWeight:
+                                lang == 'ar' ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 12),
                   Text(
                     L10n.tr(context, 'auth.sign_in.subtitle'),
                     textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    L10n.tr(context, 'auth.email_only_note'),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                   const SizedBox(height: 24),
                   Card(
@@ -129,20 +183,44 @@ class _SignInPageState extends State<SignInPage> {
                                 ? const SizedBox(
                                     height: 18,
                                     width: 18,
-                                    child:
-                                        CircularProgressIndicator(strokeWidth: 2),
+                                    child: CircularProgressIndicator(strokeWidth: 2),
                                   )
                                 : Text(L10n.tr(context, 'auth.sign_in.cta')),
                           ),
                           const SizedBox(height: 8),
                           TextButton(
                             onPressed: _loading ? null : () => context.go('/sign-up'),
-                            child: Text(L10n.tr(context, 'auth.sign_in.no_account')),
+                            child: Text(
+                              L10n.tr(context, 'auth.sign_in.no_account'),
+                            ),
                           ),
-                ],
-              ),
-            ),
-          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      TextButton(
+                        onPressed: () => context.push('/legal/privacy'),
+                        child: Text(L10n.tr(context, 'legal.privacy.title')),
+                      ),
+                      const Text('·'),
+                      TextButton(
+                        onPressed: () => context.push('/legal/terms'),
+                        child: Text(L10n.tr(context, 'legal.terms.title')),
+                      ),
+                      const Text('·'),
+                      TextButton(
+                        onPressed: () => context.push('/legal/imprint'),
+                        child: Text(L10n.tr(context, 'legal.imprint.title')),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
                 ],
               ),
             ),
@@ -152,5 +230,3 @@ class _SignInPageState extends State<SignInPage> {
     );
   }
 }
-
-

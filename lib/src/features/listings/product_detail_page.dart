@@ -7,6 +7,7 @@ import 'package:dzmarket/src/features/chat/chat_room_page.dart';
 import 'package:dzmarket/src/features/chat/order_chat_gate_page.dart';
 import 'package:dzmarket/src/models/offer.dart';
 import 'package:dzmarket/src/models/product.dart';
+import 'package:dzmarket/src/features/profile/public_profile_page.dart';
 import 'package:dzmarket/src/services/chat_repository.dart';
 import 'package:dzmarket/src/services/favorite_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
@@ -17,6 +18,7 @@ import 'package:dzmarket/src/services/payment_labels.dart';
 import 'package:dzmarket/src/services/phone_formatter.dart';
 import 'package:dzmarket/src/services/rate_limiter.dart';
 import 'package:dzmarket/src/services/review_service.dart';
+import 'package:dzmarket/src/services/location_data_service.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:flutter/material.dart';
@@ -237,7 +239,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         'profiles.wilaya.seller',
         () => supabase
             .from('profiles')
-            .select('wilaya, full_name, avatar_url, email')
+            .select('wilaya, full_name, avatar_url, email, is_public')
             .eq('id', data['owner_id'])
             .maybeSingle(),
       );
@@ -1024,6 +1026,18 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     sellerName: _sellerProfile?['full_name']?.toString(),
                     sellerEmail: _sellerProfile?['email']?.toString(),
                     onContact: _contactSeller,
+                    onViewProfile:
+                        _sellerProfile?['is_public'] == true
+                            ? () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => PublicProfilePage(
+                                      sellerId: _product!.ownerId,
+                                    ),
+                                  ),
+                                );
+                              }
+                            : null,
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -1247,7 +1261,11 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
       text: lengthValue.toString(),
     );
 
-    _loadWilayas();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _loadWilayas();
+      }
+    });
   }
 
   @override
@@ -1284,6 +1302,47 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
   bool _communeHasStopdesk(Map<String, String> c) =>
       c['has_stop_desk'] == 'true' || c['has_stop_desk'] == '1';
 
+  List<Map<String, String>> _mapFallbackWilayas(
+    List<Map<String, String>> rows,
+    String locale,
+  ) {
+    return rows
+        .map(
+          (r) => {
+            'id': r['code'] ?? '',
+            'code': r['code'] ?? '',
+            'name': (locale == 'ar' ? r['name_ar'] : r['name_fr']) ??
+                r['name_fr'] ??
+                r['name_ar'] ??
+                '',
+          },
+        )
+        .where((m) => m['code']!.isNotEmpty && m['name']!.isNotEmpty)
+        .toList();
+  }
+
+  List<Map<String, String>> _mapFallbackCommunes(
+    List<Map<String, String>> rows,
+    String wilayaCode,
+    String locale,
+  ) {
+    return rows
+        .map(
+          (r) => {
+            'id': r['id'] ?? r['name_fr'] ?? r['name_ar'] ?? '',
+            'name': (locale == 'ar' ? r['name_ar'] : r['name_fr']) ??
+                r['name_fr'] ??
+                r['name_ar'] ??
+                '',
+            'wilaya_id': wilayaCode,
+            'has_stop_desk': '0',
+            'stopdesk_id': '',
+          },
+        )
+        .where((m) => m['name']!.isNotEmpty)
+        .toList();
+  }
+
   Future<void> _loadWilayas() async {
     if (!mounted) return;
     final locale = Localizations.localeOf(context).languageCode;
@@ -1296,6 +1355,10 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
           courierId: widget.courierId,
           sellerId: widget.sellerId,
         );
+        if (_wilayas.isEmpty) {
+          final fallback = await LocationDataService.instance.fetchWilayas();
+          _wilayas = _mapFallbackWilayas(fallback, locale);
+        }
         if (_wilayas.isNotEmpty) {
           _wilayas.sort((a, b) {
             final aNum = int.tryParse(_wilayaId(a));
@@ -1388,6 +1451,15 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
         wilayaCode: wilayaId,
         sellerId: widget.sellerId,
       );
+      if (_communes.isEmpty) {
+        final numeric = int.tryParse(wilayaId.trim());
+        if (numeric != null) {
+          final code = numeric.toString().padLeft(2, '0');
+          final fallback =
+              await LocationDataService.instance.fetchCommunes(code);
+          _communes = _mapFallbackCommunes(fallback, code, locale);
+        }
+      }
       _stopdeskCommunes = _supportsStopdeskList
           ? _communes.where(_communeHasStopdesk).toList(growable: false)
           : _communes;
@@ -2293,12 +2365,14 @@ class _SellerRowFixed extends StatelessWidget {
     this.sellerName,
     this.sellerEmail,
     this.onContact,
+    this.onViewProfile,
   });
 
   final String ownerId;
   final String? sellerName;
   final String? sellerEmail;
   final VoidCallback? onContact;
+  final VoidCallback? onViewProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -2315,35 +2389,42 @@ class _SellerRowFixed extends StatelessWidget {
                 : fallbackName;
         return Row(
           children: [
-            const CircleAvatar(child: Icon(Icons.person)),
+            InkWell(
+              onTap: onViewProfile,
+              borderRadius: BorderRadius.circular(28),
+              child: const CircleAvatar(child: Icon(Icons.person)),
+            ),
             const SizedBox(width: 8),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    L10n.tr(context, 'seller.label'),
-                    style: Theme.of(context).textTheme.labelMedium,
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          displayName,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                          overflow: TextOverflow.ellipsis,
+              child: InkWell(
+                onTap: onViewProfile,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      L10n.tr(context, 'seller.label'),
+                      style: Theme.of(context).textTheme.labelMedium,
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            displayName,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                      if (rating != null) ...[
-                        const SizedBox(width: 8),
-                        const Icon(Icons.star, color: Colors.amber, size: 18),
-                        Text(rating.toStringAsFixed(1)),
+                        if (rating != null) ...[
+                          const SizedBox(width: 8),
+                          const Icon(Icons.star, color: Colors.amber, size: 18),
+                          Text(rating.toStringAsFixed(1)),
+                        ],
                       ],
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
             ),
             TextButton.icon(

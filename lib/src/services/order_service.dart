@@ -176,6 +176,22 @@ class OrderService {
     } catch (_) {
       // Do not block order creation if chat event fails.
     }
+    final isPickup = (safeDeliveryMethod ?? '').toLowerCase() == 'pickup' ||
+        (safeShippingOption ?? '').toLowerCase() == 'pickup';
+    if (isPickup) {
+      try {
+        await ChatRepository().postOrderSystemMessage(
+          orderId: orderId,
+          text: 'order.system.pickup_request',
+          payload: {
+            'i18n_key': 'order.system.pickup_request',
+          },
+          dedupeKey: 'order:$orderId:pickup_request',
+        );
+      } catch (_) {
+        // Best-effort: do not block order creation if chat event fails.
+      }
+    }
     if (usedFallback && shippingSelection != null) {
       try {
         await supabase

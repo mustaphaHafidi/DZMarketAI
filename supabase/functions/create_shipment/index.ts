@@ -555,13 +555,67 @@ serve(async (req) => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
         .test(value);
 
-    const receiverWilayaId =
+    const normalizeName = (value: string) =>
+      textValue(value)
+        .toLowerCase()
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "");
+
+    const resolveZrWilayaId = async (
+      wilayaId: string,
+      wilayaName: string,
+    ) => {
+      const code = textValue(wilayaId);
+      const nameKey = normalizeName(wilayaName);
+      if (!code && !nameKey) return "";
+      const { data } = await supabaseAdmin
+        .from("courier_locations")
+        .select("remote_id,wilaya_code,name_norm")
+        .eq("courier_key", "zrexpress")
+        .eq("type", "wilaya");
+      if (!data || !data.length) return "";
+      const byCode = data.find((r) =>
+        textValue(r.remote_id) === code || textValue(r.wilaya_code) === code
+      );
+      if (byCode) return textValue(byCode.remote_id);
+      const byName = data.find((r) => textValue(r.name_norm) === nameKey);
+      return byName ? textValue(byName.remote_id) : "";
+    };
+
+    const resolveZrCommuneId = async (
+      wilayaRemoteId: string,
+      communeId: string,
+      communeName: string,
+    ) => {
+      const nameKey = normalizeName(communeName);
+      if (!wilayaRemoteId || (!communeId && !nameKey)) return "";
+      const { data } = await supabaseAdmin
+        .from("courier_locations")
+        .select("remote_id,parent_remote_id,name_norm")
+        .eq("courier_key", "zrexpress")
+        .eq("type", "commune")
+        .eq("parent_remote_id", wilayaRemoteId);
+      if (!data || !data.length) return "";
+      const byId = data.find((r) => textValue(r.remote_id) === communeId);
+      if (byId) return textValue(byId.remote_id);
+      const byName = data.find((r) => textValue(r.name_norm) === nameKey);
+      return byName ? textValue(byName.remote_id) : "";
+    };
+
+    let receiverWilayaId =
       textValue(pick(selection, "receiverWilayaId")) ||
       textValue(pick(selection, "wilayaCode"));
-    const receiverCommuneId =
+    let receiverCommuneId =
       textValue(pick(selection, "receiverCommuneId")) ||
       textValue(pick(selection, "commune_id")) ||
       textValue(pick(selection, "receiver_commune_id"));
+    const receiverWilayaName =
+      textValue(pick(selection, "receiverWilaya")) ||
+      textValue(pick(selection, "to_wilaya_name"));
+    const receiverCommuneName =
+      textValue(pick(selection, "receiverCommune")) ||
+      textValue(pick(selection, "to_commune_name"));
     const isStopdesk =
       pick(selection, "deliveryType") === "stopdesk" ||
       pick(selection, "is_stopdesk") === true;
@@ -621,6 +675,19 @@ serve(async (req) => {
     if (normalizedPhone2 && !isZrMobile(normalizedPhone2)) {
       return jsonResponse({ ok: false, message: "zr_phone_invalid" }, 400);
     }
+    if (!isUuid(receiverWilayaId)) {
+      receiverWilayaId = await resolveZrWilayaId(
+        receiverWilayaId,
+        receiverWilayaName,
+      );
+    }
+    if (!isUuid(receiverCommuneId)) {
+      receiverCommuneId = await resolveZrCommuneId(
+        receiverWilayaId,
+        receiverCommuneId,
+        receiverCommuneName,
+      );
+    }
     if (!isUuid(receiverWilayaId) || !isUuid(receiverCommuneId)) {
       return jsonResponse({ ok: false, message: "invalid_territory_id" }, 400);
     }
@@ -637,12 +704,8 @@ serve(async (req) => {
 
     const productGuid = crypto.randomUUID();
     const productSku = textValue(selection.product_sku ?? selection.productSku ?? orderId);
-    const cityName =
-      textValue(pick(selection, "receiverWilaya")) ||
-      textValue(pick(selection, "to_wilaya_name"));
-    const districtName =
-      textValue(pick(selection, "receiverCommune")) ||
-      textValue(pick(selection, "to_commune_name"));
+    const cityName = receiverWilayaName;
+    const districtName = receiverCommuneName;
     const postalCode = textValue(pick(selection, "zip"));
     const orderedProduct: Record<string, unknown> = {
       productId: productGuid,

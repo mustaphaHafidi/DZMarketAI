@@ -1,9 +1,9 @@
-﻿import 'package:dzmarket/src/services/auth_service.dart';
+import 'package:dzmarket/src/services/auth_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
-import 'package:dzmarket/src/services/rate_limiter.dart';
-import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -18,6 +18,7 @@ class _SignUpPageState extends State<SignUpPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
   bool _loading = false;
   String? _error;
 
@@ -26,7 +27,13 @@ class _SignUpPageState extends State<SignUpPage> {
     _emailController.dispose();
     _passwordController.dispose();
     _nameController.dispose();
+    _phoneController.dispose();
     super.dispose();
+  }
+
+  Future<void> _setLocale(String code) async {
+    await LocaleService.instance.setLocale(code);
+    if (mounted) setState(() {});
   }
 
   Future<void> _signUp() async {
@@ -41,18 +48,21 @@ class _SignUpPageState extends State<SignUpPage> {
         _nameController.text,
         maxLength: 80,
       );
-      final resp = await AuthService.instance.signUp(
+      String? phone;
+      final rawPhone = _phoneController.text.trim();
+      if (rawPhone.isNotEmpty) {
+        try {
+          phone = InputSanitizer.sanitizePhone(rawPhone);
+        } on FormatException {
+          throw FormatException(L10n.tr(context, 'auth.phone_invalid'));
+        }
+      }
+      await AuthService.instance.signUp(
         email,
         password,
+        fullName: fullName,
+        phone: phone,
       );
-      if (resp.user != null && fullName != null) {
-        await RateLimiter.instance.run(
-          'profiles.update.signup',
-          () => supabase.from('profiles').update({
-                'full_name': fullName,
-              }).eq('id', resp.user!.id),
-        );
-      }
       if (!mounted) return;
       final from = GoRouterState.of(context).uri.queryParameters['from'];
       if (from != null && from.isNotEmpty) {
@@ -74,6 +84,7 @@ class _SignUpPageState extends State<SignUpPage> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = LocaleService.instance.locale.value?.languageCode ?? 'fr';
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -84,6 +95,13 @@ class _SignUpPageState extends State<SignUpPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  SvgPicture.asset(
+                    'assets/branding/dzmarket_logo.svg',
+                    height: 72,
+                    width: 72,
+                    fit: BoxFit.contain,
+                  ),
+                  const SizedBox(height: 12),
                   Text(
                     'DZMarket',
                     textAlign: TextAlign.center,
@@ -91,8 +109,50 @@ class _SignUpPageState extends State<SignUpPage> {
                           fontWeight: FontWeight.bold,
                         ),
                   ),
+                  const SizedBox(height: 6),
+                  Text(
+                    L10n.tr(context, 'auth.brand.tagline'),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      TextButton(
+                        onPressed: () => _setLocale('fr'),
+                        child: Text(
+                          L10n.tr(context, 'profile.lang_fr'),
+                          style: TextStyle(
+                            fontWeight:
+                                lang == 'fr' ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                      const Text('•'),
+                      TextButton(
+                        onPressed: () => _setLocale('ar'),
+                        child: Text(
+                          L10n.tr(context, 'profile.lang_ar'),
+                          style: TextStyle(
+                            fontWeight:
+                                lang == 'ar' ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 12),
-                  Text(L10n.tr(context, 'auth.sign_up.subtitle'), textAlign: TextAlign.center,),
+                  Text(
+                    L10n.tr(context, 'auth.sign_up.subtitle'),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    L10n.tr(context, 'auth.email_only_note'),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                   const SizedBox(height: 24),
                   Card(
                     elevation: 4,
@@ -109,6 +169,7 @@ class _SignUpPageState extends State<SignUpPage> {
                             decoration: InputDecoration(
                               labelText: L10n.tr(context, 'auth.full_name'),
                               prefixIcon: const Icon(Icons.person_outline),
+                              helperText: L10n.tr(context, 'common.optional'),
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -118,6 +179,16 @@ class _SignUpPageState extends State<SignUpPage> {
                             decoration: InputDecoration(
                               labelText: L10n.tr(context, 'auth.email'),
                               prefixIcon: const Icon(Icons.email_outlined),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _phoneController,
+                            keyboardType: TextInputType.phone,
+                            decoration: InputDecoration(
+                              labelText: L10n.tr(context, 'auth.phone_optional'),
+                              helperText: L10n.tr(context, 'auth.phone_helper'),
+                              prefixIcon: const Icon(Icons.phone_outlined),
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -155,15 +226,38 @@ class _SignUpPageState extends State<SignUpPage> {
                                 : Text(L10n.tr(context, 'auth.sign_up.cta')),
                           ),
                           TextButton(
-                            onPressed: _loading
-                                ? null
-                                : () => context.go('/sign-in'),
-                            child: Text(L10n.tr(context, 'auth.sign_up.have_account')),
+                            onPressed:
+                                _loading ? null : () => context.go('/sign-in'),
+                            child:
+                                Text(L10n.tr(context, 'auth.sign_up.have_account')),
                           ),
                         ],
                       ),
                     ),
                   ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      TextButton(
+                        onPressed: () => context.push('/legal/privacy'),
+                        child: Text(L10n.tr(context, 'legal.privacy.title')),
+                      ),
+                      const Text('·'),
+                      TextButton(
+                        onPressed: () => context.push('/legal/terms'),
+                        child: Text(L10n.tr(context, 'legal.terms.title')),
+                      ),
+                      const Text('·'),
+                      TextButton(
+                        onPressed: () => context.push('/legal/imprint'),
+                        child: Text(L10n.tr(context, 'legal.imprint.title')),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
                 ],
               ),
             ),
@@ -173,6 +267,3 @@ class _SignUpPageState extends State<SignUpPage> {
     );
   }
 }
-
-
-

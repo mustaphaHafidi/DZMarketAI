@@ -54,6 +54,7 @@ dependencies:
   firebase_analytics: ^11.0.0
   firebase_crashlytics: ^4.0.0
   connectivity_plus: ^6.0.0
+  flutter_svg: ^2.0.10
 
 dev_dependencies:
   flutter_test:
@@ -82,6 +83,7 @@ flutter:
   assets:
     - assets/i18n/fr.json
     - assets/i18n/ar.json
+    - assets/branding/dzmarket_logo.svg
 
   # To add assets to your application, add an assets section, like this:
   # assets:

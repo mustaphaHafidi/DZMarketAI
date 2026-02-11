@@ -4,6 +4,7 @@ import 'package:dzmarket/src/features/auth/sign_in_page.dart';
 import 'package:dzmarket/src/features/auth/sign_up_page.dart';
 import 'package:dzmarket/src/features/chat/order_chat_gate_page.dart';
 import 'package:dzmarket/src/features/home/home_shell.dart';
+import 'package:dzmarket/src/features/legal/legal_page.dart';
 import 'package:dzmarket/src/features/listings/product_detail_page.dart';
 import 'package:dzmarket/src/features/tracking/map_tracking_page.dart';
 import 'package:flutter/material.dart';
@@ -37,9 +38,10 @@ GoRouter createRouter({List<NavigatorObserver> observers = const []}) {
       final session = auth.currentSession;
       final loggingIn = state.matchedLocation == '/sign-in';
       final signingUp = state.matchedLocation == '/sign-up';
+      final inLegal = state.matchedLocation.startsWith('/legal');
 
       if (session == null) {
-        if (loggingIn || signingUp) return null;
+        if (loggingIn || signingUp || inLegal) return null;
         final from = Uri.encodeComponent(state.uri.toString());
         return '/sign-in?from=$from';
       }
@@ -60,6 +62,33 @@ GoRouter createRouter({List<NavigatorObserver> observers = const []}) {
         path: '/sign-up',
         pageBuilder: (context, state) =>
             const NoTransitionPage(child: SignUpPage()),
+      ),
+      GoRoute(
+        path: '/legal/privacy',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: LegalPage(
+            titleKey: 'legal.privacy.title',
+            bodyKey: 'legal.privacy.body',
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/legal/terms',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: LegalPage(
+            titleKey: 'legal.terms.title',
+            bodyKey: 'legal.terms.body',
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/legal/imprint',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: LegalPage(
+            titleKey: 'legal.imprint.title',
+            bodyKey: 'legal.imprint.body',
+          ),
+        ),
       ),
       GoRoute(
         path: '/',

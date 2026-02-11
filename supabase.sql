@@ -48,8 +48,16 @@ create trigger profiles_touch
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
-  insert into public.profiles (id, email, full_name, role, is_public, is_seller)
-  values (new.id, new.email, new.raw_user_meta_data->>'full_name', 'buyer', true, false)
+  insert into public.profiles (id, email, full_name, phone, role, is_public, is_seller)
+  values (
+    new.id,
+    new.email,
+    new.raw_user_meta_data->>'full_name',
+    new.raw_user_meta_data->>'phone',
+    'buyer',
+    true,
+    false
+  )
   on conflict (id) do nothing;
   return new;
 end;

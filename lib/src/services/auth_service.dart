@@ -30,19 +30,42 @@ class AuthService {
     return response;
   }
 
-  Future<AuthResponse> signUp(String email, String password) async {
+  Future<AuthResponse> signUp(
+    String email,
+    String password, {
+    String? fullName,
+    String? phone,
+  }) async {
     final safeEmail = InputSanitizer.sanitizeEmail(email);
     final safePassword = InputSanitizer.sanitizePassword(password);
+    final safeFullName =
+        InputSanitizer.sanitizeOptionalText(fullName, maxLength: 80);
+    final safePhone = InputSanitizer.sanitizePhone(phone);
+    final metadata = <String, dynamic>{};
+    if (safeFullName != null) metadata['full_name'] = safeFullName;
+    if (safePhone != null) metadata['phone'] = safePhone;
     final response = await RateLimiter.instance.run(
       'auth.signUp',
       () => supabase.auth.signUp(
         email: safeEmail,
         password: safePassword,
+        data: metadata.isEmpty ? null : metadata,
       ),
     );
     final user = response.user;
     if (user != null) {
       await _ensureProfile(user);
+      if (safeFullName != null || safePhone != null) {
+        try {
+          await updateProfile(
+            id: user.id,
+            fullName: safeFullName,
+            phone: safePhone,
+          );
+        } catch (_) {
+          // Ignore profile update errors (e.g., email confirmation required).
+        }
+      }
     }
     return response;
   }
@@ -202,18 +225,19 @@ class AuthService {
     await RateLimiter.instance.run(
       'profiles.ensure.insert',
       () => supabase.from('profiles').insert({
-      'id': user.id,
-      'email': user.email ?? '',
-      'full_name': user.userMetadata?['full_name'] as String?,
-      'is_public': true,
-      'lang': LocaleService.instance.locale.value?.languageCode ?? 'fr',
-      'role': 'buyer',
-      'is_seller': false,
-      'daira': null,
-      'location_lat': null,
-      'location_lng': null,
-      'preferences': <String, dynamic>{},
-      }),
+            'id': user.id,
+            'email': user.email ?? '',
+            'full_name': user.userMetadata?['full_name'] as String?,
+            'phone': user.userMetadata?['phone'] as String?,
+            'is_public': true,
+            'lang': LocaleService.instance.locale.value?.languageCode ?? 'fr',
+            'role': 'buyer',
+            'is_seller': false,
+            'daira': null,
+            'location_lat': null,
+            'location_lng': null,
+            'preferences': <String, dynamic>{},
+          }),
     );
   }
 

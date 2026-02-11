@@ -58,6 +58,7 @@ class ProductService {
     String? brand,
     String? size,
     String? color,
+    String? nearbyWilaya,
     String sort = 'newest',
     int limit = 30,
     int offset = 0,
@@ -72,6 +73,8 @@ class ProductService {
     final safeBrand = InputSanitizer.sanitizeOptionalText(brand, maxLength: 40);
     final safeSize = InputSanitizer.sanitizeOptionalText(size, maxLength: 40);
     final safeColor = InputSanitizer.sanitizeOptionalText(color, maxLength: 40);
+    final safeNearbyWilaya =
+        InputSanitizer.sanitizeOptionalText(nearbyWilaya, maxLength: 60);
     final key = [
       'q=$q',
       'cat=${safeCategoryId ?? ''}',
@@ -81,6 +84,7 @@ class ProductService {
       'brand=${safeBrand ?? ''}',
       'size=${safeSize ?? ''}',
       'color=${safeColor ?? ''}',
+      'near=${safeNearbyWilaya ?? ''}',
       'sort=$sort',
       'limit=$limit',
       'offset=$offset',
@@ -129,6 +133,9 @@ class ProductService {
     }
     if (safeColor != null && safeColor.trim().isNotEmpty) {
       filtered = filtered.ilike('color', '%${safeColor.trim()}%');
+    }
+    if (safeNearbyWilaya != null && safeNearbyWilaya.trim().isNotEmpty) {
+      filtered = filtered.eq('location_wilaya', safeNearbyWilaya.trim());
     }
 
     final ordered = switch (sort) {

@@ -59,6 +59,22 @@ class SavedSearchService {
     );
   }
 
+  Future<void> deleteSearch(String id) async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) throw StateError('Sign in required');
+    final safeId = InputSanitizer.sanitizeId(id, maxLength: 64);
+    final safeUserId = InputSanitizer.sanitizeId(userId, maxLength: 64);
+
+    await RateLimiter.instance.run(
+      'saved_searches.delete',
+      () => supabase
+          .from('saved_searches')
+          .delete()
+          .eq('id', safeId)
+          .eq('user_id', safeUserId),
+    );
+  }
+
   Map<String, dynamic>? _sanitizeFilters(Map<String, dynamic>? filters) {
     if (filters == null) return null;
     final cleaned = <String, dynamic>{};

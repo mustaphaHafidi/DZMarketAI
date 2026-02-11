@@ -787,13 +787,6 @@ class _ProfilePageState extends State<ProfilePage> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   child: Column(
                     children: [
-                      ListTile(
-                        leading: const Icon(Icons.person_outline),
-                        title: Text(L10n.tr(context, 'profile.view_public')),
-                        subtitle:
-                            Text(L10n.tr(context, 'profile.view_public_hint')),
-                        onTap: () {},
-                      ),
                       if (isAdmin) const Divider(height: 1),
                       if (isAdmin)
                         ListTile(
