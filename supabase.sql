@@ -17,7 +17,8 @@ create table if not exists public.profiles (
   email text not null,
   full_name text,
   avatar_url text,
-  role text not null default 'buyer', -- buyer | seller | admin
+  role text not null default 'buyer', -- buyer | seller | admin | superadmin
+  status text not null default 'active', -- active | suspended | banned
   is_seller boolean not null default false,
   preferences jsonb not null default '{}'::jsonb,
   phone text,
@@ -32,17 +33,95 @@ create table if not exists public.profiles (
   updated_at timestamptz default now(),
   constraint profiles_email_unique unique (email)
 );
+alter table public.profiles
+  add column if not exists status text default 'active';
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'profiles_role_check'
+      and conrelid = 'public.profiles'::regclass
+  ) then
+    alter table public.profiles
+      add constraint profiles_role_check
+      check (role in ('buyer', 'seller', 'admin', 'superadmin'));
+  end if;
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'profiles_status_check'
+      and conrelid = 'public.profiles'::regclass
+  ) then
+    alter table public.profiles
+      add constraint profiles_status_check
+      check (status in ('active', 'suspended', 'banned'));
+  end if;
+end $$;
 alter table public.profiles enable row level security;
 drop policy if exists "public profiles read" on public.profiles;
 drop policy if exists "own profile update" on public.profiles;
 drop policy if exists "insert self" on public.profiles;
 create policy "public profiles read" on public.profiles for select using (true);
 create policy "own profile update" on public.profiles for update using (auth.uid() = id);
-create policy "insert self" on public.profiles for insert with check (auth.uid() = id);
+create policy "insert self" on public.profiles
+  for insert with check (
+    auth.uid() = id
+    and coalesce(role, 'buyer') in ('buyer', 'seller')
+    and coalesce(status, 'active') = 'active'
+  );
+create or replace function public.prevent_profile_privilege_escalation()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- Users can switch only between buyer/seller on their own profile.
+  if auth.role() <> 'service_role' and new.id = auth.uid() then
+    if coalesce(new.status, 'active') is distinct from coalesce(old.status, 'active') then
+      raise exception 'forbidden';
+    end if;
+    if coalesce(old.role, 'buyer') in ('admin', 'superadmin') then
+      if coalesce(new.role, old.role) is distinct from old.role then
+        raise exception 'forbidden';
+      end if;
+    elsif coalesce(new.role, 'buyer') not in ('buyer', 'seller') then
+      raise exception 'forbidden';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists profiles_guard on public.profiles;
+create trigger profiles_guard
+  before update on public.profiles
+  for each row execute procedure public.prevent_profile_privilege_escalation();
 drop trigger if exists profiles_touch on public.profiles;
 create trigger profiles_touch
   before update on public.profiles
   for each row execute procedure public.touch_updated_at();
+
+create or replace function public.is_user_active(p_uid uuid default auth.uid())
+returns boolean language sql stable as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = p_uid
+      and coalesce(p.status, 'active') = 'active'
+  );
+$$;
+
+create or replace function public.is_superadmin(p_uid uuid default auth.uid())
+returns boolean language sql stable as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = p_uid
+      and p.role = 'superadmin'
+      and coalesce(p.status, 'active') = 'active'
+  );
+$$;
 
 -- Trigger to auto-create profile on new auth user
 create or replace function public.handle_new_user()
@@ -2054,9 +2133,15 @@ drop policy if exists "products insert by seller" on public.products;
 drop policy if exists "products update by owner" on public.products;
 create policy "products readable by all" on public.products for select using (true);
 create policy "products insert by seller" on public.products
-  for insert with check (auth.uid() = owner_id);
+  for insert with check (
+    auth.uid() = owner_id
+    and public.is_user_active(auth.uid())
+  );
 create policy "products update by owner" on public.products
-  for update using (auth.uid() = owner_id);
+  for update using (
+    auth.uid() = owner_id
+    and public.is_user_active(auth.uid())
+  );
 drop trigger if exists products_touch on public.products;
 create trigger products_touch
   before update on public.products
@@ -2080,6 +2165,71 @@ drop trigger if exists products_auto_archive on public.products;
 create trigger products_auto_archive
   before insert or update on public.products
   for each row execute procedure public.auto_archive_product();
+
+create or replace function public.is_large_volume_product(
+  p_title text,
+  p_description text,
+  p_category_slug text,
+  p_weight_kg integer,
+  p_height_cm integer,
+  p_width_cm integer,
+  p_length_cm integer
+)
+returns boolean
+language plpgsql
+immutable
+as $$
+declare
+  txt text := lower(coalesce(p_title, '') || ' ' || coalesce(p_description, ''));
+  slug text := lower(coalesce(p_category_slug, ''));
+  volume integer := coalesce(p_height_cm, 0) * coalesce(p_width_cm, 0) * coalesce(p_length_cm, 0);
+begin
+  if coalesce(p_weight_kg, 0) > 15 then
+    return true;
+  end if;
+  if coalesce(p_height_cm, 0) > 120
+     or coalesce(p_width_cm, 0) > 120
+     or coalesce(p_length_cm, 0) > 200 then
+    return true;
+  end if;
+  if volume > 900000 then
+    return true;
+  end if;
+  if slug ~ '(vehicle|car|moto|truck|furniture|appliance|electro)' then
+    return true;
+  end if;
+  if txt ~ '(voiture|moto|camion|meuble|canape|armoire|frigo|refrigerateur|lave[- ]linge|machine[- ]a[- ]laver|climatiseur|lit|table|bureau)' then
+    return true;
+  end if;
+  return false;
+end;
+$$;
+
+create or replace function public.enforce_pickup_for_large_products()
+returns trigger
+language plpgsql
+as $$
+begin
+  if public.is_large_volume_product(
+    new.title,
+    new.description,
+    new.category_slug,
+    new.weight_kg,
+    new.height_cm,
+    new.width_cm,
+    new.length_cm
+  ) then
+    new.delivery_options := array['pickup']::text[];
+    new.allow_stopdesk := false;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists products_enforce_pickup on public.products;
+create trigger products_enforce_pickup
+  before insert or update on public.products
+  for each row execute procedure public.enforce_pickup_for_large_products();
 
 create index if not exists products_owner_idx on public.products (owner_id);
 create index if not exists products_category_slug_idx on public.products (category_slug);
@@ -2932,9 +3082,19 @@ $$;
     WHERE c.product_id = p_product_id
       AND c.buyer_id = p_buyer_id
       AND c.seller_id = p_seller_id
+    ORDER BY
+      (c.order_id IS NULL) DESC,
+      c.last_message_at DESC NULLS LAST,
+      c.created_at DESC
     LIMIT 1;
 
     IF conv.id IS NOT NULL THEN
+      UPDATE public.conversations
+      SET buyer_hidden_at = NULL,
+          seller_hidden_at = NULL,
+          updated_at = now()
+      WHERE id = conv.id;
+      SELECT * INTO conv FROM public.conversations c WHERE c.id = conv.id;
       RETURN conv;
     END IF;
 
@@ -2958,16 +3118,6 @@ $$;
   BEGIN
     PERFORM pg_advisory_xact_lock(hashtext('order_conv:' || p_order_id::text));
 
-    SELECT *
-      INTO conv
-    FROM public.conversations c
-    WHERE c.order_id = p_order_id
-    LIMIT 1;
-
-  IF conv.id IS NOT NULL THEN
-    RETURN conv;
-  END IF;
-
   SELECT id, buyer_id, seller_id, product_id
     INTO ord
   FROM public.orders
@@ -2982,33 +3132,91 @@ $$;
      AND auth.role() <> 'service_role' THEN
     RAISE EXCEPTION 'Forbidden' USING errcode = '42501';
   END IF;
+  -- Serialize by thread key too, so two concurrent orders for the same
+  -- buyer/seller/product cannot create duplicate canonical conversations.
+  PERFORM pg_advisory_xact_lock(
+    hashtext(
+      'conv_thread:'
+      || coalesce(ord.product_id::text, '')
+      || ':'
+      || coalesce(ord.buyer_id::text, '')
+      || ':'
+      || coalesce(ord.seller_id::text, '')
+    )
+  );
 
-  -- Always keep a dedicated conversation per order.
+  -- Keep one canonical conversation per buyer/seller/product.
+  -- Legacy per-order rooms are reused but no new per-order room is created.
   SELECT * INTO conv
   FROM public.conversations c
-  WHERE c.order_id = p_order_id
+  WHERE c.product_id = ord.product_id
+    AND c.buyer_id = ord.buyer_id
+    AND c.seller_id = ord.seller_id
+  ORDER BY
+    (c.order_id IS NULL) DESC,
+    c.last_message_at DESC NULLS LAST,
+    c.created_at DESC
   LIMIT 1;
 
   IF conv.id IS NOT NULL THEN
+    -- New order reactivates the thread for both sides.
+    UPDATE public.conversations
+    SET buyer_hidden_at = NULL,
+        seller_hidden_at = NULL,
+        updated_at = now()
+    WHERE id = conv.id;
+
+    -- If we selected a legacy order-specific room and no canonical room exists,
+    -- normalize it to canonical (order_id = NULL).
+    IF conv.order_id IS NOT NULL THEN
+      BEGIN
+        UPDATE public.conversations
+        SET order_id = NULL,
+            updated_at = now()
+        WHERE id = conv.id;
+      EXCEPTION
+        WHEN unique_violation THEN
+          -- Another canonical room exists; keep current room unchanged.
+          NULL;
+      END;
+      SELECT * INTO conv
+      FROM public.conversations c
+      WHERE c.id = conv.id;
+    END IF;
+
     RETURN conv;
   END IF;
 
-    INSERT INTO public.conversations (
-      order_id,
-      product_id,
-      buyer_id,
-      seller_id,
-      last_message_at,
-      last_message_text
-    ) VALUES (
-      p_order_id,
-      ord.product_id,
-      ord.buyer_id,
-      ord.seller_id,
-      now(),
-      NULL
-    )
-    RETURNING * INTO conv;
+    begin
+      INSERT INTO public.conversations (
+        product_id,
+        buyer_id,
+        seller_id,
+        last_message_at,
+        last_message_text
+      ) VALUES (
+        ord.product_id,
+        ord.buyer_id,
+        ord.seller_id,
+        now(),
+        NULL
+      )
+      RETURNING * INTO conv;
+    exception
+      when unique_violation then
+        -- Canonical conversation already created by a concurrent tx.
+        select *
+          into conv
+        from public.conversations c
+        where c.product_id = ord.product_id
+          and c.buyer_id = ord.buyer_id
+          and c.seller_id = ord.seller_id
+        order by
+          (c.order_id is null) desc,
+          c.last_message_at desc nulls last,
+          c.created_at desc
+        limit 1;
+    end;
 
     RETURN conv;
   END;
@@ -3086,6 +3294,9 @@ DECLARE
   msg public.messages;
   other uuid;
 BEGIN
+  IF NOT public.is_user_active(auth.uid()) THEN
+    RAISE EXCEPTION 'account_suspended' USING errcode = '42501';
+  END IF;
   IF NOT public.is_participant(p_conversation_id) THEN
     RAISE EXCEPTION 'Forbidden' USING errcode = '42501';
   END IF;
@@ -3303,11 +3514,17 @@ CREATE POLICY conv_select ON public.conversations
 
 DROP POLICY IF EXISTS conv_insert ON public.conversations;
 CREATE POLICY conv_insert ON public.conversations
-  FOR INSERT WITH CHECK (auth.uid() IN (buyer_id, seller_id));
+  FOR INSERT WITH CHECK (
+    auth.uid() IN (buyer_id, seller_id)
+    AND public.is_user_active(auth.uid())
+  );
 
 DROP POLICY IF EXISTS conv_update ON public.conversations;
 CREATE POLICY conv_update ON public.conversations
-  FOR UPDATE USING (auth.uid() IN (buyer_id, seller_id));
+  FOR UPDATE USING (
+    auth.uid() IN (buyer_id, seller_id)
+    AND public.is_user_active(auth.uid())
+  );
 
 -- Messages policies
 DROP POLICY IF EXISTS msg_select ON public.messages;
@@ -3325,6 +3542,7 @@ CREATE POLICY msg_insert ON public.messages
             WHERE c.id = conversation_id
               AND auth.uid() IN (c.buyer_id, c.seller_id))
     AND sender_id = auth.uid()
+    AND public.is_user_active(auth.uid())
   );
 
 -- Reads policies
@@ -3523,6 +3741,10 @@ create table if not exists public.reports (
   reason text,
   created_at timestamptz default now()
 );
+create unique index if not exists reports_product_reporter_uniq
+  on public.reports(product_id, reporter_id);
+create index if not exists reports_product_created_idx
+  on public.reports(product_id, created_at desc);
 alter table public.reports enable row level security;
 drop policy if exists "reports select all" on public.reports;
 drop policy if exists "reports insert own" on public.reports;
@@ -3530,9 +3752,164 @@ drop policy if exists "reports delete own" on public.reports;
 create policy "reports select all" on public.reports
   for select using (true);
 create policy "reports insert own" on public.reports
-  for insert with check (auth.uid() = reporter_id);
+  for insert with check (
+    auth.uid() = reporter_id
+    and public.is_user_active(auth.uid())
+    and exists (
+      select 1 from public.products p
+      where p.id = product_id
+        and p.owner_id <> auth.uid()
+    )
+  );
 create policy "reports delete own" on public.reports
   for delete using (auth.uid() = reporter_id);
+
+create or replace function public.submit_listing_report(
+  p_product_id bigint,
+  p_reason text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_reporter uuid := auth.uid();
+  v_owner uuid;
+  v_count integer := 0;
+  v_status text := 'approved';
+  v_threshold constant integer := 10;
+  v_reason text := left(coalesce(p_reason, ''), 500);
+begin
+  if v_reporter is null then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+  if not public.is_user_active(v_reporter) then
+    raise exception 'account_suspended' using errcode = '42501';
+  end if;
+
+  select p.owner_id, coalesce(p.moderation_status, 'approved')
+    into v_owner, v_status
+  from public.products p
+  where p.id = p_product_id;
+  if v_owner is null then
+    raise exception 'product_missing' using errcode = 'P0002';
+  end if;
+  if v_owner = v_reporter then
+    raise exception 'self_report_forbidden' using errcode = '42501';
+  end if;
+
+  insert into public.reports (product_id, reporter_id, reason, created_at)
+  values (p_product_id, v_reporter, nullif(v_reason, ''), now())
+  on conflict (product_id, reporter_id)
+  do update set reason = excluded.reason, created_at = now();
+
+  select count(distinct reporter_id)
+    into v_count
+  from public.reports
+  where product_id = p_product_id
+    and created_at >= now() - interval '7 days';
+
+  if v_count >= v_threshold then
+    update public.products
+    set moderation_status = 'masked',
+        moderation_reason = coalesce(moderation_reason, 'auto_mask_reports'),
+        moderation_score = greatest(coalesce(moderation_score, 0), 1),
+        moderation_labels = coalesce(moderation_labels, '[]'::jsonb) || jsonb_build_array('reports_threshold'),
+        moderation_updated_at = now()
+    where id = p_product_id
+      and coalesce(moderation_status, 'approved') = 'approved';
+  end if;
+
+  select coalesce(moderation_status, 'approved')
+    into v_status
+  from public.products
+  where id = p_product_id;
+
+  return jsonb_build_object(
+    'ok', true,
+    'reports_7d', v_count,
+    'threshold', v_threshold,
+    'status', v_status
+  );
+end;
+$$;
+revoke all on function public.submit_listing_report(bigint, text) from public;
+grant execute on function public.submit_listing_report(bigint, text) to authenticated;
+
+create or replace function public.admin_set_user_status(
+  p_user_id uuid,
+  p_status text,
+  p_reason text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_status text := lower(coalesce(p_status, ''));
+  v_reason text := nullif(left(coalesce(p_reason, ''), 300), '');
+begin
+  if not public.is_superadmin(auth.uid()) then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+  if p_user_id = auth.uid() and v_status <> 'active' then
+    raise exception 'self_status_change_forbidden' using errcode = '42501';
+  end if;
+  if v_status not in ('active', 'suspended', 'banned') then
+    raise exception 'invalid_status' using errcode = '22023';
+  end if;
+  update public.profiles
+  set status = v_status,
+      updated_at = now(),
+      preferences = coalesce(preferences, '{}'::jsonb) || jsonb_build_object(
+        'admin_status_reason', v_reason,
+        'admin_status_updated_at', now()
+      )
+  where id = p_user_id;
+  if not found then
+    raise exception 'user_missing' using errcode = 'P0002';
+  end if;
+end;
+$$;
+revoke all on function public.admin_set_user_status(uuid, text, text) from public;
+grant execute on function public.admin_set_user_status(uuid, text, text) to authenticated;
+
+create or replace function public.admin_set_product_moderation(
+  p_product_id bigint,
+  p_status text,
+  p_reason text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_status text := lower(coalesce(p_status, ''));
+  v_reason text := nullif(left(coalesce(p_reason, ''), 300), '');
+begin
+  if not public.is_superadmin(auth.uid()) then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+  if v_status not in ('approved', 'masked', 'blocked') then
+    raise exception 'invalid_status' using errcode = '22023';
+  end if;
+  update public.products
+  set moderation_status = v_status,
+      moderation_reason = v_reason,
+      moderation_updated_at = now(),
+      is_archived = case when v_status = 'blocked' then true else is_archived end,
+      updated_at = now()
+  where id = p_product_id;
+  if not found then
+    raise exception 'product_missing' using errcode = 'P0002';
+  end if;
+end;
+$$;
+revoke all on function public.admin_set_product_moderation(bigint, text, text) from public;
+grant execute on function public.admin_set_product_moderation(bigint, text, text) to authenticated;
 
 -- Storage buckets + policies -------------------------------------------------
 insert into storage.buckets (id, name, public)
@@ -3700,7 +4077,7 @@ create policy "app errors select admin" on public.app_errors
       select 1
       from public.profiles p
       where p.id = auth.uid()
-        and p.role = 'admin'
+        and p.role in ('admin', 'superadmin')
     )
   );
 create index if not exists app_errors_user_idx on public.app_errors (user_id, created_at desc);
@@ -3832,11 +4209,18 @@ begin
   if not public.consume_rate_limit('order:' || new.buyer_id::text, 10, 3600) then
     raise exception 'order rate limit exceeded';
   end if;
+  -- Block only near-identical double-submit attempts (accidental double tap).
+  -- Legit second orders with another courier/method should pass.
   if exists (
     select 1 from public.orders o
     where o.buyer_id = new.buyer_id
       and o.product_id = new.product_id
-      and o.created_at > now() - interval '5 minutes'
+      and o.status in ('pending', 'paid', 'shipped')
+      and o.created_at > now() - interval '20 seconds'
+      and coalesce(o.courier_id, '') = coalesce(new.courier_id, '')
+      and coalesce(o.delivery_method, '') = coalesce(new.delivery_method, '')
+      and coalesce(o.shipping_option, '') = coalesce(new.shipping_option, '')
+      and coalesce(o.shipping_address_id, -1) = coalesce(new.shipping_address_id, -1)
   ) then
     raise exception 'duplicate order';
   end if;

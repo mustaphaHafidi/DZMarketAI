@@ -20,12 +20,15 @@ class ChatRepository {
     int limit = 30,
     ConversationCursor? cursor,
   }) {
+    final fetchLimit = (limit * 4).clamp(60, 200);
     var query = _client
         .from(SupabaseTables.conversations)
         .stream(primaryKey: ['id'])
-        .limit(limit);
+        .order('last_message_at', ascending: false)
+        .limit(fetchLimit);
 
-    // Sort client-side to avoid heavy ORDER BY on the server (prevents timeouts).
+    // Sort + dedupe client-side to avoid heavy ORDER BY on the server
+    // and to collapse legacy duplicate rooms for the same thread.
     return query.map((rows) {
       final list = rows.map(Conversation.fromJson).toList();
       list.sort((a, b) {
@@ -33,8 +36,70 @@ class ChatRepository {
         final bt = b.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
         return bt.compareTo(at);
       });
-      return list;
+      final deduped = _dedupeThreads(list);
+      return deduped.take(limit).toList();
     });
+  }
+
+  List<Conversation> _dedupeThreads(List<Conversation> sorted) {
+    final userId = _client.auth.currentUser?.id;
+    final byKey = <String, Conversation>{};
+    for (final conversation in sorted) {
+      final key = _threadKey(conversation);
+      final current = byKey[key];
+      if (current == null ||
+          _isPreferredConversation(
+            candidate: conversation,
+            current: current,
+            userId: userId,
+          )) {
+        byKey[key] = conversation;
+      }
+    }
+    final deduped = byKey.values.toList();
+    deduped.sort((a, b) {
+      final at = a.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bt = b.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return bt.compareTo(at);
+    });
+    return deduped;
+  }
+
+  String _threadKey(Conversation conversation) {
+    final productId = conversation.productId ?? '';
+    final buyerId = conversation.buyerId ?? '';
+    final sellerId = conversation.sellerId ?? '';
+    if (productId.isNotEmpty && buyerId.isNotEmpty && sellerId.isNotEmpty) {
+      return 'p:$productId|b:$buyerId|s:$sellerId';
+    }
+    final orderId = conversation.orderId ?? '';
+    if (orderId.isNotEmpty) {
+      return 'o:$orderId';
+    }
+    return 'c:${conversation.id}';
+  }
+
+  bool _isPreferredConversation({
+    required Conversation candidate,
+    required Conversation current,
+    required String? userId,
+  }) {
+    if (userId != null) {
+      final candidateHidden = candidate.isHiddenForUser(userId);
+      final currentHidden = current.isHiddenForUser(userId);
+      if (candidateHidden != currentHidden) {
+        return !candidateHidden;
+      }
+    }
+    final candidateNullOrder = candidate.orderId == null || candidate.orderId!.isEmpty;
+    final currentNullOrder = current.orderId == null || current.orderId!.isEmpty;
+    if (candidateNullOrder != currentNullOrder) {
+      return candidateNullOrder;
+    }
+    final candidateAt =
+        candidate.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+    final currentAt = current.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+    return candidateAt.isAfter(currentAt);
   }
 
   /// Stream messages for a conversation, newest last.

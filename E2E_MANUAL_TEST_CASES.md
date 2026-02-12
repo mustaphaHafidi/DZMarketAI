@@ -160,7 +160,7 @@ Format:
 
 ---
 
-## E. Fiche produit, offre, signalement, checkout (32 cas)
+## E. Fiche produit, offre, signalement, checkout (34 cas)
 
 - [ ] `TC-PROD-001 | Ouvrir fiche produit valide | Detail charge sans erreur | P0`
 - [ ] `TC-PROD-002 | Produit inexistant | Etat d erreur propre | P1`
@@ -186,7 +186,7 @@ Format:
 - [ ] `TC-PROD-022 | Stopdesk dispo transporteur -> visible | Option stopdesk utilisable | P1`
 - [ ] `TC-PROD-023 | Stopdesk non supporte -> cache | Option absente | P1`
 - [ ] `TC-PROD-024 | Envoi commande valide | Order creee status pending | P0`
-- [ ] `TC-PROD-025 | Commande duplicate immediate | Bloquee par anti-duplicate | P1`
+- [ ] `TC-PROD-025 | Double clic meme commande (<20s, meme courier/mode/adresse) | Bloquee par anti-duplicate | P1`
 - [ ] `TC-PROD-026 | Buy own product | Bloque avec message | P0`
 - [ ] `TC-PROD-027 | Produit invalide en checkout | Erreur propre (invalid product) | P1`
 - [ ] `TC-PROD-028 | Message systeme auto pour pickup | Message auto present dans chat order | P0`
@@ -194,6 +194,8 @@ Format:
 - [ ] `TC-PROD-030 | Persistence last checkout | Donnees adresse pre-remplies au prochain checkout | P1`
 - [ ] `TC-PROD-031 | Seller public tap avatar/nom | Navigation profil public OK | P0`
 - [ ] `TC-PROD-032 | Seller prive tap avatar/nom | Pas de fuite info privee | P1`
+- [ ] `TC-PROD-033 | 2e commande meme produit avec courier/mode different et stock dispo | Commande autorisee | P0`
+- [ ] `TC-PROD-034 | Repasser commandes jusqu a epuisement stock (ex: stock=3) | 3 commandes max puis out of stock | P0`
 
 ---
 
@@ -223,10 +225,12 @@ Format:
 - [ ] `TC-ORD-022 | RLS: user A ne voit pas orders user B | Aucun leak de donnees | P0`
 - [ ] `TC-ORD-023 | Stock decremente a creation order | Stock reserve immediatement | P0`
 - [ ] `TC-ORD-024 | Stock a delivered + sold_count | Valeurs coherentes | P1`
+- [ ] `TC-ORD-025 | Buyer return sync batch (100+ orders with tracking) | Job traite plusieurs lots sans stopper a 40 | P1`
+- [ ] `TC-ORD-026 | Buyer return event data minimization | buyer_return_events ne contient que buyer_id/order_id/status/courier_id/returned_at | P0`
 
 ---
 
-## G. Chat V2 (16 cas)
+## G. Chat V2 (19 cas)
 
 - [ ] `TC-CHAT-001 | Ouvrir hub chat | Conversations chargees | P0`
 - [ ] `TC-CHAT-002 | Liste conversations limitee | 30 dernieres max | P0`
@@ -244,6 +248,9 @@ Format:
 - [ ] `TC-CHAT-014 | Message systeme order_shipped/tracking | Present avec payload correct | P1`
 - [ ] `TC-CHAT-015 | Label URL visible seller only | Buyer ne voit pas bouton label | P0`
 - [ ] `TC-CHAT-016 | RLS room: user non participant | Acces refuse | P0`
+- [ ] `TC-CHAT-017 | Meme buyer/seller/produit, commandes multiples (pickup+livraison+autre courier) | Une seule room conservee | P0`
+- [ ] `TC-CHAT-018 | Hub chat apres commandes multiples meme thread | Pas de doublon de conversation | P0`
+- [ ] `TC-CHAT-019 | Room archivee puis nouvelle commande meme thread | Room reactivatee, meme id conversation | P1`
 
 ---
 
@@ -352,7 +359,7 @@ Format:
 - [ ] `TC-SEC-009 | Upload avatar path autre user | Refusee | P1`
 - [ ] `TC-SEC-010 | Upload image produits non auth | Refusee | P1`
 - [ ] `TC-SEC-011 | Rate limit orders (burst) | Neme commande refusee selon seuil | P1`
-- [ ] `TC-SEC-012 | Duplicate order meme produit 5 min | Refusee | P1`
+- [ ] `TC-SEC-012 | Duplicate order quasi identique <20s | Refusee | P1`
 - [ ] `TC-SEC-013 | Input injection simple dans recherche | Sanitization, pas crash | P1`
 - [ ] `TC-SEC-014 | Input injection simple dans chat | Sanitization, pas crash | P1`
 - [ ] `TC-SEC-015 | Input injection simple dans profil | Sanitization, pas crash | P1`
@@ -373,8 +380,10 @@ Executer minimum:
 - `TC-BROWSE-005`
 - `TC-LIST-028`
 - `TC-PROD-024`
+- `TC-PROD-033`
 - `TC-ORD-011`
 - `TC-CHAT-013`
+- `TC-CHAT-017`
 - `TC-MOD-004`
 - `TC-MOD-015`
 - `TC-MOD-020`

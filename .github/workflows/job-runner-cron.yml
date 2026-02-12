@@ -12,32 +12,250 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
+    env:
+      JOB_ERRORS_MAX: "0"
+      COURIER_API_FAILURE_MAX: "0"
+      RETURNS_ZERO_MIN_SCANNED: "50"
+      RETURNS_ZERO_STREAK_ALERT: "3"
     steps:
       - name: Call Supabase job-runner
+        id: run_job_runner
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
+          set -euo pipefail
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
             echo "Missing secrets SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY" >&2
             exit 1
           fi
-          curl -sS --fail --retry 3 --retry-delay 10 --retry-all-errors \
+          response_file="$RUNNER_TEMP/job_runner_response.json"
+          http_code=$(
+            curl -sS --retry 3 --retry-delay 10 --retry-all-errors \
+            -o "$response_file" -w "%{http_code}" \
             -X POST "$SUPABASE_URL/functions/v1/job-runner" \
             -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
             -H "Content-Type: application/json" \
             --data '{"source":"github-cron"}'
+          )
+          echo "http_code=$http_code" >> "$GITHUB_OUTPUT"
+          echo "response_file=$response_file" >> "$GITHUB_OUTPUT"
+          if [ "${http_code}" -ge 400 ]; then
+            echo "job-runner HTTP error: ${http_code}" >&2
+            cat "$response_file" || true
+            exit 1
+          fi
+          cat "$response_file"
+      - name: Evaluate job-runner health
+        id: evaluate_health
+        if: success()
+        env:
+          RESPONSE_FILE: ${{ steps.run_job_runner.outputs.response_file }}
+          JOB_ERRORS_MAX: ${{ env.JOB_ERRORS_MAX }}
+          COURIER_API_FAILURE_MAX: ${{ env.COURIER_API_FAILURE_MAX }}
+          RETURNS_ZERO_MIN_SCANNED: ${{ env.RETURNS_ZERO_MIN_SCANNED }}
+        run: |
+          set -euo pipefail
+          if [ ! -f "$RESPONSE_FILE" ]; then
+            echo "Missing response file: $RESPONSE_FILE" >&2
+            exit 1
+          fi
+          jq --version
+
+          jobs_failed=$(jq -r '.create_shipment_failures // 0' "$RESPONSE_FILE")
+          returns_count=$(jq -r '.returns // 0' "$RESPONSE_FILE")
+          scanned=$(jq -r '.returns_metrics.orders_scanned // 0' "$RESPONSE_FILE")
+          api_failures=$(jq -r '.returns_metrics.courier_api_failures // 0' "$RESPONSE_FILE")
+          sync_error=$(jq -r '.returns_metrics.sync_error // ""' "$RESPONSE_FILE")
+          if [ "$sync_error" = "null" ]; then sync_error=""; fi
+
+          hard_alert=false
+          if [ "$jobs_failed" -gt "$JOB_ERRORS_MAX" ]; then hard_alert=true; fi
+          if [ "$api_failures" -gt "$COURIER_API_FAILURE_MAX" ]; then hard_alert=true; fi
+          if [ -n "$sync_error" ]; then hard_alert=true; fi
+
+          zero_anomaly=false
+          if [ "$scanned" -ge "$RETURNS_ZERO_MIN_SCANNED" ] && [ "$returns_count" -eq 0 ]; then
+            zero_anomaly=true
+          fi
+
+          summary="jobs_failed=${jobs_failed}, api_failures=${api_failures}, returns=${returns_count}, scanned=${scanned}, sync_error=${sync_error:-none}"
+          echo "jobs_failed=$jobs_failed" >> "$GITHUB_OUTPUT"
+          echo "returns_count=$returns_count" >> "$GITHUB_OUTPUT"
+          echo "orders_scanned=$scanned" >> "$GITHUB_OUTPUT"
+          echo "api_failures=$api_failures" >> "$GITHUB_OUTPUT"
+          echo "sync_error=$sync_error" >> "$GITHUB_OUTPUT"
+          echo "hard_alert=$hard_alert" >> "$GITHUB_OUTPUT"
+          echo "zero_anomaly=$zero_anomaly" >> "$GITHUB_OUTPUT"
+          echo "summary=$summary" >> "$GITHUB_OUTPUT"
+      - name: Upsert health alerts
+        if: success()
+        uses: actions/github-script@v7
+        env:
+          HARD_ALERT: ${{ steps.evaluate_health.outputs.hard_alert }}
+          ZERO_ANOMALY: ${{ steps.evaluate_health.outputs.zero_anomaly }}
+          JOBS_FAILED: ${{ steps.evaluate_health.outputs.jobs_failed }}
+          API_FAILURES: ${{ steps.evaluate_health.outputs.api_failures }}
+          RETURNS_COUNT: ${{ steps.evaluate_health.outputs.returns_count }}
+          ORDERS_SCANNED: ${{ steps.evaluate_health.outputs.orders_scanned }}
+          SYNC_ERROR: ${{ steps.evaluate_health.outputs.sync_error }}
+          SUMMARY: ${{ steps.evaluate_health.outputs.summary }}
+          RETURNS_ZERO_STREAK_ALERT: ${{ env.RETURNS_ZERO_STREAK_ALERT }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const labels = ["ops-monitor", "job-runner"];
+            const now = new Date().toISOString();
+
+            const getOpenByTitle = async (title) => {
+              const { data } = await github.rest.issues.listForRepo({
+                owner,
+                repo,
+                state: "open",
+                per_page: 100,
+                labels: labels.join(","),
+              });
+              return data.find((i) => i.title === title) ?? null;
+            };
+
+            const upsert = async (title, body, issueLabels) => {
+              const existing = await getOpenByTitle(title);
+              if (existing) {
+                await github.rest.issues.update({
+                  owner,
+                  repo,
+                  issue_number: existing.number,
+                  body,
+                  labels: issueLabels,
+                });
+                return existing.number;
+              }
+              const { data } = await github.rest.issues.create({
+                owner,
+                repo,
+                title,
+                body,
+                labels: issueLabels,
+              });
+              return data.number;
+            };
+
+            const closeIfOpen = async (title, comment) => {
+              const existing = await getOpenByTitle(title);
+              if (!existing) return;
+              if (comment) {
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: existing.number,
+                  body: comment,
+                });
+              }
+              await github.rest.issues.update({
+                owner,
+                repo,
+                issue_number: existing.number,
+                state: "closed",
+              });
+            };
+
+            const hardAlert = process.env.HARD_ALERT === "true";
+            const zeroAnomaly = process.env.ZERO_ANOMALY === "true";
+            const jobsFailed = Number(process.env.JOBS_FAILED ?? "0");
+            const apiFailures = Number(process.env.API_FAILURES ?? "0");
+            const returnsCount = Number(process.env.RETURNS_COUNT ?? "0");
+            const ordersScanned = Number(process.env.ORDERS_SCANNED ?? "0");
+            const syncError = (process.env.SYNC_ERROR ?? "").trim();
+            const summary = process.env.SUMMARY ?? "";
+            const streakThreshold = Number(process.env.RETURNS_ZERO_STREAK_ALERT ?? "3");
+
+            const hardTitle = "job-runner alert: courier/jobs failures";
+            if (hardAlert) {
+              const body = [
+                `Time: ${now}`,
+                `Workflow: ${process.env.GITHUB_WORKFLOW}`,
+                `Run: ${process.env.GITHUB_RUN_ID}`,
+                "",
+                `Summary: ${summary}`,
+                `jobs_failed=${jobsFailed}`,
+                `courier_api_failures=${apiFailures}`,
+                `sync_error=${syncError || "none"}`,
+              ].join("\n");
+              await upsert(hardTitle, body, [...labels, "severity:high"]);
+            } else {
+              await closeIfOpen(hardTitle, `Recovered at ${now}.`);
+            }
+
+            const streakTitle = "job-runner monitor: returns-zero streak";
+            const streakAlertTitle = "job-runner alert: returns=0 anomaly streak";
+            let streak = 0;
+            const streakIssue = await getOpenByTitle(streakTitle);
+            if (zeroAnomaly) {
+              if (streakIssue) {
+                const match = /Consecutive runs:\s*(\d+)/i.exec(streakIssue.body ?? "");
+                streak = (match ? Number(match[1]) : 1) + 1;
+              } else {
+                streak = 1;
+              }
+              const streakBody = [
+                `Time: ${now}`,
+                `Consecutive runs: ${streak}`,
+                `returns=${returnsCount}`,
+                `orders_scanned=${ordersScanned}`,
+                "",
+                `Summary: ${summary}`,
+              ].join("\n");
+              await upsert(streakTitle, streakBody, [...labels, "returns-zero"]);
+
+              if (streak >= streakThreshold) {
+                const alertBody = [
+                  `Time: ${now}`,
+                  `Consecutive runs: ${streak}`,
+                  `Threshold: ${streakThreshold}`,
+                  `returns=${returnsCount}`,
+                  `orders_scanned=${ordersScanned}`,
+                  "",
+                  `Summary: ${summary}`,
+                ].join("\n");
+                await upsert(streakAlertTitle, alertBody, [...labels, "severity:medium", "returns-zero"]);
+              }
+            } else {
+              await closeIfOpen(streakTitle, `Recovered at ${now}. returns=${returnsCount}, scanned=${ordersScanned}`);
+              await closeIfOpen(streakAlertTitle, `Recovered at ${now}. returns=${returnsCount}, scanned=${ordersScanned}`);
+            }
       - name: Create issue on failure
         if: failure()
         uses: actions/github-script@v7
         with:
           script: |
             const date = new Date().toISOString();
-            const title = `job-runner failed (${date})`;
-            const body = `Workflow: ${process.env.GITHUB_WORKFLOW}\nRun: ${process.env.GITHUB_RUN_ID}\nCheck the Actions logs for details.`;
-            await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title,
-              body
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const title = "job-runner alert: workflow failure";
+            const body = `Time: ${date}\nWorkflow: ${process.env.GITHUB_WORKFLOW}\nRun: ${process.env.GITHUB_RUN_ID}\nCheck Actions logs for details.`;
+            const { data } = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: "open",
+              per_page: 100,
+              labels: "ops-monitor,job-runner",
             });
+            const existing = data.find((i) => i.title === title);
+            if (existing) {
+              await github.rest.issues.update({
+                owner,
+                repo,
+                issue_number: existing.number,
+                body,
+                labels: ["ops-monitor", "job-runner", "severity:high"],
+              });
+            } else {
+              await github.rest.issues.create({
+                owner,
+                repo,
+                title,
+                body,
+                labels: ["ops-monitor", "job-runner", "severity:high"],
+              });
+            }

@@ -159,13 +159,44 @@ const detectTrackingStatus = (data: unknown) => {
   const joined = parts.join(" ");
   return detectTrackingStatusFromText(joined);
 };
-const fetchJson = async (url: string, headers: HeadersInit) => {
-  const resp = await fetch(url, { headers });
-  if (!resp.ok) return null;
+type CourierFetchResult = { ok: boolean; data: unknown | null };
+
+type ReturnsSyncMetrics = {
+  orders_scanned: number;
+  pending_orders: number;
+  returns_inserted: number;
+  insert_errors: number;
+  courier_api_calls: number;
+  courier_api_failures: number;
+  tracking_updates: number;
+  stats_refresh_error: boolean;
+  sync_error: string | null;
+};
+
+const emptyReturnsMetrics = (): ReturnsSyncMetrics => ({
+  orders_scanned: 0,
+  pending_orders: 0,
+  returns_inserted: 0,
+  insert_errors: 0,
+  courier_api_calls: 0,
+  courier_api_failures: 0,
+  tracking_updates: 0,
+  stats_refresh_error: false,
+  sync_error: null,
+});
+
+const fetchJson = async (url: string, headers: HeadersInit): Promise<CourierFetchResult> => {
+  let resp: Response;
   try {
-    return await resp.json();
+    resp = await fetch(url, { headers });
   } catch {
-    return null;
+    return { ok: false, data: null };
+  }
+  if (!resp.ok) return { ok: false, data: null };
+  try {
+    return { ok: true, data: await resp.json() };
+  } catch {
+    return { ok: false, data: null };
   }
 };
 
@@ -181,212 +212,305 @@ const ecotrackBaseUrls = () => {
   });
 };
 
-const syncBuyerReturns = async (supabase: ReturnType<typeof createClient>) => {
+const parseEnvInt = (
+  key: string,
+  defaultValue: number,
+  min: number,
+  max: number,
+) => {
+  const raw = Number(Deno.env.get(key) ?? defaultValue.toString());
+  if (!Number.isFinite(raw)) return defaultValue;
+  return Math.min(Math.max(Math.floor(raw), min), max);
+};
+
+const normalizeReturnStatus = (status: string | null) => {
+  if (!status) return null;
+  if (status === "returned_to_sender") return status;
+  if (status === "not_claimed") return status;
+  if (status === "refused") return status;
+  return null;
+};
+
+const normalizeCourierForEvent = (courierId: string, courierName: string) => {
+  const normalized = normalizeCourier(courierId || courierName);
+  if (!normalized) return null;
+  if (normalized.includes("yalidine")) return "yalidine";
+  if (normalized.includes("ecotrack")) return "ecotrack";
+  if (normalized.includes("zrexpress")) return "zrexpress";
+  return normalized.slice(0, 32);
+};
+
+const syncBuyerReturns = async (
+  supabase: ReturnType<typeof createClient>,
+): Promise<ReturnsSyncMetrics> => {
+  const metrics = emptyReturnsMetrics();
   const since = new Date();
   since.setMonth(since.getMonth() - 12);
-  const { data: existingEvents } = await supabase
-    .from("buyer_return_events")
-    .select("order_id");
-  const existingOrders = new Set(
-    (existingEvents ?? []).map((row) => row.order_id?.toString()).filter(Boolean),
-  );
-
-  const { data: orders } = await supabase
-    .from("orders")
-    .select("id,buyer_id,seller_id,courier_id,courier_name,tracking_number,created_at")
-    .not("tracking_number", "is", null)
-    .gte("created_at", since.toISOString())
-    .order("created_at", { ascending: false })
-    .limit(40);
-
-  const orderList = Array.isArray(orders) ? orders : [];
-  const pending = orderList.filter(
-    (order) => order?.tracking_number && !existingOrders.has(order.id?.toString()),
-  );
-  if (pending.length === 0) return 0;
-
-  const sellerIds = Array.from(
-    new Set(pending.map((order) => order.seller_id).filter(Boolean)),
-  );
-  const courierIds = Array.from(
-    new Set(pending.map((order) => order.courier_id).filter(Boolean)),
-  );
-
-  const { data: settings } = await supabase
-    .from("seller_delivery_settings")
-    .select("owner_id,courier_id,api_key,api_secret")
-    .in("owner_id", sellerIds)
-    .in("courier_id", courierIds);
-
-  const settingsMap = new Map<string, { api_key: string; api_secret: string }>();
-  for (const row of settings ?? []) {
-    if (!row?.owner_id || !row?.courier_id || !row?.api_key) continue;
-    settingsMap.set(`${row.owner_id}:${row.courier_id}`, {
-      api_key: row.api_key,
-      api_secret: row.api_secret ?? "",
-    });
-  }
-
+  const maxOrders = parseEnvInt("RETURNS_SYNC_MAX_ORDERS", 500, 20, 5000);
+  const pageSize = parseEnvInt("RETURNS_SYNC_PAGE_SIZE", 100, 20, 500);
+  const maxBatches = Math.ceil(maxOrders / pageSize) + 1;
   let inserted = 0;
-  for (const order of pending) {
-    const courierId = order.courier_id ?? "";
-    const courierName = order.courier_name ?? "";
-    const normalized = normalizeCourier(`${courierId} ${courierName}`);
-    const settings =
-      settingsMap.get(`${order.seller_id}:${courierId}`) ??
-      settingsMap.get(`${order.seller_id}:${order.courier_id}`) ??
-      null;
-    if (!settings) continue;
+  let scanned = 0;
+  const settingsCache = new Map<string, { api_key: string; api_secret: string } | null>();
 
-    const tracking = order.tracking_number?.toString() ?? "";
-    if (!tracking) continue;
+  for (let batch = 0; batch < maxBatches && scanned < maxOrders; batch++) {
+    const from = batch * pageSize;
+    const to = from + pageSize - 1;
+    const { data: orders, error: ordersError } = await supabase
+      .from("orders")
+      .select("id,buyer_id,seller_id,courier_id,courier_name,tracking_number,created_at")
+      .not("tracking_number", "is", null)
+      .gte("created_at", since.toISOString())
+      .order("created_at", { ascending: false })
+      .range(from, to);
+    if (ordersError) throw ordersError;
 
-    let trackingData: unknown = null;
-    if (normalized.includes("yalidine")) {
-      trackingData = await fetchJson(
-        `https://api.yalidine.app/v1/histories/${encodeURIComponent(tracking)}`,
-        {
-          "X-API-ID": settings.api_key,
-          "X-API-TOKEN": settings.api_secret,
-          Accept: "application/json",
-        },
-      );
-    } else if (normalized.includes("ecotrack")) {
-      for (const base of ecotrackBaseUrls()) {
-        trackingData = await fetchJson(
-          `${base.replace(/\/+$/, "")}/api/v1/get/tracking/info?tracking=${encodeURIComponent(
-            tracking,
-          )}`,
+    const fetched = Array.isArray(orders) ? orders : [];
+    if (fetched.length === 0) break;
+
+    const remaining = Math.max(maxOrders - scanned, 0);
+    const orderList = fetched.slice(0, remaining);
+    scanned += orderList.length;
+    if (orderList.length === 0) break;
+
+    const orderIds = orderList
+      .map((order) => Number(order?.id))
+      .filter((id) => Number.isFinite(id)) as number[];
+    if (orderIds.length === 0) continue;
+
+    const { data: existingEvents, error: existingError } = await supabase
+      .from("buyer_return_events")
+      .select("order_id")
+      .in("order_id", orderIds);
+    if (existingError) throw existingError;
+
+    const existingOrders = new Set(
+      (existingEvents ?? [])
+        .map((row) => Number(row.order_id))
+        .filter((id) => Number.isFinite(id)),
+    );
+
+    const pending = orderList.filter((order) => {
+      const orderId = Number(order?.id);
+      return order?.tracking_number && Number.isFinite(orderId) && !existingOrders.has(orderId);
+    });
+    metrics.pending_orders += pending.length;
+    if (pending.length === 0) continue;
+
+    const missingPairs = new Map<string, { sellerId: string; courierId: string }>();
+    for (const order of pending) {
+      const sellerId = order.seller_id?.toString() ?? "";
+      const courierId = order.courier_id?.toString() ?? "";
+      if (!sellerId || !courierId) continue;
+      const key = `${sellerId}:${courierId}`;
+      if (!settingsCache.has(key)) {
+        missingPairs.set(key, { sellerId, courierId });
+      }
+    }
+
+    if (missingPairs.size > 0) {
+      const sellerIds = Array.from(new Set(Array.from(missingPairs.values()).map((v) => v.sellerId)));
+      const courierIds = Array.from(new Set(Array.from(missingPairs.values()).map((v) => v.courierId)));
+
+      const { data: settings, error: settingsError } = await supabase
+        .from("seller_delivery_settings")
+        .select("owner_id,courier_id,api_key,api_secret")
+        .in("owner_id", sellerIds)
+        .in("courier_id", courierIds);
+      if (settingsError) throw settingsError;
+
+      for (const key of missingPairs.keys()) {
+        settingsCache.set(key, null);
+      }
+      for (const row of settings ?? []) {
+        if (!row?.owner_id || !row?.courier_id || !row?.api_key) continue;
+        settingsCache.set(`${row.owner_id}:${row.courier_id}`, {
+          api_key: row.api_key,
+          api_secret: row.api_secret ?? "",
+        });
+      }
+    }
+
+    for (const order of pending) {
+      const courierId = order.courier_id ?? "";
+      const courierName = order.courier_name ?? "";
+      const normalized = normalizeCourier(`${courierId} ${courierName}`);
+      const settings = settingsCache.get(`${order.seller_id}:${courierId}`) ?? null;
+      if (!settings) continue;
+
+      const tracking = order.tracking_number?.toString() ?? "";
+      if (!tracking) continue;
+
+      let trackingData: unknown = null;
+      if (normalized.includes("yalidine")) {
+        metrics.courier_api_calls += 1;
+        const response = await fetchJson(
+          `https://api.yalidine.app/v1/histories/${encodeURIComponent(tracking)}`,
           {
-            Authorization: `Bearer ${settings.api_key}`,
+            "X-API-ID": settings.api_key,
+            "X-API-TOKEN": settings.api_secret,
             Accept: "application/json",
           },
         );
-        if (trackingData) break;
-      }
-    } else if (normalized.includes("zrexpress")) {
-      trackingData = await fetchJson(
-        `https://api.zrexpress.app/api/v1/parcels/${encodeURIComponent(tracking)}`,
-        {
-          "X-Api-Key": settings.api_key,
-          "X-Tenant": settings.api_secret,
-          Accept: "application/json",
-        },
-      );
-    }
-
-    if (!trackingData) continue;
-    let returnStatus: string | null = null;
-    if (normalized.includes("ecotrack")) {
-      returnStatus = detectEcotrackReturn(trackingData);
-    } else if (normalized.includes("zrexpress")) {
-      returnStatus = detectZrExpressReturn(trackingData);
-    }
-    if (!returnStatus) returnStatus = detectReturn(trackingData);
-
-    if (returnStatus) {
-      const { error: insertError } = await supabase
-        .from("buyer_return_events")
-        .upsert(
-          {
-            buyer_id: order.buyer_id,
-            order_id: Number(order.id),
-            courier_id: courierId || courierName,
-            status: returnStatus,
-            returned_at: new Date().toISOString(),
-          },
-          { onConflict: "order_id,status" },
-        );
-      if (!insertError) inserted += 1;
-    }
-
-    const trackingStatus = detectTrackingStatus(trackingData);
-    if (trackingStatus) {
-      const isReturn =
-        trackingStatus === "returned_to_sender" ||
-        trackingStatus === "not_claimed" ||
-        trackingStatus === "refused";
-      const eventKey = `order:${order.id}:tracking:${trackingStatus}`;
-      const payload = {
-        i18n_key: isReturn ? "order.system.returned" : "order.system.tracking",
-        status: trackingStatus,
-        status_i18n: `order.status.${trackingStatus}`,
-        tracking_number: tracking,
-        courier_id: courierId,
-        courier_name: courierName,
-      };
-      try {
-        await supabase.rpc("post_order_event", {
-          p_order_id: Number(order.id),
-          p_event: "order_tracking",
-          p_payload: payload,
-          p_dedupe_key: eventKey,
-        });
-      } catch (_) {
-        // Ignore tracking message errors
-      }
-
-      try {
-        const { data: shipmentRow } = await supabase
-          .from("shipments")
-          .select("events,status,tracking_number,carrier,option,delivery_mode,label_url")
-          .eq("order_id", Number(order.id))
-          .maybeSingle();
-
-        const existingEvents = (shipmentRow?.events as unknown as Array<Record<string, unknown>>) ?? [];
-        const eventExists = existingEvents.some((e) => {
-          const key = e?.key as string | undefined;
-          const status = e?.status as string | undefined;
-          return key === `status:${trackingStatus}` || status === trackingStatus;
-        });
-        const updatedEvents = eventExists
-          ? existingEvents
-          : [
-              ...existingEvents,
-              {
-                key: `status:${trackingStatus}`,
-                status: trackingStatus,
-                title: trackingStatus,
-                description: courierName || courierId || "",
-                at: new Date().toISOString(),
-              },
-            ];
-
-        if (shipmentRow) {
-          await supabase
-            .from("shipments")
-            .update({
-              status: trackingStatus,
-              tracking_number: tracking,
-              events: updatedEvents,
-              carrier: shipmentRow.carrier ?? courierName ?? courierId,
-              option: shipmentRow.option,
-              delivery_mode: shipmentRow.delivery_mode,
-              label_url: shipmentRow.label_url,
-            })
-            .eq("order_id", Number(order.id));
-        } else {
-          await supabase.from("shipments").insert({
-            order_id: Number(order.id),
-            tracking_number: tracking,
-            status: trackingStatus,
-            carrier: courierName ?? courierId,
-            option: null,
-            delivery_mode: null,
-            label_url: null,
-            events: updatedEvents,
-          });
+        if (!response.ok) metrics.courier_api_failures += 1;
+        trackingData = response.data;
+      } else if (normalized.includes("ecotrack")) {
+        for (const base of ecotrackBaseUrls()) {
+          metrics.courier_api_calls += 1;
+          const response = await fetchJson(
+            `${base.replace(/\/+$/, "")}/api/v1/get/tracking/info?tracking=${encodeURIComponent(
+              tracking,
+            )}`,
+            {
+              Authorization: `Bearer ${settings.api_key}`,
+              Accept: "application/json",
+            },
+          );
+          if (!response.ok) metrics.courier_api_failures += 1;
+          trackingData = response.data;
+          if (trackingData) break;
         }
-      } catch (_) {
-        // Ignore shipment timeline errors
+      } else if (normalized.includes("zrexpress")) {
+        metrics.courier_api_calls += 1;
+        const response = await fetchJson(
+          `https://api.zrexpress.app/api/v1/parcels/${encodeURIComponent(tracking)}`,
+          {
+            "X-Api-Key": settings.api_key,
+            "X-Tenant": settings.api_secret,
+            Accept: "application/json",
+          },
+        );
+        if (!response.ok) metrics.courier_api_failures += 1;
+        trackingData = response.data;
+      }
+
+      if (!trackingData) continue;
+      let returnStatus: string | null = null;
+      if (normalized.includes("ecotrack")) {
+        returnStatus = detectEcotrackReturn(trackingData);
+      } else if (normalized.includes("zrexpress")) {
+        returnStatus = detectZrExpressReturn(trackingData);
+      }
+      if (!returnStatus) returnStatus = detectReturn(trackingData);
+      const safeReturnStatus = normalizeReturnStatus(returnStatus);
+
+      if (safeReturnStatus) {
+        const safeCourierId = normalizeCourierForEvent(courierId, courierName);
+        const { error: insertError } = await supabase
+          .from("buyer_return_events")
+          .upsert(
+            {
+              buyer_id: order.buyer_id,
+              order_id: Number(order.id),
+              // Keep return event minimal: no buyer name/phone/address copied here.
+              courier_id: safeCourierId,
+              status: safeReturnStatus,
+              returned_at: new Date().toISOString(),
+            },
+            { onConflict: "order_id,status" },
+          );
+        if (!insertError) {
+          inserted += 1;
+        } else {
+          metrics.insert_errors += 1;
+        }
+      }
+
+      const trackingStatus = detectTrackingStatus(trackingData);
+      if (trackingStatus) {
+        metrics.tracking_updates += 1;
+        const isReturn =
+          trackingStatus === "returned_to_sender" ||
+          trackingStatus === "not_claimed" ||
+          trackingStatus === "refused";
+        const eventKey = `order:${order.id}:tracking:${trackingStatus}`;
+        const payload = {
+          i18n_key: isReturn ? "order.system.returned" : "order.system.tracking",
+          status: trackingStatus,
+          status_i18n: `order.status.${trackingStatus}`,
+          tracking_number: tracking,
+          courier_id: courierId,
+          courier_name: courierName,
+        };
+        try {
+          await supabase.rpc("post_order_event", {
+            p_order_id: Number(order.id),
+            p_event: "order_tracking",
+            p_payload: payload,
+            p_dedupe_key: eventKey,
+          });
+        } catch (_) {
+          // Ignore tracking message errors
+        }
+
+        try {
+          const { data: shipmentRow } = await supabase
+            .from("shipments")
+            .select("events,status,tracking_number,carrier,option,delivery_mode,label_url")
+            .eq("order_id", Number(order.id))
+            .maybeSingle();
+
+          const existingEvents = (shipmentRow?.events as unknown as Array<Record<string, unknown>>) ?? [];
+          const eventExists = existingEvents.some((e) => {
+            const key = e?.key as string | undefined;
+            const status = e?.status as string | undefined;
+            return key === `status:${trackingStatus}` || status === trackingStatus;
+          });
+          const updatedEvents = eventExists
+            ? existingEvents
+            : [
+                ...existingEvents,
+                {
+                  key: `status:${trackingStatus}`,
+                  status: trackingStatus,
+                  title: trackingStatus,
+                  description: courierName || courierId || "",
+                  at: new Date().toISOString(),
+                },
+              ];
+
+          if (shipmentRow) {
+            await supabase
+              .from("shipments")
+              .update({
+                status: trackingStatus,
+                tracking_number: tracking,
+                events: updatedEvents,
+                carrier: shipmentRow.carrier ?? courierName ?? courierId,
+                option: shipmentRow.option,
+                delivery_mode: shipmentRow.delivery_mode,
+                label_url: shipmentRow.label_url,
+              })
+              .eq("order_id", Number(order.id));
+          } else {
+            await supabase.from("shipments").insert({
+              order_id: Number(order.id),
+              tracking_number: tracking,
+              status: trackingStatus,
+              carrier: courierName ?? courierId,
+              option: null,
+              delivery_mode: null,
+              label_url: null,
+              events: updatedEvents,
+            });
+          }
+        } catch (_) {
+          // Ignore shipment timeline errors
+        }
       }
     }
   }
 
+  metrics.orders_scanned = scanned;
+  metrics.returns_inserted = inserted;
   if (inserted > 0) {
-    await supabase.rpc("refresh_buyer_return_stats", {});
+    try {
+      await supabase.rpc("refresh_buyer_return_stats", {});
+    } catch (_) {
+      metrics.stats_refresh_error = true;
+    }
   }
-  return inserted;
+  return metrics;
 };
 
 serve(async (req) => {
@@ -456,7 +580,7 @@ serve(async (req) => {
   }
 
   let cancelled = 0;
-  let returns = 0;
+  let returnsMetrics = emptyReturnsMetrics();
   let purgedErrors = 0;
   try {
     const { data: cancelledCount } = await supabase.rpc("cancel_stale_orders", {});
@@ -465,9 +589,9 @@ serve(async (req) => {
     // Do not fail job runner if cancellation fails
   }
   try {
-    returns = await syncBuyerReturns(supabase);
-  } catch (_) {
-    returns = 0;
+    returnsMetrics = await syncBuyerReturns(supabase);
+  } catch (e) {
+    returnsMetrics.sync_error = e instanceof Error ? e.message : String(e);
   }
 
   try {
@@ -483,11 +607,14 @@ serve(async (req) => {
     purgedErrors = 0;
   }
 
+  const createShipmentFailures = results.filter((item) => !item.ok).length;
   return jsonResponse({
     ok: true,
     processed: results.length,
+    create_shipment_failures: createShipmentFailures,
     cancelled,
-    returns,
+    returns: returnsMetrics.returns_inserted,
+    returns_metrics: returnsMetrics,
     purged_errors: purgedErrors,
     results,
   });
