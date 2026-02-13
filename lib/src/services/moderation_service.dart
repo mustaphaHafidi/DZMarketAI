@@ -8,12 +8,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class ModerationResult {
   const ModerationResult({
     required this.allowed,
+    required this.action,
     this.reason,
     this.labels,
     this.score,
   });
 
   final bool allowed;
+  final String action;
   final String? reason;
   final List<String>? labels;
   final double? score;
@@ -26,6 +28,9 @@ class ModerationResult {
     final score = json['score'] as num?;
     return ModerationResult(
       allowed: json['allowed'] == true,
+      action:
+          json['action']?.toString() ??
+          (json['allowed'] == true ? 'allow' : 'block'),
       reason: json['reason']?.toString(),
       labels: labels,
       score: score?.toDouble(),
@@ -79,7 +84,7 @@ class ModerationService {
       allowNewlines: true,
     );
     if (safeText.isEmpty) {
-      return const ModerationResult(allowed: true);
+      return const ModerationResult(allowed: true, action: 'allow');
     }
     try {
       final response = await RateLimiter.instance.run(
@@ -97,7 +102,7 @@ class ModerationService {
       );
     } catch (e) {
       if (_isModerationUnavailable(e)) {
-        return const ModerationResult(allowed: true);
+        return const ModerationResult(allowed: true, action: 'allow');
       }
       rethrow;
     }
@@ -107,6 +112,8 @@ class ModerationService {
     required String title,
     String? description,
     List<String> imageUrls = const [],
+    String? categorySlug,
+    String? policyProfile,
   }) async {
     final safeTitle = InputSanitizer.sanitizeText(title, maxLength: 120);
     final safeDescription = InputSanitizer.sanitizeOptionalText(
@@ -115,6 +122,14 @@ class ModerationService {
       allowNewlines: true,
     );
     final safeImages = InputSanitizer.sanitizeUrlList(imageUrls, maxItems: 5);
+    final safeCategorySlug = InputSanitizer.sanitizeOptionalText(
+      categorySlug,
+      maxLength: 60,
+    );
+    final safePolicyProfile = InputSanitizer.sanitizeOptionalText(
+      policyProfile,
+      maxLength: 40,
+    );
     try {
       final response = await RateLimiter.instance.run(
         'moderation.listing',
@@ -127,6 +142,10 @@ class ModerationService {
             ].where((e) => e != null && e.isNotEmpty).join('\n'),
             'image_urls': safeImages,
             'type': 'listing',
+            if (safeCategorySlug != null && safeCategorySlug.isNotEmpty)
+              'category_slug': safeCategorySlug,
+            if (safePolicyProfile != null && safePolicyProfile.isNotEmpty)
+              'policy_profile': safePolicyProfile,
           },
         ),
       );
@@ -138,7 +157,7 @@ class ModerationService {
       );
     } catch (e) {
       if (_isModerationUnavailable(e)) {
-        return const ModerationResult(allowed: true);
+        return const ModerationResult(allowed: true, action: 'allow');
       }
       rethrow;
     }

@@ -72,6 +72,21 @@ class _ChatHubPageState extends State<ChatHubPage> {
                 decoration: InputDecoration(
                   hintText: L10n.tr(context, 'chat.search'),
                   prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _searchCtrl.text.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: L10n.tr(
+                            context,
+                            'common.clear',
+                            fallback: 'Effacer',
+                          ),
+                          onPressed: () {
+                            _searchDebounce?.cancel();
+                            _searchCtrl.clear();
+                            setState(() => _query = '');
+                          },
+                          icon: const Icon(Icons.close),
+                        ),
                   filled: true,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -80,6 +95,7 @@ class _ChatHubPageState extends State<ChatHubPage> {
                 ),
                 onChanged: (v) {
                   _searchDebounce?.cancel();
+                  setState(() {});
                   _searchDebounce = Timer(
                     const Duration(milliseconds: 300),
                     () {
@@ -89,6 +105,51 @@ class _ChatHubPageState extends State<ChatHubPage> {
                   );
                 },
               ),
+            ),
+            ValueListenableBuilder<bool>(
+              valueListenable: ConnectivityService.instance.isOnline,
+              builder: (context, isOnline, _) {
+                if (isOnline) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.wifi_off_rounded,
+                          size: 16,
+                          color: Theme.of(context).colorScheme.onErrorContainer,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            L10n.tr(
+                              context,
+                              'common.offline_chip',
+                              fallback: 'Hors ligne',
+                            ),
+                            style: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onErrorContainer,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
             Expanded(
               child: StreamBuilder<List<Conversation>>(
@@ -190,170 +251,202 @@ class _ChatHubPageState extends State<ChatHubPage> {
                               if (_query.isEmpty) return true;
                               final meta = metaMap[c.id];
                               final title = meta?.productTitle ?? '';
-                              final seller = meta?.sellerName ?? '';
+                              final participant =
+                                  meta?.otherName(userId) ??
+                                  meta?.sellerName ??
+                                  '';
+                              final preview =
+                                  c.lastMessageText ?? meta?.productTitle ?? '';
                               return title.toLowerCase().contains(_query) ||
-                                  seller.toLowerCase().contains(_query);
+                                  participant.toLowerCase().contains(_query) ||
+                                  preview.toLowerCase().contains(_query);
                             }).toList();
                             final limited = filtered
                                 .take(_maxConversations)
                                 .toList();
                             if (limited.isEmpty) {
                               return Center(
-                                child: Text(
-                                  L10n.tr(context, 'chat.no_results'),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.forum_outlined,
+                                        size: 28,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Text(
+                                        L10n.tr(context, 'chat.no_results'),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               );
                             }
+                            final unreadCount = limited.where((conv) {
+                              if (archivedList || conv.lastMessageAt == null) {
+                                return false;
+                              }
+                              final read = readMap[conv.id];
+                              return read?.lastReadAt == null ||
+                                  conv.lastMessageAt!.isAfter(
+                                    read!.lastReadAt!,
+                                  );
+                            }).length;
                             return RefreshIndicator(
                               onRefresh: manualRefresh,
-                              child: ListView.separated(
-                                itemCount: limited.length,
-                                separatorBuilder: (_, __) =>
-                                    const Divider(height: 1),
-                                itemBuilder: (context, index) {
-                                  final conv = limited[index];
-                                  final meta = metaMap[conv.id];
-                                  final read = readMap[conv.id];
-                                  final unread =
-                                      !archivedList &&
-                                      conv.lastMessageAt != null &&
-                                      (read?.lastReadAt == null ||
-                                          conv.lastMessageAt!.isAfter(
-                                            read!.lastReadAt!,
-                                          ));
-                                  final rawSubtitle =
-                                      conv.lastMessageText ??
-                                      meta?.productTitle ??
-                                      '';
-                                  final subtitle = rawSubtitle.isEmpty
-                                      ? ''
-                                      : L10n.tr(
-                                          context,
-                                          rawSubtitle,
-                                          fallback: rawSubtitle,
-                                        );
-                                  return Dismissible(
-                                    key: ValueKey(conv.id),
-                                    direction: DismissDirection.endToStart,
-                                    background: Container(
-                                      color: archivedList
-                                          ? Colors.green
-                                          : Theme.of(context).colorScheme.error,
-                                      alignment: Alignment.centerRight,
-                                      padding: const EdgeInsets.only(right: 20),
-                                      child: Icon(
-                                        archivedList
-                                            ? Icons.undo
-                                            : Icons.visibility_off_outlined,
-                                        color: Colors.white,
+                              child: Column(
+                                children: [
+                                  if (!archivedList)
+                                    Padding(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        16,
+                                        2,
+                                        16,
+                                        8,
                                       ),
-                                    ),
-                                    confirmDismiss: (_) async => true,
-                                    onDismissed: (_) async {
-                                      if (archivedList) {
-                                        await _repo.restoreConversation(
-                                          conv.id,
-                                        );
-                                      } else {
-                                        await _repo.deleteConversation(conv.id);
-                                      }
-                                    },
-                                    child: ListTile(
-                                      leading: meta?.productImage != null
-                                          ? ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                              child: CachedNetworkImage(
-                                                imageUrl: meta!.productImage!,
-                                                width: 48,
-                                                height: 48,
-                                                fit: BoxFit.cover,
-                                                memCacheWidth:
-                                                    NetworkPreferencesService
-                                                        .instance
-                                                        .listImageMemCacheWidth,
-                                                memCacheHeight:
-                                                    NetworkPreferencesService
-                                                        .instance
-                                                        .listImageMemCacheHeight,
-                                                fadeInDuration:
-                                                    NetworkPreferencesService
-                                                        .instance
-                                                        .imageFadeInDuration,
-                                                fadeOutDuration:
-                                                    NetworkPreferencesService
-                                                        .instance
-                                                        .imageFadeOutDuration,
-                                                placeholder: (context, _) =>
-                                                    Container(
-                                                      width: 48,
-                                                      height: 48,
-                                                      color:
-                                                          Colors.grey.shade300,
-                                                    ),
-                                                errorWidget: (context, _, __) =>
-                                                    Container(
-                                                      width: 48,
-                                                      height: 48,
-                                                      color:
-                                                          Colors.grey.shade300,
-                                                      child: const Icon(
-                                                        Icons
-                                                            .image_not_supported,
-                                                      ),
-                                                    ),
-                                              ),
-                                            )
-                                          : const Icon(
-                                              Icons.chat_bubble_outline,
-                                            ),
-                                      title: Text(
-                                        meta?.productTitle ??
+                                      child: Row(
+                                        children: [
+                                          Text(
                                             L10n.tr(
                                               context,
-                                              'chat.fallback_title',
+                                              'chat.tab_messages',
                                             ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      subtitle: Text(
-                                        subtitle,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      trailing: Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          if (conv.lastMessageAt != null)
-                                            Text(
-                                              DateFormat.Hm().format(
-                                                conv.lastMessageAt!.toLocal(),
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.labelLarge,
+                                          ),
+                                          const Spacer(),
+                                          if (unreadCount > 0)
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 10,
+                                                    vertical: 4,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.primaryContainer,
+                                                borderRadius:
+                                                    BorderRadius.circular(999),
                                               ),
-                                              style: Theme.of(
-                                                context,
-                                              ).textTheme.labelSmall,
-                                            ),
-                                          if (unread)
-                                            const CircleAvatar(
-                                              radius: 6,
-                                              backgroundColor: Colors.red,
+                                              child: Text(
+                                                '$unreadCount',
+                                                style: TextStyle(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .onPrimaryContainer,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
                                             ),
                                         ],
                                       ),
-                                      onTap: () {
-                                        Navigator.of(context).push(
-                                          MaterialPageRoute(
-                                            builder: (_) => ChatRoomPage(
-                                              conversationId: conv.id,
-                                              productId: conv.productId,
+                                    ),
+                                  Expanded(
+                                    child: ListView.separated(
+                                      itemCount: limited.length,
+                                      separatorBuilder: (_, __) =>
+                                          const Divider(height: 1),
+                                      itemBuilder: (context, index) {
+                                        final conv = limited[index];
+                                        final meta = metaMap[conv.id];
+                                        final read = readMap[conv.id];
+                                        final unread =
+                                            !archivedList &&
+                                            conv.lastMessageAt != null &&
+                                            (read?.lastReadAt == null ||
+                                                conv.lastMessageAt!.isAfter(
+                                                  read!.lastReadAt!,
+                                                ));
+                                        final rawSubtitle =
+                                            conv.lastMessageText ??
+                                            meta?.productTitle ??
+                                            '';
+                                        final subtitle = rawSubtitle.isEmpty
+                                            ? ''
+                                            : L10n.tr(
+                                                context,
+                                                rawSubtitle,
+                                                fallback: rawSubtitle,
+                                              );
+                                        return Dismissible(
+                                          key: ValueKey(conv.id),
+                                          direction:
+                                              DismissDirection.endToStart,
+                                          background: Container(
+                                            color: archivedList
+                                                ? Colors.green
+                                                : Theme.of(
+                                                    context,
+                                                  ).colorScheme.error,
+                                            alignment: Alignment.centerRight,
+                                            padding: const EdgeInsets.only(
+                                              right: 20,
                                             ),
+                                            child: Icon(
+                                              archivedList
+                                                  ? Icons.undo
+                                                  : Icons
+                                                        .visibility_off_outlined,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                          confirmDismiss: (_) async => true,
+                                          onDismissed: (_) async {
+                                            if (archivedList) {
+                                              await _repo.restoreConversation(
+                                                conv.id,
+                                              );
+                                            } else {
+                                              await _repo.deleteConversation(
+                                                conv.id,
+                                              );
+                                            }
+                                          },
+                                          child: _ConversationListItem(
+                                            title:
+                                                meta?.productTitle ??
+                                                L10n.tr(
+                                                  context,
+                                                  'chat.fallback_title',
+                                                ),
+                                            subtitle: subtitle,
+                                            participantName:
+                                                meta?.otherName(userId) ??
+                                                meta?.sellerName ??
+                                                '',
+                                            productImage: meta?.productImage,
+                                            participantAvatar: meta
+                                                ?.otherAvatar(userId),
+                                            unread: unread,
+                                            archived: archivedList,
+                                            timeLabel: _formatConversationTime(
+                                              context,
+                                              conv.lastMessageAt,
+                                            ),
+                                            onTap: () {
+                                              Navigator.of(context).push(
+                                                MaterialPageRoute(
+                                                  builder: (_) => ChatRoomPage(
+                                                    conversationId: conv.id,
+                                                    productId: conv.productId,
+                                                  ),
+                                                ),
+                                              );
+                                            },
                                           ),
                                         );
                                       },
                                     ),
-                                  );
-                                },
+                                  ),
+                                ],
                               ),
                             );
                           }
@@ -398,5 +491,213 @@ class _ChatHubPageState extends State<ChatHubPage> {
         e.contains('no address associated with hostname') ||
         e.contains('network is unreachable') ||
         e.contains('websocketchannelexception');
+  }
+
+  String _formatConversationTime(BuildContext context, DateTime? dateTime) {
+    if (dateTime == null) return '';
+    final local = dateTime.toLocal();
+    final now = DateTime.now();
+    final sameDay =
+        local.year == now.year &&
+        local.month == now.month &&
+        local.day == now.day;
+    if (sameDay) {
+      return DateFormat.Hm().format(local);
+    }
+    return DateFormat('dd/MM').format(local);
+  }
+}
+
+class _ConversationListItem extends StatelessWidget {
+  const _ConversationListItem({
+    required this.title,
+    required this.subtitle,
+    required this.participantName,
+    required this.productImage,
+    required this.participantAvatar,
+    required this.unread,
+    required this.archived,
+    required this.timeLabel,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final String participantName;
+  final String? productImage;
+  final String? participantAvatar;
+  final bool unread;
+  final bool archived;
+  final String timeLabel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        child: Row(
+          children: [
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: _ConversationThumb(productImage: productImage),
+                ),
+                if (unread)
+                  Positioned(
+                    top: -1,
+                    right: -1,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.error,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.surface,
+                          width: 1.2,
+                        ),
+                      ),
+                    ),
+                  ),
+                if (participantAvatar != null && participantAvatar!.isNotEmpty)
+                  Positioned(
+                    right: -2,
+                    bottom: -2,
+                    child: CircleAvatar(
+                      radius: 10,
+                      backgroundColor: Theme.of(context).colorScheme.surface,
+                      child: ClipOval(
+                        child: CachedNetworkImage(
+                          imageUrl: participantAvatar!,
+                          width: 18,
+                          height: 18,
+                          fit: BoxFit.cover,
+                          memCacheWidth: NetworkPreferencesService
+                              .instance
+                              .listImageMemCacheWidth,
+                          memCacheHeight: NetworkPreferencesService
+                              .instance
+                              .listImageMemCacheHeight,
+                          fadeInDuration: NetworkPreferencesService
+                              .instance
+                              .imageFadeInDuration,
+                          fadeOutDuration: NetworkPreferencesService
+                              .instance
+                              .imageFadeOutDuration,
+                          errorWidget: (_, __, ___) =>
+                              const Icon(Icons.person, size: 12),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      if (timeLabel.isNotEmpty)
+                        Text(
+                          timeLabel,
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    participantName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                fontWeight: unread
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
+                              ),
+                        ),
+                      ),
+                      if (archived) ...[
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.visibility_off_outlined,
+                          size: 16,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ConversationThumb extends StatelessWidget {
+  const _ConversationThumb({required this.productImage});
+
+  final String? productImage;
+
+  @override
+  Widget build(BuildContext context) {
+    if (productImage != null && productImage!.isNotEmpty) {
+      return CachedNetworkImage(
+        imageUrl: productImage!,
+        width: 56,
+        height: 56,
+        fit: BoxFit.cover,
+        memCacheWidth:
+            NetworkPreferencesService.instance.listImageMemCacheWidth,
+        memCacheHeight:
+            NetworkPreferencesService.instance.listImageMemCacheHeight,
+        fadeInDuration: NetworkPreferencesService.instance.imageFadeInDuration,
+        fadeOutDuration:
+            NetworkPreferencesService.instance.imageFadeOutDuration,
+        placeholder: (context, _) =>
+            Container(width: 56, height: 56, color: Colors.grey.shade300),
+        errorWidget: (context, _, __) => Container(
+          width: 56,
+          height: 56,
+          color: Colors.grey.shade300,
+          child: const Icon(Icons.image_not_supported),
+        ),
+      );
+    }
+    return Container(
+      width: 56,
+      height: 56,
+      color: Colors.grey.shade200,
+      child: const Icon(Icons.chat_bubble_outline),
+    );
   }
 }

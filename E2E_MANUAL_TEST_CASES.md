@@ -8,7 +8,7 @@ Il couvre:
 - securite fonctionnelle (RLS visible via UI)
 - role buyer/seller/superadmin
 - workflows critiques commande/livraison/chat/moderation
-- Total IDs uniques: 281
+- Total IDs uniques: 291
 
 ## 2) Regles d execution
 - Executer sur `dev` en priorite, puis spot-check sur `staging/prod`.
@@ -372,6 +372,21 @@ Format:
 
 ---
 
+## M. Offres et livraison a convenir (10 cas)
+
+- [ ] `TC-OFFER-001 | Acheteur envoie une offre depuis fiche produit | Message offre auto publie dans la chat room unique buyer+seller+product | P0`
+- [ ] `TC-OFFER-002 | Vendeur accepte offre depuis chat | Statut offre passe accepte + message systeme visible pour les 2 participants | P0`
+- [ ] `TC-OFFER-003 | Vendeur refuse offre depuis chat | Statut offre passe refuse + message systeme visible pour les 2 participants | P0`
+- [ ] `TC-OFFER-004 | Vendeur propose contre-offre depuis chat | Meme offer thread mis a jour sans duplication de room | P0`
+- [ ] `TC-OFFER-005 | Acheteur renvoie une nouvelle offre apres refus | Nouvelle carte offre creee, historique conserve, une seule room | P1`
+- [ ] `TC-OFFER-006 | Plusieurs updates sur la meme offre (contre-offre successives) | Seule la carte la plus recente reste actionnable | P0`
+- [ ] `TC-OFFER-007 | Offre seule (sans achat) | Aucune ligne expedition creee dans Mes ventes | P0`
+- [ ] `TC-OFFER-008 | Achat en mode livraison a convenir (vendeur avec transporteurs configures) | Message chat cree, aucune action bordereau forcee | P0`
+- [ ] `TC-OFFER-009 | Achat livraison courier standard (non convenir) | Ligne vente expedition creee normalement, bouton bordereau present | P0`
+- [ ] `TC-OFFER-010 | Reouverture chat apres offres + commandes multiples | Toujours meme conversation_id pour buyer+seller+product | P0`
+
+---
+
 ## 5) Lot de regression rapide avant release (smoke P0)
 Executer minimum:
 - `TC-AUTH-002`
@@ -385,6 +400,8 @@ Executer minimum:
 - `TC-ORD-011`
 - `TC-CHAT-013`
 - `TC-CHAT-017`
+- `TC-OFFER-002`
+- `TC-OFFER-008`
 - `TC-MOD-004`
 - `TC-MOD-015`
 - `TC-MOD-020`

@@ -202,15 +202,112 @@ const emptyReturnsMetrics = (): ReturnsSyncMetrics => ({
   sync_error: null,
 });
 
-const fetchJson = async (url: string, headers: HeadersInit): Promise<CourierFetchResult> => {
-  let resp: Response;
-  try {
-    resp = await fetch(url, { headers });
-  } catch {
-    return { ok: false, data: null };
+const consumeRateLimit = async (
+  supabase: ReturnType<typeof createClient>,
+  key: string,
+  limit: number,
+  windowSeconds: number,
+) => {
+  const { data, error } = await supabase.rpc("consume_rate_limit", {
+    p_key: key,
+    p_limit: limit,
+    p_window_seconds: windowSeconds,
+  });
+  if (error) throw new Error(error.message);
+  return data === true;
+};
+
+const sleep = (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+const parseRetryAfterMs = (value: string | null) => {
+  if (!value) return null;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds > 0) return Math.min(seconds * 1000, 15000);
+  const dateMs = Date.parse(value);
+  if (Number.isFinite(dateMs)) {
+    const delta = dateMs - Date.now();
+    if (delta > 0) return Math.min(delta, 15000);
   }
-  if (!resp.ok) return { ok: false, data: null };
+  return null;
+};
+
+const isRetryableStatus = (status: number) =>
+  status === 408 || status === 429 || status >= 500;
+
+const fetchWithRetry = async (
+  url: string,
+  init: RequestInit,
+  maxAttempts = 4,
+) => {
+  let resp: Response;
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      resp = await fetch(url, init);
+      if (!isRetryableStatus(resp.status) || attempt === maxAttempts) {
+        return resp;
+      }
+      const retryAfterMs = parseRetryAfterMs(resp.headers.get("Retry-After"));
+      const jitter = Math.floor(Math.random() * 120);
+      const backoff = Math.min(300 * 2 ** (attempt - 1), 5000);
+      await sleep((retryAfterMs ?? backoff) + jitter);
+    } catch (error) {
+      lastError = error;
+      if (attempt === maxAttempts) break;
+      const jitter = Math.floor(Math.random() * 120);
+      const backoff = Math.min(300 * 2 ** (attempt - 1), 5000);
+      await sleep(backoff + jitter);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("network_retry_failed");
+};
+
+type CarrierRateWindow = { limit: number; seconds: number };
+
+const syncRatePolicy = (carrierCode: string): CarrierRateWindow[] => {
+  switch (carrierCode) {
+    case "guepex":
+      return [{ limit: 4, seconds: 1 }, { limit: 45, seconds: 60 }];
+    case "ecotrack":
+      return [{ limit: 45, seconds: 60 }];
+    case "yalidine":
+      return [{ limit: 8, seconds: 1 }, { limit: 80, seconds: 60 }];
+    case "zrexpress":
+      return [{ limit: 8, seconds: 1 }, { limit: 80, seconds: 60 }];
+    default:
+      return [{ limit: 6, seconds: 1 }, { limit: 60, seconds: 60 }];
+  }
+};
+
+const enforceCourierSyncLimit = async (
+  supabase: ReturnType<typeof createClient>,
+  carrierCode: string,
+) => {
+  if (!carrierCode) return true;
+  for (const window of syncRatePolicy(carrierCode)) {
+    const ok = await consumeRateLimit(
+      supabase,
+      `carrier_sync:${carrierCode}:${window.seconds}`,
+      window.limit,
+      window.seconds,
+    );
+    if (!ok) return false;
+  }
+  return true;
+};
+
+const fetchJson = async (
+  supabase: ReturnType<typeof createClient>,
+  carrierCode: string,
+  url: string,
+  headers: HeadersInit,
+): Promise<CourierFetchResult> => {
+  const allowed = await enforceCourierSyncLimit(supabase, carrierCode);
+  if (!allowed) return { ok: false, data: null };
   try {
+    const resp = await fetchWithRetry(url, { method: "GET", headers });
+    if (!resp.ok) return { ok: false, data: null };
     return { ok: true, data: await resp.json() };
   } catch {
     return { ok: false, data: null };
@@ -220,6 +317,18 @@ const fetchJson = async (url: string, headers: HeadersInit): Promise<CourierFetc
 const ecotrackBaseUrls = () => {
   const envValue = (Deno.env.get("ECOTRACK_BASE_URL") ?? "").trim();
   const candidates = [envValue, "https://api.ecotrack.dz", "https://ovred.ecotrack.dz"];
+  const seen = new Set<string>();
+  return candidates.filter((v) => {
+    const normalized = v.replace(/\/+$/, "");
+    if (!normalized || seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
+};
+
+const guepexBaseUrls = () => {
+  const envValue = (Deno.env.get("GUEPEX_BASE_URL") ?? "").trim();
+  const candidates = [envValue, "https://api.guepex.app"];
   const seen = new Set<string>();
   return candidates.filter((v) => {
     const normalized = v.replace(/\/+$/, "");
@@ -254,6 +363,7 @@ const normalizeCourierForEvent = (courierId: string, courierName: string) => {
   if (normalized.includes("yalidine")) return "yalidine";
   if (normalized.includes("ecotrack")) return "ecotrack";
   if (normalized.includes("zrexpress")) return "zrexpress";
+  if (normalized.includes("guepex")) return "guepex";
   return normalized.slice(0, 32);
 };
 
@@ -362,6 +472,8 @@ const syncBuyerReturns = async (
       if (normalized.includes("yalidine")) {
         metrics.courier_api_calls += 1;
         const response = await fetchJson(
+          supabase,
+          "yalidine",
           `https://api.yalidine.app/v1/histories/${encodeURIComponent(tracking)}`,
           {
             "X-API-ID": settings.api_key,
@@ -375,6 +487,8 @@ const syncBuyerReturns = async (
         for (const base of ecotrackBaseUrls()) {
           metrics.courier_api_calls += 1;
           const response = await fetchJson(
+            supabase,
+            "ecotrack",
             `${base.replace(/\/+$/, "")}/api/v1/get/tracking/info?tracking=${encodeURIComponent(
               tracking,
             )}`,
@@ -390,6 +504,8 @@ const syncBuyerReturns = async (
       } else if (normalized.includes("zrexpress")) {
         metrics.courier_api_calls += 1;
         const response = await fetchJson(
+          supabase,
+          "zrexpress",
           `https://api.zrexpress.app/api/v1/parcels/${encodeURIComponent(tracking)}`,
           {
             "X-Api-Key": settings.api_key,
@@ -399,6 +515,36 @@ const syncBuyerReturns = async (
         );
         if (!response.ok) metrics.courier_api_failures += 1;
         trackingData = response.data;
+      } else if (normalized.includes("guepex")) {
+        if (!settings.api_secret) continue;
+        for (const base of guepexBaseUrls()) {
+          metrics.courier_api_calls += 1;
+          let response = await fetchJson(
+            supabase,
+            "guepex",
+            `${base.replace(/\/+$/, "")}/v1/histories/${encodeURIComponent(tracking)}`,
+            {
+              "X-API-ID": settings.api_key,
+              "X-API-TOKEN": settings.api_secret,
+              Accept: "application/json",
+            },
+          );
+          if (!response.ok) {
+            response = await fetchJson(
+              supabase,
+              "guepex",
+              `${base.replace(/\/+$/, "")}/v1/histories?tracking=${encodeURIComponent(tracking)}`,
+              {
+                "X-API-ID": settings.api_key,
+                "X-API-TOKEN": settings.api_secret,
+                Accept: "application/json",
+              },
+            );
+          }
+          if (!response.ok) metrics.courier_api_failures += 1;
+          trackingData = response.data;
+          if (trackingData) break;
+        }
       }
 
       if (!trackingData) continue;
@@ -651,14 +797,18 @@ serve(async (req) => {
     const jobId = job.id as number;
     try {
       const payload = { ...(job.payload ?? {}), async: false };
-      const resp = await fetch(`${url}/functions/v1/create_shipment`, {
-        method: "POST",
-        headers: {
-          Authorization: auth,
-          "Content-Type": "application/json",
+      const resp = await fetchWithRetry(
+        `${url}/functions/v1/create_shipment`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: auth,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
         },
-        body: JSON.stringify(payload),
-      });
+        3,
+      );
       const body = await resp.text();
       const ok = resp.ok;
       await supabase.rpc("complete_job", {

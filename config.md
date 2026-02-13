@@ -60,6 +60,16 @@ flutter run -d <DEVICE_ID> --flavor dev -t lib/main.dart \
 ## Security
 - Never commit `SUPABASE_SERVICE_ROLE_KEY`.
 - Keep transporter tokens server-side only (Edge Functions or encrypted DB fields).
+- For strict moderation behavior, set Edge secret `MODERATION_FAIL_OPEN=false`.
+
+## Edge Functions (critical deploy set)
+```bash
+supabase functions deploy validate-courier
+supabase functions deploy courier-locations
+supabase functions deploy create_shipment
+supabase functions deploy job-runner
+supabase functions deploy moderate-content
+```
 
 ## Next Updates
 See NEXT_UPDATES.md for the current prioritized roadmap and release checklist.

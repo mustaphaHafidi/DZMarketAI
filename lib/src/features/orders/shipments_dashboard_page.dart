@@ -1,4 +1,4 @@
-﻿import 'package:dzmarket/src/features/orders/fulfillment_page.dart';
+import 'package:dzmarket/src/features/orders/fulfillment_page.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/utils/delivery_mode_utils.dart';
@@ -32,7 +32,9 @@ class ShipmentsDashboardPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) {
-      return Scaffold(body: Center(child: Text(L10n.tr(context, 'profile.login_required'))));
+      return Scaffold(
+        body: Center(child: Text(L10n.tr(context, 'profile.login_required'))),
+      );
     }
     final service = ShippingService();
     final dateFmt = DateFormat('dd/MM HH:mm');
@@ -69,10 +71,13 @@ class ShipmentsDashboardPage extends StatelessWidget {
               final orderId = r['order_id']?.toString() ?? '?';
               final statusLabel = _statusLabel(context, status);
               final isCancelled = status == 'cancelled';
-              final carrierKey = (courierId.isNotEmpty ? courierId : carrier).toLowerCase();
-              final isIntegratedCarrier = carrierKey.contains('yalidine') ||
+              final carrierKey = (courierId.isNotEmpty ? courierId : carrier)
+                  .toLowerCase();
+              final isIntegratedCarrier =
+                  carrierKey.contains('yalidine') ||
                   carrierKey.contains('ecotrack') ||
-                  carrierKey.contains('zrexpress');
+                  carrierKey.contains('zrexpress') ||
+                  carrierKey.contains('guepex');
               final allowManualStatus = !isIntegratedCarrier && !isCancelled;
               final isArrangedOrder = isArrangedDelivery(
                 deliveryMethod: deliveryMethod,
@@ -124,17 +129,23 @@ class ShipmentsDashboardPage extends StatelessWidget {
                     if (labelUrl != null)
                       Text(
                         L10n.tr(context, 'shipments.label_ready'),
-                        style: TextStyle(color: Theme.of(context).colorScheme.primary),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
                       ),
                     if (!allowManualStatus)
                       Text(
                         L10n.tr(context, 'shipments.auto_status'),
-                        style: TextStyle(color: Theme.of(context).colorScheme.secondary),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.secondary,
+                        ),
                       ),
                     if (isCancelled)
                       Text(
                         L10n.tr(context, 'shipments.cancelled_no_label'),
-                        style: TextStyle(color: Theme.of(context).colorScheme.error),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
                       ),
                     if (isArrangedOrder)
                       Text(
@@ -149,27 +160,41 @@ class ShipmentsDashboardPage extends StatelessWidget {
                       children: [
                         if (allowManualStatus)
                           TextButton.icon(
-                            onPressed: () => _showStatusSheet(context, orderId, status),
+                            onPressed: () =>
+                                _showStatusSheet(context, orderId, status),
                             icon: const Icon(Icons.sync_outlined, size: 18),
-                            label: Text(L10n.tr(context, 'shipments.change_status')),
+                            label: Text(
+                              L10n.tr(context, 'shipments.change_status'),
+                            ),
                           ),
                         if (canGenerateLabel)
                           TextButton.icon(
                             onPressed: () async {
                               await Navigator.of(context).push(
                                 MaterialPageRoute(
-                                  builder: (_) => FulfillmentPage(orderId: orderId),
+                                  builder: (_) =>
+                                      FulfillmentPage(orderId: orderId),
                                 ),
                               );
                             },
-                            icon: const Icon(Icons.local_shipping_outlined, size: 18),
-                            label: Text(L10n.tr(context, 'shipments.generate_label')),
+                            icon: const Icon(
+                              Icons.local_shipping_outlined,
+                              size: 18,
+                            ),
+                            label: Text(
+                              L10n.tr(context, 'shipments.generate_label'),
+                            ),
                           ),
                         if (labelUrl != null)
                           TextButton.icon(
                             onPressed: () => _openLabel(labelUrl),
-                            icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-                            label: Text(L10n.tr(context, 'shipments.open_label')),
+                            icon: const Icon(
+                              Icons.picture_as_pdf_outlined,
+                              size: 18,
+                            ),
+                            label: Text(
+                              L10n.tr(context, 'shipments.open_label'),
+                            ),
                           ),
                       ],
                     ),
@@ -207,7 +232,10 @@ class ShipmentsDashboardPage extends StatelessWidget {
                     title: Text(_statusLabel(context, s)),
                     trailing: s == current ? const Icon(Icons.check) : null,
                     onTap: () async {
-                      await service.updateShipmentStatus(orderId: orderId, status: s);
+                      await service.updateShipmentStatus(
+                        orderId: orderId,
+                        status: s,
+                      );
                       if (context.mounted) Navigator.pop(context);
                     },
                   ),
@@ -226,4 +254,3 @@ class ShipmentsDashboardPage extends StatelessWidget {
     }
   }
 }
-

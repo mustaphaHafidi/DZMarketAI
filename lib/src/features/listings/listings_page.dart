@@ -41,6 +41,9 @@ class _ListingsPageState extends State<ListingsPage> {
   String _sort = 'newest';
   bool _showFavoritesOnly = false;
   bool _nearbyOnly = false;
+  bool _quickMax5000 = false;
+  bool _quickNewOnly = false;
+  bool _quickDeliveryOnly = false;
   String? _buyerWilaya;
   List<Product> _products = const [];
   bool _loading = false;
@@ -216,6 +219,104 @@ class _ListingsPageState extends State<ListingsPage> {
               ),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: SizedBox(
+              height: 36,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  FilterChip(
+                    selected: _quickMax5000,
+                    label: Text(
+                      L10n.tr(
+                        context,
+                        'listing.quick.max_5000',
+                        fallback: '< 5000 DA',
+                      ),
+                    ),
+                    onSelected: (value) {
+                      setState(() => _quickMax5000 = value);
+                      _refresh();
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  FilterChip(
+                    selected: _quickNewOnly,
+                    label: Text(
+                      L10n.tr(context, 'listing.quick.new', fallback: 'Neuf'),
+                    ),
+                    onSelected: (value) {
+                      setState(() => _quickNewOnly = value);
+                      _refresh();
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  FilterChip(
+                    selected: _quickDeliveryOnly,
+                    label: Text(
+                      L10n.tr(
+                        context,
+                        'listing.quick.delivery',
+                        fallback: 'Livraison',
+                      ),
+                    ),
+                    onSelected: (value) {
+                      setState(() => _quickDeliveryOnly = value);
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          ValueListenableBuilder<bool>(
+            valueListenable: ConnectivityService.instance.isOnline,
+            builder: (context, isOnline, _) {
+              if (isOnline && !_loading && _products.isNotEmpty) {
+                return const SizedBox.shrink();
+              }
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+                child: Row(
+                  children: [
+                    if (!isOnline)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.wifi_off_rounded, size: 16),
+                            const SizedBox(width: 6),
+                            Text(
+                              L10n.tr(
+                                context,
+                                'common.offline_chip',
+                                fallback: 'Hors ligne',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    const Spacer(),
+                    if (!isOnline)
+                      TextButton(
+                        onPressed: _refresh,
+                        child: Text(L10n.tr(context, 'common.retry')),
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
           Expanded(
             child: StreamBuilder<Set<String>>(
               stream: userId != null
@@ -278,19 +379,34 @@ class _ListingsPageState extends State<ListingsPage> {
     InputSanitizer.sanitizeText(_priceMax.text, maxLength: 16),
   );
 
+  String _effectiveCondition() {
+    if (_quickNewOnly) return 'new';
+    return _safeCondition();
+  }
+
+  double? _effectiveMinPrice() => _safeMinPrice();
+
+  double? _effectiveMaxPrice() {
+    final baseMax = _safeMaxPrice();
+    if (!_quickMax5000) return baseMax;
+    if (baseMax == null) return 5000;
+    return baseMax <= 5000 ? baseMax : 5000;
+  }
+
   String _queryKey() {
     final userId = supabase.auth.currentUser?.id ?? '';
     return [
       _safeSearch().toLowerCase(),
-      _safeCondition(),
+      _effectiveCondition(),
       _safeCategory(),
-      _safeMinPrice()?.toString() ?? '',
-      _safeMaxPrice()?.toString() ?? '',
+      _effectiveMinPrice()?.toString() ?? '',
+      _effectiveMaxPrice()?.toString() ?? '',
       _safeBrand(),
       _safeSize(),
       _safeColor(),
       _nearbyOnly ? (_buyerWilaya ?? '') : '',
       _sort,
+      _quickDeliveryOnly ? 'delivery_only' : '',
       userId,
     ].join('|');
   }
@@ -298,8 +414,8 @@ class _ListingsPageState extends State<ListingsPage> {
   Future<void> _refresh() async {
     final key = _queryKey();
     _activeQueryKey = key;
-    final min = _safeMinPrice();
-    final max = _safeMaxPrice();
+    final min = _effectiveMinPrice();
+    final max = _effectiveMaxPrice();
     final previousProducts = _products;
     final wasEmpty = previousProducts.isEmpty;
     setState(() {
@@ -320,7 +436,7 @@ class _ListingsPageState extends State<ListingsPage> {
           .fetchProducts(
             search: _safeSearch(),
             categoryId: _safeCategory(),
-            condition: _safeCondition(),
+            condition: _effectiveCondition(),
             minPrice: min,
             maxPrice: max,
             brand: _safeBrand(),
@@ -382,8 +498,8 @@ class _ListingsPageState extends State<ListingsPage> {
   Future<void> _loadMore() async {
     if (_loading || !_hasMore) return;
     final key = _activeQueryKey ?? _queryKey();
-    final min = _safeMinPrice();
-    final max = _safeMaxPrice();
+    final min = _effectiveMinPrice();
+    final max = _effectiveMaxPrice();
     setState(() => _loading = true);
 
     List<Product> results = const [];
@@ -392,7 +508,7 @@ class _ListingsPageState extends State<ListingsPage> {
           .fetchProducts(
             search: _safeSearch(),
             categoryId: _safeCategory(),
-            condition: _safeCondition(),
+            condition: _effectiveCondition(),
             minPrice: min,
             maxPrice: max,
             brand: _safeBrand(),
@@ -487,7 +603,7 @@ class _ListingsPageState extends State<ListingsPage> {
           ),
         );
       }
-      return Center(child: Text(L10n.tr(context, 'listing.empty')));
+      return _BrowseEmptyState(onReset: _clearFilters, onRetry: _refresh);
     }
     final showLoader = _loading && _products.isNotEmpty;
     final itemCount = filtered.length + (showLoader ? 1 : 0);
@@ -528,8 +644,13 @@ class _ListingsPageState extends State<ListingsPage> {
     List<Product> products,
     Set<String> favorites,
   ) {
-    if (!_showFavoritesOnly) return products;
-    return products.where((p) => favorites.contains(p.id)).toList();
+    return products.where((p) {
+      if (_showFavoritesOnly && !favorites.contains(p.id)) return false;
+      if (_quickDeliveryOnly && !p.deliveryOptions.contains('cod')) {
+        return false;
+      }
+      return true;
+    }).toList();
   }
 
   String _conditionLabel(BuildContext context, String value) {
@@ -585,6 +706,9 @@ class _ListingsPageState extends State<ListingsPage> {
       _sort = (f['sort'] as String?) ?? 'newest';
       _showFavoritesOnly = (f['favoritesOnly'] as bool?) ?? false;
       _nearbyOnly = (f['nearbyOnly'] as bool?) ?? false;
+      _quickMax5000 = (f['quickMax5000'] as bool?) ?? false;
+      _quickNewOnly = (f['quickNewOnly'] as bool?) ?? false;
+      _quickDeliveryOnly = (f['quickDeliveryOnly'] as bool?) ?? false;
     });
     _refresh();
   }
@@ -602,6 +726,9 @@ class _ListingsPageState extends State<ListingsPage> {
       'sort': _sort,
       'favoritesOnly': _showFavoritesOnly,
       'nearbyOnly': _nearbyOnly,
+      'quickMax5000': _quickMax5000,
+      'quickNewOnly': _quickNewOnly,
+      'quickDeliveryOnly': _quickDeliveryOnly,
     };
   }
 
@@ -667,6 +794,9 @@ class _ListingsPageState extends State<ListingsPage> {
                 _sort = 'newest';
                 _showFavoritesOnly = false;
                 _nearbyOnly = false;
+                _quickMax5000 = false;
+                _quickNewOnly = false;
+                _quickDeliveryOnly = false;
               });
             }
 
@@ -961,7 +1091,11 @@ class _ListingsPageState extends State<ListingsPage> {
 
   int _activeFilterCount() {
     var count = 0;
-    if (_safeCondition() != 'any') count++;
+    if (_quickNewOnly) {
+      count++;
+    } else if (_safeCondition() != 'any') {
+      count++;
+    }
     if (_safeCategory() != 'any') count++;
     if (_safeMinPrice() != null || _safeMaxPrice() != null) count++;
     if (_safeBrand().isNotEmpty) count++;
@@ -969,6 +1103,10 @@ class _ListingsPageState extends State<ListingsPage> {
     if (_safeColor().isNotEmpty) count++;
     if (_sort != 'newest') count++;
     if (_nearbyOnly) count++;
+    if (_showFavoritesOnly) count++;
+    if (_quickMax5000) count++;
+    if (_quickNewOnly) count++;
+    if (_quickDeliveryOnly) count++;
     return count;
   }
 
@@ -1121,6 +1259,9 @@ class _ListingsPageState extends State<ListingsPage> {
       _sort = 'newest';
       _showFavoritesOnly = false;
       _nearbyOnly = false;
+      _quickMax5000 = false;
+      _quickNewOnly = false;
+      _quickDeliveryOnly = false;
     });
     _refresh();
   }
@@ -1213,7 +1354,8 @@ class _ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     const fallbackImage =
         'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80';
-    final firstImage = product.firstDisplayableImageUrl(fallback: fallbackImage) ??
+    final firstImage =
+        product.firstDisplayableImageUrl(fallback: fallbackImage) ??
         fallbackImage;
     final imagePrefs = NetworkPreferencesService.instance;
     return InkWell(
@@ -1298,6 +1440,30 @@ class _ProductCard extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (product.condition != null &&
+                        product.condition!.isNotEmpty)
+                      Positioned(
+                        left: 8,
+                        bottom: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.7),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            product.condition!,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -1317,20 +1483,157 @@ class _ProductCard extends StatelessWidget {
                   if (product.brand != null && product.brand!.isNotEmpty)
                     Text(
                       '${product.brand}${product.size != null ? ' - ${product.size}' : ''}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.outline,
+                        fontSize: 12,
                       ),
                     ),
                   const SizedBox(height: 6),
-                  if (product.condition != null &&
-                      product.condition!.isNotEmpty)
-                    Chip(
-                      label: Text(product.condition!),
-                      visualDensity: VisualDensity.compact,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.place_outlined,
+                        size: 14,
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          product.locationWilaya ??
+                              L10n.tr(
+                                context,
+                                'listing.location_unknown',
+                                fallback: 'Localisation inconnue',
+                              ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context).colorScheme.outline,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      if (product.deliveryOptions.contains('cod'))
+                        _CardMiniBadge(
+                          icon: Icons.local_shipping_outlined,
+                          label: L10n.tr(
+                            context,
+                            'listing.quick.delivery',
+                            fallback: 'Livraison',
+                          ),
+                        ),
+                      if (product.deliveryOptions.contains('pickup'))
+                        _CardMiniBadge(
+                          icon: Icons.handshake_outlined,
+                          label: L10n.tr(
+                            context,
+                            'listing.detail.delivery_pickup',
+                          ),
+                        ),
+                    ],
+                  ),
                 ],
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CardMiniBadge extends StatelessWidget {
+  const _CardMiniBadge({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: Theme.of(context).colorScheme.outline),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BrowseEmptyState extends StatelessWidget {
+  const _BrowseEmptyState({required this.onReset, required this.onRetry});
+
+  final VoidCallback onReset;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.search_off_rounded,
+              size: 34,
+              color: Theme.of(context).colorScheme.outline,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              L10n.tr(context, 'listing.empty'),
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              L10n.tr(
+                context,
+                'listing.empty_hint',
+                fallback: 'Essaie de modifier les filtres ou la recherche.',
+              ),
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.outline,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              alignment: WrapAlignment.center,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: onReset,
+                  icon: const Icon(Icons.clear_all),
+                  label: Text(L10n.tr(context, 'common.reset')),
+                ),
+                FilledButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh),
+                  label: Text(L10n.tr(context, 'common.retry')),
+                ),
+              ],
             ),
           ],
         ),

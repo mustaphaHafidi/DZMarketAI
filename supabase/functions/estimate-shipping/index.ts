@@ -1,0 +1,613 @@
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+};
+
+const jsonResponse = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+
+const textValue = (value: unknown) =>
+  typeof value === "string" ? value.trim() : value == null ? "" : String(value);
+
+const numberValue = (value: unknown) => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const parsed = Number(textValue(value).replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const normalizeToken = (value: unknown) =>
+  textValue(value)
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+
+const normalizeCourier = (value: unknown) =>
+  textValue(value).toLowerCase().replace(/[^a-z0-9]/g, "");
+
+const extractList = (decoded: unknown): Array<Record<string, unknown>> => {
+  if (Array.isArray(decoded)) {
+    return decoded.filter((item): item is Record<string, unknown> =>
+      !!item && typeof item === "object"
+    );
+  }
+  if (decoded && typeof decoded === "object") {
+    const obj = decoded as Record<string, unknown>;
+    const direct = [obj.data, obj.results, obj.items, obj.livraison];
+    for (const candidate of direct) {
+      if (Array.isArray(candidate)) {
+        return candidate.filter((item): item is Record<string, unknown> =>
+          !!item && typeof item === "object"
+        );
+      }
+    }
+    if (obj.data && typeof obj.data === "object") {
+      const nested = obj.data as Record<string, unknown>;
+      const nestedCandidates = [nested.items, nested.results, nested.livraison];
+      for (const candidate of nestedCandidates) {
+        if (Array.isArray(candidate)) {
+          return candidate.filter((item): item is Record<string, unknown> =>
+            !!item && typeof item === "object"
+          );
+        }
+      }
+    }
+  }
+  return [];
+};
+
+const consumeRateLimit = async (
+  supabase: ReturnType<typeof createClient>,
+  key: string,
+  limit: number,
+  windowSeconds: number,
+) => {
+  const { data, error } = await supabase.rpc("consume_rate_limit", {
+    p_key: key,
+    p_limit: limit,
+    p_window_seconds: windowSeconds,
+  });
+  if (error) throw new Error(error.message);
+  return data === true;
+};
+
+const sleep = (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+const parseRetryAfterMs = (value: string | null) => {
+  if (!value) return null;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds > 0) return Math.min(seconds * 1000, 15000);
+  const dateMs = Date.parse(value);
+  if (Number.isFinite(dateMs)) {
+    const delta = dateMs - Date.now();
+    if (delta > 0) return Math.min(delta, 15000);
+  }
+  return null;
+};
+
+const isRetryableStatus = (status: number) =>
+  status === 408 || status === 429 || status >= 500;
+
+const fetchWithRetry = async (
+  url: string,
+  init: RequestInit,
+  maxAttempts = 4,
+) => {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const resp = await fetch(url, init);
+      if (!isRetryableStatus(resp.status) || attempt === maxAttempts) return resp;
+      const retryAfterMs = parseRetryAfterMs(resp.headers.get("Retry-After"));
+      const jitter = Math.floor(Math.random() * 120);
+      const backoff = Math.min(320 * 2 ** (attempt - 1), 5000);
+      await sleep((retryAfterMs ?? backoff) + jitter);
+    } catch (error) {
+      lastError = error;
+      if (attempt === maxAttempts) break;
+      const jitter = Math.floor(Math.random() * 120);
+      const backoff = Math.min(320 * 2 ** (attempt - 1), 5000);
+      await sleep(backoff + jitter);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("network_retry_failed");
+};
+
+type CarrierRateWindow = { limit: number; seconds: number };
+
+const quoteRatePolicy = (carrierCode: string): CarrierRateWindow[] => {
+  switch (carrierCode) {
+    case "guepex":
+      return [{ limit: 4, seconds: 1 }, { limit: 45, seconds: 60 }];
+    case "ecotrack":
+      return [{ limit: 45, seconds: 60 }];
+    case "yalidine":
+      return [{ limit: 8, seconds: 1 }, { limit: 80, seconds: 60 }];
+    case "zrexpress":
+      return [{ limit: 8, seconds: 1 }, { limit: 80, seconds: 60 }];
+    default:
+      return [{ limit: 5, seconds: 1 }, { limit: 60, seconds: 60 }];
+  }
+};
+
+const enforceCarrierRateLimit = async (
+  supabase: ReturnType<typeof createClient>,
+  carrierCode: string,
+  sellerId: string,
+) => {
+  for (const window of quoteRatePolicy(carrierCode)) {
+    const ok = await consumeRateLimit(
+      supabase,
+      `carrier_quote:${carrierCode}:${sellerId}:${window.seconds}`,
+      window.limit,
+      window.seconds,
+    );
+    if (!ok) return false;
+  }
+  return true;
+};
+
+const carrierFetch = async (
+  supabase: ReturnType<typeof createClient>,
+  carrierCode: string,
+  sellerId: string,
+  url: string,
+  init: RequestInit,
+) => {
+  const allowed = await enforceCarrierRateLimit(supabase, carrierCode, sellerId);
+  if (!allowed) return null;
+  return fetchWithRetry(url, init);
+};
+
+const pickNumber = (record: Record<string, unknown>, keys: string[]) => {
+  for (const key of keys) {
+    if (!(key in record)) continue;
+    const parsed = numberValue(record[key]);
+    if (parsed != null) return parsed;
+  }
+  return null;
+};
+
+const firstLikelyPrice = (record: Record<string, unknown>) => {
+  const ignored = ["id", "code", "min", "max", "wilaya", "commune", "retour"];
+  for (const [key, raw] of Object.entries(record)) {
+    const keyNorm = normalizeToken(key);
+    if (!keyNorm) continue;
+    if (ignored.some((token) => keyNorm.includes(token))) continue;
+    const parsed = numberValue(raw);
+    if (parsed != null && parsed > 0) return parsed;
+  }
+  return null;
+};
+
+type QuoteResult = {
+  fee: number;
+  baseFee: number;
+  overweightFee: number;
+  source: string;
+  currency: "DZD";
+};
+
+const fallbackEstimate = (
+  senderWilaya: string,
+  receiverWilaya: string,
+  weightKg: number,
+  heightCm: number,
+  widthCm: number,
+  lengthCm: number,
+): QuoteResult => {
+  const sameWilaya = normalizeToken(senderWilaya) &&
+      normalizeToken(senderWilaya) === normalizeToken(receiverWilaya);
+  const baseFee = sameWilaya ? 300 : 700;
+  const extraWeight = Math.max(0, weightKg - 5);
+  const overweightFee = extraWeight * 70;
+  const volumeCm3 = Math.max(0, heightCm) * Math.max(0, widthCm) * Math.max(0, lengthCm);
+  const oversizeFee = volumeCm3 > 500000 ? 250 : volumeCm3 > 200000 ? 120 : 0;
+  return {
+    fee: Math.max(0, baseFee + overweightFee + oversizeFee),
+    baseFee,
+    overweightFee: overweightFee + oversizeFee,
+    source: "fallback_rule",
+    currency: "DZD",
+  };
+};
+
+const parseEcotrackQuote = (
+  decoded: unknown,
+  toWilayaId: string,
+  deliveryType: string,
+  weightKg: number,
+): QuoteResult | null => {
+  if (!decoded || typeof decoded !== "object") return null;
+  const root = decoded as Record<string, unknown>;
+  const rows = extractList(root.livraison ?? root.data);
+  if (rows.length === 0) return null;
+  const target = rows.find((row) => {
+    const rowId = textValue(row["wilaya_id"] ?? row["code"] ?? row["id"]);
+    return !!rowId && normalizeToken(rowId) === normalizeToken(toWilayaId);
+  }) ?? rows[0];
+  const baseFee = deliveryType === "stopdesk"
+    ? pickNumber(target, [
+      "tarif_stopdesk",
+      "stopdesk_tarif",
+      "express_desk",
+      "desk_fee",
+      "tarif",
+    ])
+    : pickNumber(target, [
+      "tarif",
+      "home_tarif",
+      "express_home",
+      "home_fee",
+      "tarif_stopdesk",
+    ]);
+  if (baseFee == null || baseFee < 0) return null;
+  const threshold = pickNumber(target, [
+    "overweight_threshold_kg",
+    "overweight_threshold",
+    "seuil_kg",
+  ]) ?? 5;
+  const extraPerKg = pickNumber(target, [
+    "tarif_kg_supp",
+    "supplement_kg",
+    "extra_fee_per_kg",
+    "overweight_fee_per_kg",
+  ]) ??
+      pickNumber(root, [
+        "tarif_kg_supp",
+        "supplement_kg",
+        "extra_fee_per_kg",
+        "overweight_fee_per_kg",
+      ]);
+  const overweightFee = extraPerKg == null
+    ? 0
+    : Math.ceil(Math.max(0, weightKg - threshold)) * extraPerKg;
+  return {
+    fee: Math.max(0, baseFee + overweightFee),
+    baseFee,
+    overweightFee,
+    source: "carrier_api",
+    currency: "DZD",
+  };
+};
+
+const parseGenericCarrierQuote = (
+  decoded: unknown,
+  deliveryType: string,
+  weightKg: number,
+): QuoteResult | null => {
+  if (!decoded || typeof decoded !== "object") return null;
+  const root = decoded as Record<string, unknown>;
+  const rows = extractList(decoded);
+  for (const row of rows.length === 0 ? [root] : rows) {
+    const baseFee = deliveryType === "stopdesk"
+      ? pickNumber(row, [
+        "tarif_stopdesk",
+        "stopdesk_fee",
+        "express_desk",
+        "desk_fee",
+        "pickup_fee",
+        "pickup_price",
+        "rate_pickup",
+      ]) ?? firstLikelyPrice(row)
+      : pickNumber(row, [
+        "tarif",
+        "home_fee",
+        "express_home",
+        "home_price",
+        "delivery_fee",
+        "delivery_price",
+        "rate_home",
+      ]) ?? firstLikelyPrice(row);
+    if (baseFee == null || baseFee < 0) continue;
+    const threshold = pickNumber(row, [
+      "overweight_threshold_kg",
+      "weight_threshold",
+      "seuil_kg",
+    ]) ??
+        pickNumber(root, [
+          "overweight_threshold_kg",
+          "weight_threshold",
+          "seuil_kg",
+        ]) ??
+        5;
+    const extraFee = pickNumber(row, [
+      "overweight_fee",
+      "overweight_fee_per_kg",
+      "oversize_fee",
+      "extra_fee_per_kg",
+      "tarif_kg_supp",
+      "supplement_kg",
+    ]) ??
+        pickNumber(root, [
+          "overweight_fee",
+          "overweight_fee_per_kg",
+          "oversize_fee",
+          "extra_fee_per_kg",
+          "tarif_kg_supp",
+          "supplement_kg",
+        ]);
+    const overweightFee = extraFee == null
+      ? 0
+      : Math.ceil(Math.max(0, weightKg - threshold)) * extraFee;
+    return {
+      fee: Math.max(0, baseFee + overweightFee),
+      baseFee,
+      overweightFee,
+      source: "carrier_api",
+      currency: "DZD",
+    };
+  }
+  return null;
+};
+
+const canonicalCarrierCode = (courierId: string, courierName: string) => {
+  const normalized = normalizeCourier(`${courierId} ${courierName}`);
+  if (normalized.includes("yalidine")) return "yalidine";
+  if (normalized.includes("ecotrack")) return "ecotrack";
+  if (normalized.includes("zrexpress")) return "zrexpress";
+  if (normalized.includes("guepex")) return "guepex";
+  return normalizeCourier(courierId);
+};
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") {
+    return jsonResponse({ ok: false, message: "Method not allowed" }, 405);
+  }
+
+  const auth = req.headers.get("authorization") ?? "";
+  if (!auth.startsWith("Bearer ")) {
+    return jsonResponse({ ok: false, message: "Unauthorized" }, 401);
+  }
+
+  const url = Deno.env.get("SUPABASE_URL") ?? "";
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  if (!url || !serviceKey) {
+    return jsonResponse({ ok: false, message: "Server misconfigured" }, 500);
+  }
+
+  const supabase = createClient(url, serviceKey, {
+    auth: { persistSession: false },
+    global: { headers: { Authorization: auth } },
+  });
+
+  let userId = "";
+  try {
+    const { data } = await supabase.auth.getUser();
+    userId = data.user?.id ?? "";
+  } catch {
+    userId = "";
+  }
+  if (!userId) return jsonResponse({ ok: false, message: "Unauthorized" }, 401);
+
+  try {
+    const ok = await consumeRateLimit(supabase, `shipping_quote:${userId}`, 40, 60);
+    if (!ok) {
+      return jsonResponse({ ok: false, message: "Rate limit exceeded" }, 429);
+    }
+  } catch {
+    return jsonResponse({ ok: false, message: "Rate limit error" }, 500);
+  }
+
+  let payload: Record<string, unknown>;
+  try {
+    payload = await req.json();
+  } catch {
+    return jsonResponse({ ok: false, message: "Invalid JSON" }, 400);
+  }
+
+  const sellerId = textValue(payload.seller_id);
+  const courierId = textValue(payload.courier_id);
+  const courierName = textValue(payload.courier_name);
+  const productId = textValue(payload.product_id);
+  const deliveryType = textValue(payload.delivery_type) || "home";
+  const senderWilayaId = textValue(payload.sender_wilaya_id);
+  const senderWilayaName = textValue(payload.sender_wilaya_name);
+  const receiverWilayaId = textValue(payload.receiver_wilaya_id);
+  const receiverWilayaName = textValue(payload.receiver_wilaya_name);
+  const receiverCommuneId = textValue(payload.receiver_commune_id);
+  const receiverCommuneName = textValue(payload.receiver_commune_name);
+  const weightKg = Math.max(1, Math.round(numberValue(payload.weight_kg) ?? 1));
+  const heightCm = Math.max(0, Math.round(numberValue(payload.height_cm) ?? 0));
+  const widthCm = Math.max(0, Math.round(numberValue(payload.width_cm) ?? 0));
+  const lengthCm = Math.max(0, Math.round(numberValue(payload.length_cm) ?? 0));
+  const price = Math.max(0, numberValue(payload.price) ?? 0);
+  const declaredValue = Math.max(0, numberValue(payload.declared_value) ?? price);
+
+  if (!sellerId || !courierId) {
+    return jsonResponse({ ok: false, message: "seller_id and courier_id required" }, 400);
+  }
+
+  let shippingFree = false;
+  let effectiveSenderWilayaId = senderWilayaId;
+  let effectiveSenderWilayaName = senderWilayaName;
+  if (productId) {
+    const { data: product } = await supabase
+      .from("products")
+      .select("id,owner_id,shipping_free,location_wilaya")
+      .eq("id", productId)
+      .maybeSingle();
+    if (product) {
+      if (textValue(product.owner_id) && textValue(product.owner_id) !== sellerId) {
+        return jsonResponse({ ok: false, message: "seller mismatch for product" }, 403);
+      }
+      shippingFree = product.shipping_free === true;
+      if (!effectiveSenderWilayaName) {
+        effectiveSenderWilayaName = textValue(product.location_wilaya);
+      }
+    }
+  }
+
+  if (shippingFree) {
+    return jsonResponse({
+      ok: true,
+      fee: 0,
+      base_fee: 0,
+      overweight_fee: 0,
+      currency: "DZD",
+      source: "free_shipping",
+      free_shipping: true,
+      courier_code: canonicalCarrierCode(courierId, courierName),
+    });
+  }
+
+  const { data: settings } = await supabase
+    .from("seller_delivery_settings")
+    .select("api_key,api_secret")
+    .eq("owner_id", sellerId)
+    .eq("courier_id", courierId)
+    .maybeSingle();
+  const apiKey = textValue(settings?.api_key);
+  const apiSecret = textValue(settings?.api_secret);
+  if (!apiKey) {
+    return jsonResponse({ ok: false, message: "missing seller courier settings" }, 400);
+  }
+
+  const carrierCode = canonicalCarrierCode(courierId, courierName);
+  const senderRouteValue = effectiveSenderWilayaId || effectiveSenderWilayaName;
+  const receiverRouteValue = receiverWilayaId || receiverWilayaName;
+
+  let quote: QuoteResult | null = null;
+  try {
+    if (carrierCode === "ecotrack") {
+      const resp = await carrierFetch(
+        supabase,
+        carrierCode,
+        sellerId,
+        "https://api.ecotrack.dz/api/v1/get/fees",
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            Accept: "application/json",
+          },
+        },
+      );
+      if (!resp) return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
+      if (resp.ok) {
+        quote = parseEcotrackQuote(await resp.json(), receiverRouteValue, deliveryType, weightKg);
+      }
+    } else if (carrierCode === "guepex") {
+      const base = (Deno.env.get("GUEPEX_BASE_URL") ?? "https://api.guepex.app").replace(
+        /\/+$/,
+        "",
+      );
+      const route = new URL(`${base}/v1/fees/`);
+      if (senderRouteValue) route.searchParams.set("from_wilaya_id", senderRouteValue);
+      if (receiverRouteValue) route.searchParams.set("to_wilaya_id", receiverRouteValue);
+      const resp = await carrierFetch(
+        supabase,
+        carrierCode,
+        sellerId,
+        route.toString(),
+        {
+          method: "GET",
+          headers: {
+            "X-API-ID": apiKey,
+            "X-API-TOKEN": apiSecret,
+            Accept: "application/json",
+          },
+        },
+      );
+      if (!resp) return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
+      if (resp.ok) {
+        quote = parseGenericCarrierQuote(await resp.json(), deliveryType, weightKg);
+      }
+    } else if (carrierCode === "yalidine") {
+      const route = new URL("https://api.yalidine.app/v1/fees/");
+      if (senderRouteValue) route.searchParams.set("from_wilaya_id", senderRouteValue);
+      if (receiverRouteValue) route.searchParams.set("to_wilaya_id", receiverRouteValue);
+      const resp = await carrierFetch(
+        supabase,
+        carrierCode,
+        sellerId,
+        route.toString(),
+        {
+          method: "GET",
+          headers: {
+            "X-API-ID": apiKey,
+            "X-API-TOKEN": apiSecret,
+            Accept: "application/json",
+          },
+        },
+      );
+      if (!resp) return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
+      if (resp.ok) {
+        quote = parseGenericCarrierQuote(await resp.json(), deliveryType, weightKg);
+      }
+    } else if (carrierCode === "zrexpress") {
+      const toTerritoryId = receiverRouteValue || receiverCommuneId || receiverCommuneName;
+      if (toTerritoryId) {
+        const route = `https://api.zrexpress.app/api/v1/delivery-pricing/rates/${
+          encodeURIComponent(toTerritoryId)
+        }`;
+        const resp = await carrierFetch(
+          supabase,
+          carrierCode,
+          sellerId,
+          route,
+          {
+            method: "GET",
+            headers: {
+              "X-Api-Key": apiKey,
+              "X-Tenant": apiSecret,
+              Accept: "application/json",
+            },
+          },
+        );
+        if (!resp) return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
+        if (resp.ok) {
+          quote = parseGenericCarrierQuote(await resp.json(), deliveryType, weightKg);
+        }
+      }
+    }
+  } catch {
+    quote = null;
+  }
+
+  if (!quote) {
+    quote = fallbackEstimate(
+      senderRouteValue,
+      receiverRouteValue,
+      weightKg,
+      heightCm,
+      widthCm,
+      lengthCm,
+    );
+  }
+
+  return jsonResponse({
+    ok: true,
+    fee: quote.fee,
+    base_fee: quote.baseFee,
+    overweight_fee: quote.overweightFee,
+    currency: quote.currency,
+    source: quote.source,
+    free_shipping: false,
+    courier_code: carrierCode,
+    meta: {
+      seller_id: sellerId,
+      courier_id: courierId,
+      courier_name: courierName,
+      delivery_type: deliveryType,
+      sender_wilaya: senderRouteValue,
+      receiver_wilaya: receiverRouteValue,
+      receiver_commune: receiverCommuneId || receiverCommuneName,
+      declared_value: declaredValue,
+      price,
+      weight_kg: weightKg,
+      height_cm: heightCm,
+      width_cm: widthCm,
+      length_cm: lengthCm,
+    },
+  });
+});

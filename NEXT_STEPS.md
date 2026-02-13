@@ -1,44 +1,52 @@
 # NEXT_STEPS
 
-Last updated: 2026-02-12
+Last updated: 2026-02-13
 
 ## 1) Current state snapshot
-Project is in active stabilization mode with strong progress on:
-- Shipping rules consistency (arranged delivery vs courier label generation).
-- Canonical chat thread behavior.
-- Offline UX hardening.
-- Branding/app icon rollout across platforms.
-
-Release readiness is not complete yet; a focused P0 pass is still needed.
+Project is in stabilization mode and technically close to release candidate.
+Major backend and UX paths now work with:
+- One canonical chat room per buyer/seller/product.
+- Multi-courier shipping including Guepex.
+- Moderation flow wired in listing creation.
+- Improved chat hub UX and better offline behavior.
 
 ## 2) Recent changes (already done)
-Backend/DB:
-- Added arranged-delivery guards (`20260212170000_arranged_delivery_guards.sql`).
-- Added courier parcel rule table and limits (`20260212200000_courier_parcel_rules.sql`).
-- Refined duplicate-order guard and canonical chat logic from prior migrations.
+Backend and DB:
+- Added courier parcel rule support and guards in `supabase.sql` and migrations.
+- Added Guepex courier support end-to-end.
+- Added offers compatibility guards for legacy DB columns (`updated_at`, `counter_amount`, etc.).
 
-Edge functions:
-- `create_shipment`: supports arranged delivery bypass for label generation and enforces parcel rules.
-- `job-runner`: reminders, stale order cancellation, return sync, retention cleanup, reliability metrics.
-- `moderate-content`: fail-open support via `MODERATION_FAIL_OPEN`.
+Edge Functions:
+- `create_shipment` supports Guepex and better tracking fallback behavior.
+- `validate-courier` and `courier-locations` support Guepex credentials and territory loading.
+- `moderate-content` deployed with strict policy option (`MODERATION_FAIL_OPEN`).
+- `job-runner` remains active for reliability and transport sync.
+- Added anti-surge controls on courier APIs:
+- retry/backoff on transient failures (`429`, `5xx`, timeout),
+- per-carrier throttling using `consume_rate_limit`,
+- same reliability layer aligned across `create_shipment`, `validate-courier`, `courier-locations`, `job-runner`.
 
-CI/Ops:
-- `job-runner-cron.yml` now evaluates anomalies and opens/updates GitHub alerts.
+Mobile app:
+- Chat hub redesigned for cleaner cards, compact offline banner, improved search/unread.
+- Offer cards interaction deduped in chat room (only latest card actionable per offer).
+- Listing creation improved:
+- category picker with search and recent history,
+- moderation outcome handling in publish flow,
+- crash fix for unmodifiable list in category step.
 
-Mobile UX:
-- Better offline behavior and reduced noisy errors.
-- Product image compatibility filtering (HEIC/HEIF handling).
-- Checkout courier limits moved to optional detail action instead of persistent warning block.
-- Listing photo cap behavior aligned with product flow.
+Ops:
+- `moderate-content` deployed successfully.
+- `MODERATION_FAIL_OPEN=false` configured for strict moderation behavior.
 
-## 3) Known issues / risks to verify now
-1. Listing publish may fail with moderation 503 if moderation env is missing and fail-open is disabled.
-2. Courier label flow must never trigger for arranged delivery (`livraison a convenir` / pickup-like modes).
-3. Some legacy images may still not render if source URLs are invalid/unreachable.
-4. Fresh environment setup can drift if migration order is skipped.
+## 3) Known issues / active risks
+1. Offer flow needs final E2E validation for no duplicate visual cards in all edge cases.
+2. Arranged delivery chat messages must stay coherent and must not trigger label generation in seller sales flow.
+3. Some legacy environments may still miss columns if not fully migrated (run `supabase db push`).
+4. Firebase warning (`Invalid google_app_id`) can pollute logs if flavor config is not clean.
+5. Carrier throttle thresholds may need production tuning (too strict = delays, too loose = API bans).
 
-## 4) Reproduction commands
-Local quality:
+## 4) Reproduction and validation commands
+Quality:
 ```bash
 flutter analyze
 flutter test
@@ -49,56 +57,43 @@ Run on USB:
 flutter run -d <DEVICE_ID> --flavor dev -t lib/main.dart --dart-define-from-file=test/test_env.json --no-resident
 ```
 
-Deploy critical functions:
+Deploy core functions:
 ```bash
+supabase functions deploy validate-courier
+supabase functions deploy courier-locations
 supabase functions deploy create_shipment
 supabase functions deploy job-runner
 supabase functions deploy moderate-content
 ```
 
-Manual API smoke (cron function):
-```bash
-curl -X POST "$SUPABASE_URL/functions/v1/job-runner" \
-  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
-  -H "Content-Type: application/json" \
-  --data '{"source":"manual-smoke"}'
-```
-
 ## 5) Prioritized TODO
-### P0 (blocking for release)
-- Validate all required function secrets in Supabase project:
-  - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
-  - `SIGHTENGINE_USER`, `SIGHTENGINE_SECRET` (or explicitly keep fail-open policy)
-- End-to-end test for 3 actors on latest DB migrations:
-  - buyer order
-  - seller shipment generation
-  - superadmin moderation/errors
-- Confirm arranged delivery does not request/generate shipping label.
-- Confirm one chat room per buyer+seller+product for repeated orders.
+### P0 (release blocking)
+- Run full offer lifecycle E2E in real accounts:
+- buyer creates offer,
+- seller accepts/refuses/counters from same chat message flow,
+- buyer receives updates and can re-offer.
+- Verify arranged delivery does not create shipment work items in seller sales.
+- Verify latest `supabase.sql` executes cleanly on fresh and existing DBs.
 
-### P1 (high value after P0)
-- Full FR/AR manual matrix replay:
-  - `E2E_MANUAL_TEST_CASES.md`
-  - `E2E_MANUAL_TEST_CASES_AR.md`
-- Validate courier limit UX copy and error messages for all 3 couriers.
-- Final pass on offline UX consistency (browse/chat/profile).
+### P1 (high value)
+- Complete FR/AR manual replay of updated cases in `E2E_MANUAL_TEST_CASES.md`.
+- Improve product detail visual hierarchy for conversion (without touching core logic).
+- Add monitoring panel for courier API failures by carrier and rate-limit hit counters.
 
-### P2 (post-stabilization)
-- Performance pass for image loading/cache under low network.
-- Analytics/Crashlytics config cleanup (invalid firebase app id warnings if present).
-- Stronger dashboards around conversion and shipment SLA.
+### P2 (post-RC)
+- Tighten analytics and crash dashboards by feature domain.
+- Add richer moderation review queue metrics.
+- Improve low-network media loading strategy.
 
 ## 6) Checklist before release candidate
 - [ ] `flutter analyze` clean.
 - [ ] `flutter test` pass.
-- [ ] Critical functions deployed (`create_shipment`, `job-runner`, `moderate-content`).
-- [ ] Latest migrations applied in target Supabase project.
-- [ ] No open P0 bug.
-- [ ] Manual smoke test done on real Android USB device.
-- [ ] Cron run verified and GitHub alerts behavior validated.
-- [ ] FR/AR texts complete for all new UX messages.
+- [ ] DB up to date via migrations and `supabase.sql` sanity.
+- [ ] Functions deployed (`validate-courier`, `courier-locations`, `create_shipment`, `job-runner`, `moderate-content`).
+- [ ] Offer lifecycle validated E2E on device.
+- [ ] Arranged delivery flow validated E2E (no wrong shipment generation).
+- [ ] FR/AR copy reviewed for new UX and moderation messages.
 
-## 7) Notes for next handoff
-- Keep using `supabase.sql` as baseline and keep it aligned with migrations.
-- Do not introduce new features before P0 closure.
-- Track all production-impact decisions in `NEXT_UPDATES.md` and this file.
+## 7) Handoff notes
+- Keep documenting production-impact updates in this file and `NEXT_UPDATES.md`.
+- Avoid new large features until P0 closure is complete.

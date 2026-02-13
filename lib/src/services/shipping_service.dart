@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'package:dzmarket/src/config/supabase_options.dart';
 import 'package:dzmarket/src/models/parcel_import_model.dart';
 import 'package:dzmarket/src/models/shipment.dart';
@@ -65,7 +65,8 @@ class CourierCapabilities {
       supportsStopdesk: supportsStopdesk || other.supportsStopdesk,
       supportsInsurance: supportsInsurance || other.supportsInsurance,
       supportsExchange: supportsExchange || other.supportsExchange,
-      supportsDeclaredValue: supportsDeclaredValue || other.supportsDeclaredValue,
+      supportsDeclaredValue:
+          supportsDeclaredValue || other.supportsDeclaredValue,
       supportsDimensions: supportsDimensions || other.supportsDimensions,
       supportsWeight: supportsWeight || other.supportsWeight,
     );
@@ -115,9 +116,7 @@ class CourierParcelRules {
       maxHeightCm: maxHeightCm < other.maxHeightCm
           ? maxHeightCm
           : other.maxHeightCm,
-      maxWidthCm: maxWidthCm < other.maxWidthCm
-          ? maxWidthCm
-          : other.maxWidthCm,
+      maxWidthCm: maxWidthCm < other.maxWidthCm ? maxWidthCm : other.maxWidthCm,
       maxLengthCm: maxLengthCm < other.maxLengthCm
           ? maxLengthCm
           : other.maxLengthCm,
@@ -141,16 +140,32 @@ class CourierParcelValidation {
   const CourierParcelValidation(this.code, {this.params = const {}});
 }
 
+class ShippingFeeQuote {
+  final double fee;
+  final String source;
+  final bool freeShipping;
+
+  const ShippingFeeQuote({
+    required this.fee,
+    required this.source,
+    required this.freeShipping,
+  });
+}
+
 class ShippingService {
   // Shared HTTP client to reuse connections across instances.
   static final http.Client _httpClient = http.Client();
 
   // Simple in-memory cache for courier responses to avoid repeated network calls.
   static const Duration _cacheTtl = Duration(minutes: 30);
-  static final Map<String, _CacheItem<List<Map<String, String>>>> _courierWilayasCache = {};
-  static final Map<String, _CacheItem<List<Map<String, String>>>> _courierCommunesCache = {};
-  static final Map<String, _CacheItem<Map<String, dynamic>>> _ecotrackFeesCache = {};
-  static final Map<String, _CacheItem<CourierParcelRules>> _parcelRulesCache = {};
+  static final Map<String, _CacheItem<List<Map<String, String>>>>
+  _courierWilayasCache = {};
+  static final Map<String, _CacheItem<List<Map<String, String>>>>
+  _courierCommunesCache = {};
+  static final Map<String, _CacheItem<Map<String, dynamic>>>
+  _ecotrackFeesCache = {};
+  static final Map<String, _CacheItem<CourierParcelRules>> _parcelRulesCache =
+      {};
   static const options = <String>[
     'Livraison domicile (24-72h)',
     'Point relais / bureau poste',
@@ -196,7 +211,126 @@ class ShippingService {
       'contact': 'support@zrexpress.app',
       'coverage': 'National',
     },
+    {
+      'id': 'guepex',
+      'name': 'Guepex',
+      'contact': 'developer@guepex.com',
+      'coverage': 'National',
+    },
   ];
+
+  Future<ShippingFeeQuote?> estimateCheckoutShippingFee({
+    required String sellerId,
+    required String courierId,
+    String? courierName,
+    String? productId,
+    required String deliveryType,
+    String? senderWilayaId,
+    String? senderWilayaName,
+    String? receiverWilayaId,
+    String? receiverWilayaName,
+    String? receiverCommuneId,
+    String? receiverCommuneName,
+    required double price,
+    required int weightKg,
+    required int heightCm,
+    required int widthCm,
+    required int lengthCm,
+    double? declaredValue,
+  }) async {
+    final safeSellerId = InputSanitizer.sanitizeId(sellerId, maxLength: 64);
+    final safeCourierId = InputSanitizer.sanitizeOptionalText(
+      courierId,
+      maxLength: 64,
+    );
+    if (safeSellerId.isEmpty ||
+        safeCourierId == null ||
+        safeCourierId.isEmpty) {
+      return null;
+    }
+
+    final safeCourierName = InputSanitizer.sanitizeOptionalText(
+      courierName,
+      maxLength: 80,
+    );
+    final safeProductId = InputSanitizer.sanitizeOptionalText(
+      productId,
+      maxLength: 64,
+    );
+    final safeDelivery = InputSanitizer.sanitizeText(
+      deliveryType,
+      maxLength: 40,
+    );
+    final safeSenderWilayaId = InputSanitizer.sanitizeOptionalText(
+      senderWilayaId,
+      maxLength: 20,
+    );
+    final safeSenderWilayaName = InputSanitizer.sanitizeOptionalText(
+      senderWilayaName,
+      maxLength: 80,
+    );
+    final safeReceiverWilayaId = InputSanitizer.sanitizeOptionalText(
+      receiverWilayaId,
+      maxLength: 20,
+    );
+    final safeReceiverWilayaName = InputSanitizer.sanitizeOptionalText(
+      receiverWilayaName,
+      maxLength: 80,
+    );
+    final safeReceiverCommuneId = InputSanitizer.sanitizeOptionalText(
+      receiverCommuneId,
+      maxLength: 20,
+    );
+    final safeReceiverCommuneName = InputSanitizer.sanitizeOptionalText(
+      receiverCommuneName,
+      maxLength: 80,
+    );
+
+    final response = await RateLimiter.instance.run(
+      'shipping.quote.invoke',
+      () => supabase.functions.invoke(
+        'estimate-shipping',
+        body: {
+          'seller_id': safeSellerId,
+          'courier_id': safeCourierId,
+          if (safeCourierName != null) 'courier_name': safeCourierName,
+          if (safeProductId != null) 'product_id': safeProductId,
+          'delivery_type': safeDelivery,
+          if (safeSenderWilayaId != null)
+            'sender_wilaya_id': safeSenderWilayaId,
+          if (safeSenderWilayaName != null)
+            'sender_wilaya_name': safeSenderWilayaName,
+          if (safeReceiverWilayaId != null)
+            'receiver_wilaya_id': safeReceiverWilayaId,
+          if (safeReceiverWilayaName != null)
+            'receiver_wilaya_name': safeReceiverWilayaName,
+          if (safeReceiverCommuneId != null)
+            'receiver_commune_id': safeReceiverCommuneId,
+          if (safeReceiverCommuneName != null)
+            'receiver_commune_name': safeReceiverCommuneName,
+          'price': price,
+          'declared_value': declaredValue ?? price,
+          'weight_kg': weightKg,
+          'height_cm': heightCm,
+          'width_cm': widthCm,
+          'length_cm': lengthCm,
+        },
+      ),
+    );
+    final data = response.data;
+    if (data is! Map) return null;
+    if (data['ok'] != true) return null;
+    final fee =
+        (data['fee'] as num?)?.toDouble() ?? double.tryParse('${data['fee']}');
+    if (fee == null || !fee.isFinite || fee < 0) return null;
+    final source = (data['source']?.toString() ?? '').trim();
+    final freeShipping = data['free_shipping'] == true;
+    return ShippingFeeQuote(
+      fee: fee,
+      source: source.isEmpty ? 'unknown' : source,
+      freeShipping: freeShipping,
+    );
+  }
 
   Future<List<Map<String, String>>> fetchCouriers() async => couriers;
 
@@ -228,10 +362,13 @@ class ShippingService {
     String? courierId,
     String? courierName,
   }) {
-    final merged = _normalizeCourierKey('${courierId ?? ''} ${courierName ?? ''}');
+    final merged = _normalizeCourierKey(
+      '${courierId ?? ''} ${courierName ?? ''}',
+    );
     if (merged.contains('yalidine')) return 'yalidine';
     if (merged.contains('ecotrack')) return 'ecotrack';
     if (merged.contains('zrexpress')) return 'zrexpress';
+    if (merged.contains('guepex')) return 'guepex';
     final idKey = _normalizeCourierKey(courierId);
     if (idKey.isNotEmpty) return idKey;
     return null;
@@ -315,6 +452,12 @@ class ShippingService {
     return idKey.contains('zrexpress') || nameKey.contains('zrexpress');
   }
 
+  static bool isGuepexCourier({String? courierId, String? courierName}) {
+    final idKey = _normalizeCourierKey(courierId);
+    final nameKey = _normalizeCourierKey(courierName);
+    return idKey.contains('guepex') || nameKey.contains('guepex');
+  }
+
   static CourierCapabilities capabilitiesFor({
     String? courierId,
     String? courierName,
@@ -346,6 +489,16 @@ class ShippingService {
         supportsInsurance: false,
         supportsExchange: false,
         supportsDeclaredValue: false,
+        supportsDimensions: true,
+        supportsWeight: true,
+      );
+    }
+    if (key.contains('guepex')) {
+      return const CourierCapabilities(
+        supportsStopdesk: true,
+        supportsInsurance: true,
+        supportsExchange: true,
+        supportsDeclaredValue: true,
         supportsDimensions: true,
         supportsWeight: true,
       );
@@ -407,6 +560,18 @@ class ShippingService {
         maxLengthCm: 200,
         maxVolumeCm3: 8000000,
         maxDeclaredValue: 99999999,
+        overweightThresholdKg: 5,
+      );
+    }
+    if (key.contains('guepex')) {
+      return const CourierParcelRules(
+        minWeightKg: 1,
+        maxWeightKg: 60,
+        maxHeightCm: 200,
+        maxWidthCm: 200,
+        maxLengthCm: 200,
+        maxVolumeCm3: 8000000,
+        maxDeclaredValue: 150000,
         overweightThresholdKg: 5,
       );
     }
@@ -570,7 +735,9 @@ class ShippingService {
           .from(SupabaseTables.shipments)
           .stream(primaryKey: ['order_id'])
           .eq('order_id', safeOrderId)
-          .map((rows) => rows.isNotEmpty ? Shipment.fromJson(rows.first) : null),
+          .map(
+            (rows) => rows.isNotEmpty ? Shipment.fromJson(rows.first) : null,
+          ),
     );
   }
 
@@ -600,27 +767,30 @@ class ShippingService {
       // swallow and try fallback
     }
 
-      try {
-        // Fallback if RPC unavailable: attempt direct select (may be blocked by RLS)
-        final rows = await RateLimiter.instance.run(
-          'shipments.couriers.select',
-          () => supabase
-              .from('seller_delivery_settings')
-              .select('courier_id, api_key, api_secret, sender_id, couriers(name)')
-              .eq('owner_id', safeSellerId)
-              .not('api_key', 'is', null)
-              .or('courier_id.eq.ecotrack,api_secret.not.is.null'),
-        );
-        return rows
-            .map(
-              (r) => {
-                'courier_id': r['courier_id'],
-                'courier_name': (r['couriers'] as Map?)?['name'] ??
-                    _courierNameFromId(r['courier_id']?.toString()) ??
-                    r['courier_id']?.toString(),
-              },
+    try {
+      // Fallback if RPC unavailable: attempt direct select (may be blocked by RLS)
+      final rows = await RateLimiter.instance.run(
+        'shipments.couriers.select',
+        () => supabase
+            .from('seller_delivery_settings')
+            .select(
+              'courier_id, api_key, api_secret, sender_id, couriers(name)',
             )
-            .toList();
+            .eq('owner_id', safeSellerId)
+            .not('api_key', 'is', null)
+            .or('courier_id.eq.ecotrack,api_secret.not.is.null'),
+      );
+      return rows
+          .map(
+            (r) => {
+              'courier_id': r['courier_id'],
+              'courier_name':
+                  (r['couriers'] as Map?)?['name'] ??
+                  _courierNameFromId(r['courier_id']?.toString()) ??
+                  r['courier_id']?.toString(),
+            },
+          )
+          .toList();
     } catch (_) {}
     return const [];
   }
@@ -661,11 +831,18 @@ class ShippingService {
   }) async {
     final safeOrderId = InputSanitizer.sanitizeId(orderId, maxLength: 64);
     final safeCourierId = InputSanitizer.sanitizeText(courierId, maxLength: 64);
-    final safeCourierName =
-        InputSanitizer.sanitizeText(courierName, maxLength: 80);
-    final safeOption = InputSanitizer.sanitizeOptionalText(option, maxLength: 60);
-    final safeDelivery =
-        InputSanitizer.sanitizeOptionalText(deliveryMode, maxLength: 40);
+    final safeCourierName = InputSanitizer.sanitizeText(
+      courierName,
+      maxLength: 80,
+    );
+    final safeOption = InputSanitizer.sanitizeOptionalText(
+      option,
+      maxLength: 60,
+    );
+    final safeDelivery = InputSanitizer.sanitizeOptionalText(
+      deliveryMode,
+      maxLength: 40,
+    );
     await createShipment(
       orderId: safeOrderId,
       courierId: safeCourierId,
@@ -688,12 +865,18 @@ class ShippingService {
   }) async {
     final safeOrderId = InputSanitizer.sanitizeId(orderId, maxLength: 64);
     final safeCourierId = InputSanitizer.sanitizeText(courierId, maxLength: 64);
-    final safeCourierName =
-        InputSanitizer.sanitizeText(courierName, maxLength: 80);
-    final safeDelivery =
-        InputSanitizer.sanitizeOptionalText(deliveryMode, maxLength: 40);
-    final safeOption =
-        InputSanitizer.sanitizeOptionalText(shippingOption, maxLength: 60);
+    final safeCourierName = InputSanitizer.sanitizeText(
+      courierName,
+      maxLength: 80,
+    );
+    final safeDelivery = InputSanitizer.sanitizeOptionalText(
+      deliveryMode,
+      maxLength: 40,
+    );
+    final safeOption = InputSanitizer.sanitizeOptionalText(
+      shippingOption,
+      maxLength: 60,
+    );
     final body = <String, dynamic>{
       'order_id': safeOrderId,
       'courier_id': safeCourierId,
@@ -727,10 +910,12 @@ class ShippingService {
         final labelUrl = map['label_url']?.toString();
         final hasLabel = labelUrl != null && labelUrl.isNotEmpty;
         final statusValue = hasLabel ? 'shipped' : 'validated';
-        final labelKey =
-            hasLabel ? 'order.system.shipped' : 'order.system.validated';
-        final eventKey =
-            hasLabel ? 'order:$orderId:shipped' : 'order:$orderId:validated';
+        final labelKey = hasLabel
+            ? 'order.system.shipped'
+            : 'order.system.validated';
+        final eventKey = hasLabel
+            ? 'order:$orderId:shipped'
+            : 'order:$orderId:validated';
         final locale =
             LocaleService.instance.locale.value?.languageCode ?? 'fr';
         await _postOrderSystemMessage(
@@ -791,7 +976,8 @@ class ShippingService {
       orderRes = await supabase
           .from(SupabaseTables.orders)
           .select(
-              'product_id,buyer_id,seller_id,shipping_address_id,agreed_price,sale_price,shipping_selection')
+            'product_id,buyer_id,seller_id,shipping_address_id,agreed_price,sale_price,shipping_selection',
+          )
           .eq('id', safeOrderId)
           .maybeSingle();
     } on PostgrestException catch (e) {
@@ -799,7 +985,8 @@ class ShippingService {
         orderRes = await supabase
             .from(SupabaseTables.orders)
             .select(
-                'product_id,buyer_id,seller_id,shipping_address_id,agreed_price,sale_price')
+              'product_id,buyer_id,seller_id,shipping_address_id,agreed_price,sale_price',
+            )
             .eq('id', safeOrderId)
             .maybeSingle();
       } else {
@@ -809,8 +996,9 @@ class ShippingService {
     if (orderRes == null) {
       throw StateError('Commande introuvable');
     }
-    final Map<String, dynamic> orderRow =
-        Map<String, dynamic>.from(orderRes as Map);
+    final Map<String, dynamic> orderRow = Map<String, dynamic>.from(
+      orderRes as Map,
+    );
     final buyerId = orderRow['buyer_id']?.toString() ?? '';
     final sellerId = orderRow['seller_id']?.toString() ?? '';
     final productId = orderRow['product_id']?.toString();
@@ -834,14 +1022,18 @@ class ShippingService {
       final productRes = await supabase
           .from('products')
           .select(
-              'title,price,shipping_free,exchange_after_delivery,insurance_active,declared_value,weight_kg,height_cm,width_cm,length_cm')
+            'title,price,shipping_free,exchange_after_delivery,insurance_active,declared_value,weight_kg,height_cm,width_cm,length_cm',
+          )
           .eq('id', productId)
           .maybeSingle();
       final Map<String, dynamic>? product = productRes;
       if (product != null) {
         productTitle =
-            InputSanitizer.sanitizeOptionalText(product['title'], maxLength: 120) ??
-                productTitle;
+            InputSanitizer.sanitizeOptionalText(
+              product['title'],
+              maxLength: 120,
+            ) ??
+            productTitle;
         if (price <= 0 && product['price'] is num) {
           price = (product['price'] as num).toDouble();
         }
@@ -908,13 +1100,17 @@ class ShippingService {
       }
       selection['productList'] ??= selection['product_list'] ?? productTitle;
       selection['freeshipping'] ??=
-          selection['free_shipping'] ?? selection['shipping_free'] ?? freeShipping;
+          selection['free_shipping'] ??
+          selection['shipping_free'] ??
+          freeShipping;
       selection['hasExchange'] ??=
           selection['exchange_after_delivery'] ??
           selection['has_exchange'] ??
           exchangeAfterDelivery;
       selection['insuranceActive'] ??=
-          selection['insurance_active'] ?? selection['insurance'] ?? insuranceActive;
+          selection['insurance_active'] ??
+          selection['insurance'] ??
+          insuranceActive;
       selection['declaredValue'] ??=
           selection['declared_value'] ?? declaredValue;
       selection['declared_value'] ??= selection['declaredValue'];
@@ -925,8 +1121,7 @@ class ShippingService {
       selection['is_stopdesk'] ??=
           selection['deliveryType'] == 'stopdesk' ||
           selection['is_stopdesk'] == true;
-      if (selection['stopdesk_id'] == null &&
-          selection['stopdeskId'] != null) {
+      if (selection['stopdesk_id'] == null && selection['stopdeskId'] != null) {
         selection['stopdesk_id'] = selection['stopdeskId'];
       }
       return selection;
@@ -945,11 +1140,18 @@ class ShippingService {
           .maybeSingle();
       final Map<String, dynamic>? addr = addrRes;
       if (addr != null) {
-        address = InputSanitizer.sanitizeOptionalText(addr['line1'], maxLength: 140) ?? '';
+        address =
+            InputSanitizer.sanitizeOptionalText(
+              addr['line1'],
+              maxLength: 140,
+            ) ??
+            '';
         toWilaya =
-            InputSanitizer.sanitizeOptionalText(addr['state'], maxLength: 80) ?? '';
+            InputSanitizer.sanitizeOptionalText(addr['state'], maxLength: 80) ??
+            '';
         toCommune =
-            InputSanitizer.sanitizeOptionalText(addr['city'], maxLength: 80) ?? '';
+            InputSanitizer.sanitizeOptionalText(addr['city'], maxLength: 80) ??
+            '';
         phone = InputSanitizer.sanitizePhone(addr['phone'] ?? '') ?? '';
       }
     }
@@ -978,7 +1180,11 @@ class ShippingService {
       final Map<String, dynamic>? seller = sellerRes;
       if (seller != null) {
         fromWilaya =
-            InputSanitizer.sanitizeOptionalText(seller['wilaya'], maxLength: 80) ?? 'Alger';
+            InputSanitizer.sanitizeOptionalText(
+              seller['wilaya'],
+              maxLength: 80,
+            ) ??
+            'Alger';
       }
     }
 
@@ -1048,11 +1254,15 @@ class ShippingService {
     if (isZrExpressCourier(courierId: courierId, courierName: courierName)) {
       return '24-72h';
     }
+    if (isGuepexCourier(courierId: courierId, courierName: courierName)) {
+      return '24-72h';
+    }
     if (name.contains('ems') || id.contains('ems')) {
       return '48-96h';
     }
     return '48-96h';
   }
+
   Future<Map<String, dynamic>> createYalidineParcel({
     required Map<String, dynamic> settings,
     required Map<String, dynamic> parcel,
@@ -1147,19 +1357,31 @@ class ShippingService {
     int heightCm = 0,
   }) async {
     final safeOrderId = InputSanitizer.sanitizeId(orderId, maxLength: 64);
-    final safeSenderWilaya =
-        InputSanitizer.sanitizeText(senderWilayaName, maxLength: 80);
-    final safeReceiverName =
-        InputSanitizer.sanitizeText(receiverName, maxLength: 80);
+    final safeSenderWilaya = InputSanitizer.sanitizeText(
+      senderWilayaName,
+      maxLength: 80,
+    );
+    final safeReceiverName = InputSanitizer.sanitizeText(
+      receiverName,
+      maxLength: 80,
+    );
     final safeReceiverPhone = InputSanitizer.sanitizePhone(receiverPhone);
-    final safeReceiverAddress =
-        InputSanitizer.sanitizeText(receiverAddress, maxLength: 140);
-    final safeReceiverWilaya =
-        InputSanitizer.sanitizeText(receiverWilaya, maxLength: 80);
-    final safeReceiverCommune =
-        InputSanitizer.sanitizeText(receiverCommune, maxLength: 80);
-    final safeProductList =
-        InputSanitizer.sanitizeText(productList, maxLength: 120);
+    final safeReceiverAddress = InputSanitizer.sanitizeText(
+      receiverAddress,
+      maxLength: 140,
+    );
+    final safeReceiverWilaya = InputSanitizer.sanitizeText(
+      receiverWilaya,
+      maxLength: 80,
+    );
+    final safeReceiverCommune = InputSanitizer.sanitizeText(
+      receiverCommune,
+      maxLength: 80,
+    );
+    final safeProductList = InputSanitizer.sanitizeText(
+      productList,
+      maxLength: 120,
+    );
 
     if (safeSenderWilaya.isEmpty ||
         safeReceiverWilaya.isEmpty ||
@@ -1173,8 +1395,10 @@ class ShippingService {
       throw FormatException('Receiver phone invalid for Yalidine');
     }
 
-    final nameParts =
-        safeReceiverName.split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
+    final nameParts = safeReceiverName
+        .split(RegExp(r'\s+'))
+        .where((e) => e.isNotEmpty)
+        .toList();
     final firstName = nameParts.isNotEmpty ? nameParts.first : safeReceiverName;
     final familyName = nameParts.length > 1
         ? nameParts.sublist(1).join(' ')
@@ -1210,7 +1434,8 @@ class ShippingService {
       final message = result['message']?.toString() ?? 'Yalidine error';
       throw Exception(message);
     }
-    final trackingNumber = result['tracking'] ??
+    final trackingNumber =
+        result['tracking'] ??
         result['tracking_number'] ??
         result['tracking_id'] ??
         result['parcel_id'];
@@ -1253,24 +1478,24 @@ class ShippingService {
 
     await RateLimiter.instance.run(
       'orders.update.label',
-      () => supabase.from(SupabaseTables.orders).update({
-        'tracking_number': trackingNumber,
-        'label_url': signedUrl,
-      }).eq('id', safeOrderId),
+      () => supabase
+          .from(SupabaseTables.orders)
+          .update({'tracking_number': trackingNumber, 'label_url': signedUrl})
+          .eq('id', safeOrderId),
     );
 
-      final labelKey = 'order.system.shipped';
-      await _postOrderSystemMessage(
-        orderId: safeOrderId,
-        text: L10n.trLocale(locale, labelKey),
-        i18nKey: labelKey,
-        status: 'shipped',
-        statusI18n: 'order.status.shipped',
-        trackingNumber: trackingNumber?.toString(),
-        labelUrl: signedUrl,
-        courierName: 'Yalidine Express',
-        dedupeKey: 'order:$safeOrderId:shipped',
-      );
+    final labelKey = 'order.system.shipped';
+    await _postOrderSystemMessage(
+      orderId: safeOrderId,
+      text: L10n.trLocale(locale, labelKey),
+      i18nKey: labelKey,
+      status: 'shipped',
+      statusI18n: 'order.status.shipped',
+      trackingNumber: trackingNumber?.toString(),
+      labelUrl: signedUrl,
+      courierName: 'Yalidine Express',
+      dedupeKey: 'order:$safeOrderId:shipped',
+    );
   }
 
   Future<Map<String, dynamic>> generateYalidineParcelAndAttachLabelFromImport({
@@ -1288,7 +1513,8 @@ class ShippingService {
       final message = result['message']?.toString() ?? 'Yalidine error';
       throw Exception(message);
     }
-    final trackingNumber = result['tracking'] ??
+    final trackingNumber =
+        result['tracking'] ??
         result['tracking_number'] ??
         result['tracking_id'] ??
         result['parcel_id'];
@@ -1331,24 +1557,24 @@ class ShippingService {
 
     await RateLimiter.instance.run(
       'orders.update.label',
-      () => supabase.from(SupabaseTables.orders).update({
-        'tracking_number': trackingNumber,
-        'label_url': signedUrl,
-      }).eq('id', model.orderId),
+      () => supabase
+          .from(SupabaseTables.orders)
+          .update({'tracking_number': trackingNumber, 'label_url': signedUrl})
+          .eq('id', model.orderId),
     );
 
-      final labelKey = 'order.system.shipped';
-      await _postOrderSystemMessage(
-        orderId: model.orderId,
-        text: L10n.trLocale(locale, labelKey),
-        i18nKey: labelKey,
-        status: 'shipped',
-        statusI18n: 'order.status.shipped',
-        trackingNumber: trackingNumber?.toString(),
-        labelUrl: signedUrl,
-        courierName: 'Yalidine Express',
-        dedupeKey: 'order:${model.orderId}:shipped',
-      );
+    final labelKey = 'order.system.shipped';
+    await _postOrderSystemMessage(
+      orderId: model.orderId,
+      text: L10n.trLocale(locale, labelKey),
+      i18nKey: labelKey,
+      status: 'shipped',
+      statusI18n: 'order.status.shipped',
+      trackingNumber: trackingNumber?.toString(),
+      labelUrl: signedUrl,
+      courierName: 'Yalidine Express',
+      dedupeKey: 'order:${model.orderId}:shipped',
+    );
     return {
       'delivery_fee': result['delivery_fee'],
       'taxe_percentage': result['taxe_percentage'],
@@ -1383,25 +1609,43 @@ class ShippingService {
 
     final safeOrderId = InputSanitizer.sanitizeId(orderId, maxLength: 64);
     final safeCarrier = InputSanitizer.sanitizeText(carrier, maxLength: 80);
-    final safeOption =
-        InputSanitizer.sanitizeOptionalText(option, maxLength: 60);
-    final safeDelivery =
-        InputSanitizer.sanitizeOptionalText(deliveryMode, maxLength: 40);
-    final safeReceiverName =
-        InputSanitizer.sanitizeOptionalText(receiverName, maxLength: 80);
+    final safeOption = InputSanitizer.sanitizeOptionalText(
+      option,
+      maxLength: 60,
+    );
+    final safeDelivery = InputSanitizer.sanitizeOptionalText(
+      deliveryMode,
+      maxLength: 40,
+    );
+    final safeReceiverName = InputSanitizer.sanitizeOptionalText(
+      receiverName,
+      maxLength: 80,
+    );
     final safeReceiverPhone = InputSanitizer.sanitizePhone(receiverPhone);
-    final safeReceiverAddress =
-        InputSanitizer.sanitizeOptionalText(receiverAddress, maxLength: 140);
-    final safeReceiverCity =
-        InputSanitizer.sanitizeOptionalText(receiverCity, maxLength: 80);
-    final safeReceiverDaira =
-        InputSanitizer.sanitizeOptionalText(receiverDaira, maxLength: 80);
-    final safeReceiverWilaya =
-        InputSanitizer.sanitizeOptionalText(receiverWilaya, maxLength: 80);
-    final safeReceiverZip =
-        InputSanitizer.sanitizeOptionalText(receiverZip, maxLength: 20);
-    final safeContent =
-        InputSanitizer.sanitizeOptionalText(parcelContent, maxLength: 120);
+    final safeReceiverAddress = InputSanitizer.sanitizeOptionalText(
+      receiverAddress,
+      maxLength: 140,
+    );
+    final safeReceiverCity = InputSanitizer.sanitizeOptionalText(
+      receiverCity,
+      maxLength: 80,
+    );
+    final safeReceiverDaira = InputSanitizer.sanitizeOptionalText(
+      receiverDaira,
+      maxLength: 80,
+    );
+    final safeReceiverWilaya = InputSanitizer.sanitizeOptionalText(
+      receiverWilaya,
+      maxLength: 80,
+    );
+    final safeReceiverZip = InputSanitizer.sanitizeOptionalText(
+      receiverZip,
+      maxLength: 20,
+    );
+    final safeContent = InputSanitizer.sanitizeOptionalText(
+      parcelContent,
+      maxLength: 120,
+    );
 
     final request = <String, dynamic>{
       'carrier': safeCarrier,
@@ -1418,7 +1662,8 @@ class ShippingService {
       if (parcelWeight != null) 'parcel_weight': parcelWeight,
       if (parcelPrice != null) 'parcel_price': parcelPrice,
       if (safeContent != null) 'parcel_content': safeContent,
-      if (sellerCourierSettings != null) 'seller_settings': sellerCourierSettings,
+      if (sellerCourierSettings != null)
+        'seller_settings': sellerCourierSettings,
     };
 
     final data = await LabelService().generateLabel(
@@ -1428,8 +1673,7 @@ class ShippingService {
     if (data == null || data.isEmpty) {
       throw StateError('Label generation failed');
     }
-    final labelUrl =
-        data['signed_url'] ?? data['label_url'] ?? data['label'];
+    final labelUrl = data['signed_url'] ?? data['label_url'] ?? data['label'];
     final trackingNumber =
         data['tracking_number'] ?? data['tracking'] ?? data['tracking_id'];
     if (labelUrl == null || labelUrl.toString().isEmpty) {
@@ -1440,14 +1684,14 @@ class ShippingService {
     await RateLimiter.instance.run(
       'shipments.upsert',
       () => supabase.from(SupabaseTables.shipments).upsert({
-      'order_id': safeOrderId,
-      'tracking_number': trackingNumber,
-      'label_url': labelUrl,
-      'status': 'shipped',
-      'carrier': safeCarrier,
-      'option': safeOption,
-      'delivery_mode': safeDelivery,
-      'shipping_cost': shippingCost,
+        'order_id': safeOrderId,
+        'tracking_number': trackingNumber,
+        'label_url': labelUrl,
+        'status': 'shipped',
+        'carrier': safeCarrier,
+        'option': safeOption,
+        'delivery_mode': safeDelivery,
+        'shipping_cost': shippingCost,
         'events': [
           {
             'title': _labelEventTitle(locale),
@@ -1516,7 +1760,6 @@ class ShippingService {
     return detailed['ok'] == true;
   }
 
-
   Future<bool> _validateYalidine({
     required String apiKey,
     required String apiSecret,
@@ -1576,16 +1819,24 @@ class ShippingService {
     if (apiKey == null || apiKey.trim().isEmpty) {
       return {'ok': false, 'message': 'Token manquant'};
     }
-    final name =
-        InputSanitizer.sanitizeText(courierName, maxLength: 80).toLowerCase();
+    final name = InputSanitizer.sanitizeText(
+      courierName,
+      maxLength: 80,
+    ).toLowerCase();
     if (!name.contains('ecotrack') &&
         (apiSecret == null || apiSecret.trim().isEmpty)) {
       return {'ok': false, 'message': 'Secret manquant'};
     }
     try {
       final isZr = isZrExpressCourier(courierName: name);
-      if (name.contains('yalidine') || name.contains('ecotrack') || isZr) {
-        final tokenLength = name.contains('ecotrack') || isZr ? 200 : 120;
+      final isGuepex = isGuepexCourier(courierName: name);
+      if (name.contains('yalidine') ||
+          name.contains('ecotrack') ||
+          isZr ||
+          isGuepex) {
+        final tokenLength = name.contains('ecotrack') || isZr || isGuepex
+            ? 200
+            : 120;
         final edge = await _validateViaEdgeDetailed(
           courierName: courierName,
           apiKey: InputSanitizer.sanitizeText(apiKey, maxLength: tokenLength),
@@ -1664,8 +1915,10 @@ class ShippingService {
       throw StateError('Clés Yalidine manquantes');
     }
 
-    final safeTracking =
-        InputSanitizer.sanitizeOptionalText(tracking, maxLength: 60);
+    final safeTracking = InputSanitizer.sanitizeOptionalText(
+      tracking,
+      maxLength: 60,
+    );
     final uri = safeTracking == null
         ? Uri.parse('https://api.yalidine.app/v1/parcels/')
         : Uri.parse('https://api.yalidine.app/v1/parcels/$safeTracking');
@@ -1695,82 +1948,98 @@ class ShippingService {
     Map<String, dynamic>? settings,
     String? sellerId,
   }) async {
-      final safeCourierId =
-          InputSanitizer.sanitizeText(courierId, maxLength: 40).toLowerCase();
-      final cacheKey = _courierWilayaCacheKey(safeCourierId, sellerId);
-      final cached = _courierWilayasCache[cacheKey];
-      if (cached != null && !cached.isExpired) {
-        return cached.value;
-      }
-      final isZrExpress = isZrExpressCourier(courierId: safeCourierId);
-      if (safeCourierId.contains('yalidine')) {
-        if (sellerId != null && sellerId.isNotEmpty) {
-          final edge = await _fetchCourierWilayasViaEdge(
-            sellerId: sellerId,
-            courierId: safeCourierId,
-          );
-          if (edge.isNotEmpty) {
-            _courierWilayasCache[cacheKey] =
-                _CacheItem(edge, DateTime.now().add(_cacheTtl));
-            return edge;
-          }
-        }
-        final fallback = await _fetchDbWilayas();
-        if (fallback.isNotEmpty) {
-          _courierWilayasCache[cacheKey] =
-              _CacheItem(fallback, DateTime.now().add(_cacheTtl));
-        }
-        return fallback;
-      } else if (safeCourierId.contains('ecotrack')) {
-        if (sellerId != null && sellerId.isNotEmpty) {
-          final edge = await _fetchCourierWilayasViaEdge(
-            sellerId: sellerId,
-            courierId: safeCourierId,
-          );
-          if (edge.isNotEmpty) {
-            _courierWilayasCache[cacheKey] =
-                _CacheItem(edge, DateTime.now().add(_cacheTtl));
-            return edge;
-          }
-        }
-        final fallback = await _fetchDbWilayas();
-        if (fallback.isNotEmpty) {
-          _courierWilayasCache[cacheKey] =
-              _CacheItem(fallback, DateTime.now().add(_cacheTtl));
-        }
-        return fallback;
-      }
-      if (isZrExpress) {
-        if (sellerId != null && sellerId.isNotEmpty) {
-          final edge = await _fetchCourierWilayasViaEdge(
-            sellerId: sellerId,
-            courierId: safeCourierId,
-          );
-          if (edge.isNotEmpty) {
-            _courierWilayasCache[cacheKey] =
-                _CacheItem(edge, DateTime.now().add(_cacheTtl));
-          }
-          return edge;
-        }
-        return const [];
-      }
+    final safeCourierId = InputSanitizer.sanitizeText(
+      courierId,
+      maxLength: 40,
+    ).toLowerCase();
+    final cacheKey = _courierWilayaCacheKey(safeCourierId, sellerId);
+    final cached = _courierWilayasCache[cacheKey];
+    if (cached != null && !cached.isExpired) {
+      return cached.value;
+    }
+    final isZrExpress = isZrExpressCourier(courierId: safeCourierId);
+    if (safeCourierId.contains('yalidine')) {
       if (sellerId != null && sellerId.isNotEmpty) {
         final edge = await _fetchCourierWilayasViaEdge(
           sellerId: sellerId,
           courierId: safeCourierId,
         );
         if (edge.isNotEmpty) {
-          _courierWilayasCache[cacheKey] =
-              _CacheItem(edge, DateTime.now().add(_cacheTtl));
+          _courierWilayasCache[cacheKey] = _CacheItem(
+            edge,
+            DateTime.now().add(_cacheTtl),
+          );
           return edge;
         }
       }
       final fallback = await _fetchDbWilayas();
       if (fallback.isNotEmpty) {
-        _courierWilayasCache[cacheKey] =
-            _CacheItem(fallback, DateTime.now().add(_cacheTtl));
+        _courierWilayasCache[cacheKey] = _CacheItem(
+          fallback,
+          DateTime.now().add(_cacheTtl),
+        );
       }
       return fallback;
+    } else if (safeCourierId.contains('ecotrack')) {
+      if (sellerId != null && sellerId.isNotEmpty) {
+        final edge = await _fetchCourierWilayasViaEdge(
+          sellerId: sellerId,
+          courierId: safeCourierId,
+        );
+        if (edge.isNotEmpty) {
+          _courierWilayasCache[cacheKey] = _CacheItem(
+            edge,
+            DateTime.now().add(_cacheTtl),
+          );
+          return edge;
+        }
+      }
+      final fallback = await _fetchDbWilayas();
+      if (fallback.isNotEmpty) {
+        _courierWilayasCache[cacheKey] = _CacheItem(
+          fallback,
+          DateTime.now().add(_cacheTtl),
+        );
+      }
+      return fallback;
+    }
+    if (isZrExpress) {
+      if (sellerId != null && sellerId.isNotEmpty) {
+        final edge = await _fetchCourierWilayasViaEdge(
+          sellerId: sellerId,
+          courierId: safeCourierId,
+        );
+        if (edge.isNotEmpty) {
+          _courierWilayasCache[cacheKey] = _CacheItem(
+            edge,
+            DateTime.now().add(_cacheTtl),
+          );
+        }
+        return edge;
+      }
+      return const [];
+    }
+    if (sellerId != null && sellerId.isNotEmpty) {
+      final edge = await _fetchCourierWilayasViaEdge(
+        sellerId: sellerId,
+        courierId: safeCourierId,
+      );
+      if (edge.isNotEmpty) {
+        _courierWilayasCache[cacheKey] = _CacheItem(
+          edge,
+          DateTime.now().add(_cacheTtl),
+        );
+        return edge;
+      }
+    }
+    final fallback = await _fetchDbWilayas();
+    if (fallback.isNotEmpty) {
+      _courierWilayasCache[cacheKey] = _CacheItem(
+        fallback,
+        DateTime.now().add(_cacheTtl),
+      );
+    }
+    return fallback;
   }
 
   Future<List<Map<String, String>>> _fetchCourierWilayasViaEdge({
@@ -1814,61 +2083,71 @@ class ShippingService {
     required String wilayaCode,
     String? sellerId,
   }) async {
-      final safeCourierId =
-          InputSanitizer.sanitizeText(courierId, maxLength: 40).toLowerCase();
-      final isZrExpress = isZrExpressCourier(courierId: safeCourierId);
-      final safeWilayaCode = InputSanitizer.sanitizeText(
-        wilayaCode,
-        maxLength: isZrExpress ? 64 : 8,
-      );
-      final cacheKey = _courierCommuneCacheKey(
-        safeCourierId,
-        sellerId,
-        safeWilayaCode,
-      );
-      final cached = _courierCommunesCache[cacheKey];
-      if (cached != null && !cached.isExpired) {
-        return cached.value;
-      }
-      if (safeCourierId.contains('yalidine')) {
-        if (sellerId != null && sellerId.isNotEmpty) {
-          final edge = await _fetchCourierCommunesViaEdge(
-            sellerId: sellerId,
-            courierId: safeCourierId,
-            wilayaCode: safeWilayaCode,
+    final safeCourierId = InputSanitizer.sanitizeText(
+      courierId,
+      maxLength: 40,
+    ).toLowerCase();
+    final isZrExpress = isZrExpressCourier(courierId: safeCourierId);
+    final safeWilayaCode = InputSanitizer.sanitizeText(
+      wilayaCode,
+      maxLength: isZrExpress ? 64 : 8,
+    );
+    final cacheKey = _courierCommuneCacheKey(
+      safeCourierId,
+      sellerId,
+      safeWilayaCode,
+    );
+    final cached = _courierCommunesCache[cacheKey];
+    if (cached != null && !cached.isExpired) {
+      return cached.value;
+    }
+    if (safeCourierId.contains('yalidine')) {
+      if (sellerId != null && sellerId.isNotEmpty) {
+        final edge = await _fetchCourierCommunesViaEdge(
+          sellerId: sellerId,
+          courierId: safeCourierId,
+          wilayaCode: safeWilayaCode,
+        );
+        if (edge.isNotEmpty) {
+          _courierCommunesCache[cacheKey] = _CacheItem(
+            edge,
+            DateTime.now().add(_cacheTtl),
           );
-          if (edge.isNotEmpty) {
-            _courierCommunesCache[cacheKey] =
-                _CacheItem(edge, DateTime.now().add(_cacheTtl));
-            return edge;
-          }
+          return edge;
         }
-        final fallback = await _fetchDbCommunes(safeWilayaCode);
-        if (fallback.isNotEmpty) {
-          _courierCommunesCache[cacheKey] =
-              _CacheItem(fallback, DateTime.now().add(_cacheTtl));
-        }
-        return fallback;
-      } else if (safeCourierId.contains('ecotrack')) {
-        if (sellerId != null && sellerId.isNotEmpty) {
-          final edge = await _fetchCourierCommunesViaEdge(
-            sellerId: sellerId,
-            courierId: safeCourierId,
-            wilayaCode: safeWilayaCode,
-          );
-          if (edge.isNotEmpty) {
-            _courierCommunesCache[cacheKey] =
-                _CacheItem(edge, DateTime.now().add(_cacheTtl));
-            return edge;
-          }
-        }
-        final fallback = await _fetchDbCommunes(safeWilayaCode);
-        if (fallback.isNotEmpty) {
-          _courierCommunesCache[cacheKey] =
-              _CacheItem(fallback, DateTime.now().add(_cacheTtl));
-        }
-        return fallback;
       }
+      final fallback = await _fetchDbCommunes(safeWilayaCode);
+      if (fallback.isNotEmpty) {
+        _courierCommunesCache[cacheKey] = _CacheItem(
+          fallback,
+          DateTime.now().add(_cacheTtl),
+        );
+      }
+      return fallback;
+    } else if (safeCourierId.contains('ecotrack')) {
+      if (sellerId != null && sellerId.isNotEmpty) {
+        final edge = await _fetchCourierCommunesViaEdge(
+          sellerId: sellerId,
+          courierId: safeCourierId,
+          wilayaCode: safeWilayaCode,
+        );
+        if (edge.isNotEmpty) {
+          _courierCommunesCache[cacheKey] = _CacheItem(
+            edge,
+            DateTime.now().add(_cacheTtl),
+          );
+          return edge;
+        }
+      }
+      final fallback = await _fetchDbCommunes(safeWilayaCode);
+      if (fallback.isNotEmpty) {
+        _courierCommunesCache[cacheKey] = _CacheItem(
+          fallback,
+          DateTime.now().add(_cacheTtl),
+        );
+      }
+      return fallback;
+    }
     if (isZrExpress) {
       if (sellerId != null && sellerId.isNotEmpty) {
         final edge = await _fetchCourierCommunesViaEdge(
@@ -1877,8 +2156,10 @@ class ShippingService {
           wilayaCode: safeWilayaCode,
         );
         if (edge.isNotEmpty) {
-          _courierCommunesCache[cacheKey] =
-              _CacheItem(edge, DateTime.now().add(_cacheTtl));
+          _courierCommunesCache[cacheKey] = _CacheItem(
+            edge,
+            DateTime.now().add(_cacheTtl),
+          );
         }
         return edge;
       }
@@ -1891,15 +2172,19 @@ class ShippingService {
         wilayaCode: safeWilayaCode,
       );
       if (edge.isNotEmpty) {
-        _courierCommunesCache[cacheKey] =
-            _CacheItem(edge, DateTime.now().add(_cacheTtl));
+        _courierCommunesCache[cacheKey] = _CacheItem(
+          edge,
+          DateTime.now().add(_cacheTtl),
+        );
         return edge;
       }
     }
     final fallback = await _fetchDbCommunes(safeWilayaCode);
     if (fallback.isNotEmpty) {
-      _courierCommunesCache[cacheKey] =
-          _CacheItem(fallback, DateTime.now().add(_cacheTtl));
+      _courierCommunesCache[cacheKey] = _CacheItem(
+        fallback,
+        DateTime.now().add(_cacheTtl),
+      );
     }
     return fallback;
   }
@@ -1975,7 +2260,10 @@ class ShippingService {
     try {
       final trimmed = wilayaCode.trim();
       final padded = trimmed.length == 1 ? trimmed.padLeft(2, '0') : trimmed;
-      final codes = <String>{trimmed, padded}.where((v) => v.isNotEmpty).toList();
+      final codes = <String>{
+        trimmed,
+        padded,
+      }.where((v) => v.isNotEmpty).toList();
       final rows = await RateLimiter.instance.run(
         'communes.db',
         () => supabase
@@ -2004,7 +2292,9 @@ class ShippingService {
     final uriWithParam = Uri.parse(
       'https://api.ecotrack.dz/api/v1/validate/token?api_token=${Uri.encodeQueryComponent(token.trim())}',
     );
-    final uriNoParam = Uri.parse('https://api.ecotrack.dz/api/v1/validate/token');
+    final uriNoParam = Uri.parse(
+      'https://api.ecotrack.dz/api/v1/validate/token',
+    );
     try {
       final resp = await RateLimiter.instance.run(
         'ecotrack.validate',
@@ -2087,8 +2377,10 @@ class ShippingService {
     }
     final data = jsonDecode(resp.body);
     if (data is Map<String, dynamic>) {
-      _ecotrackFeesCache[cacheKey] =
-          _CacheItem(data, DateTime.now().add(_cacheTtl));
+      _ecotrackFeesCache[cacheKey] = _CacheItem(
+        data,
+        DateTime.now().add(_cacheTtl),
+      );
       return data;
     }
     throw StateError('Ecotrack fees response invalid');
@@ -2106,8 +2398,9 @@ class ShippingService {
       throw StateError('Ecotrack token missing');
     }
     final params = order.map((key, value) => MapEntry(key, value.toString()));
-    final uri = Uri.parse('https://api.ecotrack.dz/api/v1/create/order')
-        .replace(queryParameters: params);
+    final uri = Uri.parse(
+      'https://api.ecotrack.dz/api/v1/create/order',
+    ).replace(queryParameters: params);
     final resp = await RateLimiter.instance.run(
       'ecotrack.order.create',
       () => _httpClient
@@ -2198,7 +2491,8 @@ class ShippingService {
     final safeOrderId = InputSanitizer.sanitizeId(orderId, maxLength: 64);
     final orderPayload = <String, dynamic>{
       'reference': safeOrderId,
-      'nom_client': '${selection['familyname']} ${selection['firstname']}'.trim(),
+      'nom_client': '${selection['familyname']} ${selection['firstname']}'
+          .trim(),
       'telephone': selection['phone_main'] ?? selection['phone'],
       'telephone_2': selection['phone_secondary'] ?? '',
       'adresse': selection['address'],
@@ -2224,8 +2518,8 @@ class ShippingService {
       tracking = results[safeOrderId]['tracking']?.toString();
       final success = results[safeOrderId]['success'];
       if (success == false) {
-        final msg = results[safeOrderId]['message']?.toString() ??
-            'Ecotrack error';
+        final msg =
+            results[safeOrderId]['message']?.toString() ?? 'Ecotrack error';
         throw Exception(msg);
       }
     }
@@ -2262,10 +2556,10 @@ class ShippingService {
 
     await RateLimiter.instance.run(
       'orders.update.label.ecotrack',
-      () => supabase.from(SupabaseTables.orders).update({
-        'tracking_number': tracking,
-        'label_url': labelUrl,
-      }).eq('id', safeOrderId),
+      () => supabase
+          .from(SupabaseTables.orders)
+          .update({'tracking_number': tracking, 'label_url': labelUrl})
+          .eq('id', safeOrderId),
     );
 
     final labelKey = 'order.system.shipped';
@@ -2281,10 +2575,7 @@ class ShippingService {
       dedupeKey: 'order:$safeOrderId:shipped',
     );
 
-    return {
-      'tracking': tracking,
-      'label_url': labelUrl,
-    };
+    return {'tracking': tracking, 'label_url': labelUrl};
   }
 
   /// Stream shipments for a seller identified by [sellerId].
@@ -2313,14 +2604,14 @@ class ShippingService {
       final ordersResponse = orderIds.isEmpty
           ? <Map<String, dynamic>>[]
           : await RateLimiter.instance.run(
-                'orders.shipments.select',
-                () => supabase
-                    .from(SupabaseTables.orders)
-                    .select(
-                      'id, seller_id, courier_name, courier_id, shipping_cost, shipping_option, delivery_method, created_at',
-                    )
-                    .filter('id', 'in', orderIds),
-              );
+              'orders.shipments.select',
+              () => supabase
+                  .from(SupabaseTables.orders)
+                  .select(
+                    'id, seller_id, courier_name, courier_id, shipping_cost, shipping_option, delivery_method, created_at',
+                  )
+                  .filter('id', 'in', orderIds),
+            );
       final ordersById = <String, Map<String, dynamic>>{};
       for (final o in ordersResponse) {
         final map = Map<String, dynamic>.from(o as Map);
@@ -2329,31 +2620,31 @@ class ShippingService {
       }
 
       final result = <Map<String, dynamic>>[];
-        for (final r in rows) {
-          final orderId = r['order_id']?.toString();
-          if (orderId == null) continue;
-          final order = ordersById[orderId];
-          if (order == null) continue;
+      for (final r in rows) {
+        final orderId = r['order_id']?.toString();
+        if (orderId == null) continue;
+        final order = ordersById[orderId];
+        if (order == null) continue;
         if ((order['seller_id']?.toString() ?? '') != safeSellerId) continue;
 
         final createdAt =
             r['created_at'] as String? ?? order['created_at'] as String?;
-          result.add({
-            'order_id': orderId,
-            'status': r['status'] as String? ?? 'pending',
-            'carrier':
-                r['carrier'] as String? ??
-                r['courier_name'] as String? ??
-                order['courier_name'] as String? ??
-                '-',
-            'courier_id': order['courier_id'] as String?,
-            'shipping_option': order['shipping_option'] as String?,
-            'delivery_method': order['delivery_method'] as String?,
-            'tracking_number': r['tracking_number'] as String?,
-            'shipping_cost': r['shipping_cost'] ?? order['shipping_cost'],
-            'label_url': r['label_url'] as String?,
-            'created_at': createdAt,
-          });
+        result.add({
+          'order_id': orderId,
+          'status': r['status'] as String? ?? 'pending',
+          'carrier':
+              r['carrier'] as String? ??
+              r['courier_name'] as String? ??
+              order['courier_name'] as String? ??
+              '-',
+          'courier_id': order['courier_id'] as String?,
+          'shipping_option': order['shipping_option'] as String?,
+          'delivery_method': order['delivery_method'] as String?,
+          'tracking_number': r['tracking_number'] as String?,
+          'shipping_cost': r['shipping_cost'] ?? order['shipping_cost'],
+          'label_url': r['label_url'] as String?,
+          'created_at': createdAt,
+        });
       }
 
       result.sort((a, b) {
@@ -2392,8 +2683,9 @@ class ShippingService {
       safeCourierIdLower,
       safeCourierId.toUpperCase(),
     }.toList();
-    final safeOwnerId =
-        ownerId == null ? null : InputSanitizer.sanitizeId(ownerId, maxLength: 64);
+    final safeOwnerId = ownerId == null
+        ? null
+        : InputSanitizer.sanitizeId(ownerId, maxLength: 64);
     final current = supabase.auth.currentUser?.id;
     if (safeOwnerId != null && safeOwnerId != current) {
       return null;
@@ -2405,7 +2697,9 @@ class ShippingService {
         .select('api_key, api_secret, sender_id, extra');
     query = query.inFilter('courier_id', courierIdVariants);
     if (safeOwnerId != null) query = query.eq('owner_id', safeOwnerId);
-    if (safeOwnerId == null && current != null) query = query.eq('owner_id', current);
+    if (safeOwnerId == null && current != null) {
+      query = query.eq('owner_id', current);
+    }
 
     final row = await RateLimiter.instance.run(
       'seller_settings.select',
@@ -2421,7 +2715,9 @@ class ShippingService {
     final apiKey = map['api_key'] ?? map['api_id'];
     final apiSecret = map['api_secret'] ?? map['api_token'];
     if (apiKey == null) return null;
-    final extra = map['extra'] is Map ? Map<String, dynamic>.from(map['extra'] as Map) : null;
+    final extra = map['extra'] is Map
+        ? Map<String, dynamic>.from(map['extra'] as Map)
+        : null;
     final baseUrl = map['base_url'] ?? extra?['base_url'];
     return {
       'api_key': apiKey,
@@ -2436,8 +2732,10 @@ class ShippingService {
   Future<Map<String, dynamic>?> loadSellerDeliverySettingsByName(
     String courierName,
   ) async {
-    final safeCourierName =
-        InputSanitizer.sanitizeText(courierName, maxLength: 80);
+    final safeCourierName = InputSanitizer.sanitizeText(
+      courierName,
+      maxLength: 80,
+    );
     // Find courier ID from the couriers list
     final c = couriers.firstWhere(
       (e) =>
@@ -2464,20 +2762,28 @@ class ShippingService {
     required String apiSecret,
     String? senderId,
   }) async {
-    final safeCourierName =
-        InputSanitizer.sanitizeText(courierName, maxLength: 80);
+    final safeCourierName = InputSanitizer.sanitizeText(
+      courierName,
+      maxLength: 80,
+    );
     final lowerName = safeCourierName.toLowerCase();
     final isEcotrack = lowerName.contains('ecotrack');
     final isZrExpress = isZrExpressCourier(courierName: lowerName);
+    final isGuepex = isGuepexCourier(courierName: lowerName);
     final safeApiKey = InputSanitizer.sanitizeText(
       apiKey,
-      maxLength: (isEcotrack || isZrExpress) ? 200 : 120,
+      maxLength: (isEcotrack || isZrExpress || isGuepex) ? 200 : 120,
     );
     final safeApiSecret = isEcotrack || apiSecret.trim().isEmpty
         ? ''
-        : InputSanitizer.sanitizeText(apiSecret, maxLength: isZrExpress ? 200 : 120);
-    final safeSenderId =
-        InputSanitizer.sanitizeOptionalText(senderId, maxLength: 80);
+        : InputSanitizer.sanitizeText(
+            apiSecret,
+            maxLength: (isZrExpress || isGuepex) ? 200 : 120,
+          );
+    final safeSenderId = InputSanitizer.sanitizeOptionalText(
+      senderId,
+      maxLength: 80,
+    );
     // Find the courier by name to get its ID
     final c = couriers.firstWhere(
       (e) =>
@@ -2500,14 +2806,20 @@ class ShippingService {
         'api_key': safeApiKey.isEmpty ? null : safeApiKey,
         'api_secret': safeApiSecret.isEmpty ? null : safeApiSecret,
         'sender_id': safeSenderId,
-        'extra': isEcotrack ? {'base_url': 'https://api.ecotrack.dz'} : null,
+        'extra': isEcotrack
+            ? {'base_url': 'https://api.ecotrack.dz'}
+            : isGuepex
+            ? {'base_url': 'https://api.guepex.app'}
+            : null,
       }, onConflict: 'owner_id,courier_id'),
     );
   }
 
   Future<void> deleteSellerDeliverySettingsByName(String courierName) async {
-    final safeCourierName =
-        InputSanitizer.sanitizeText(courierName, maxLength: 80);
+    final safeCourierName = InputSanitizer.sanitizeText(
+      courierName,
+      maxLength: 80,
+    );
     final c = couriers.firstWhere(
       (e) =>
           (e['name'] ?? '').toString().toLowerCase() ==
@@ -2540,9 +2852,3 @@ class ShippingService {
     return sanitized;
   }
 }
-
-
-
-
-
-

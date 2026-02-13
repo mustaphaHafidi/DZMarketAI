@@ -1,145 +1,161 @@
 # PROJECT_CONTEXT
 
-Last updated: 2026-02-12
+Last updated: 2026-02-13
 
 ## 1) Project objective
 DZMarket is a mobile-first Algerian marketplace app (Flutter + Supabase) for:
 - Acheter / vendre des articles.
-- Passer commande (principalement COD).
-- Gerer livraison multi-transporteurs.
-- Suivre statut de commande et chat vendeur/acheteur.
+- Negocier via offres en chat.
+- Passer commande (COD et flux livraison).
+- Gerer expedition multi-transporteurs.
+- Suivre commande via chat + timeline transporteur.
 - Moderation et supervision via superadmin.
 
-## 2) Active actors and business scope
-Active roles in app:
+## 2) Active actors and core business rules
+Active roles:
 - `buyer`
 - `seller`
 - `superadmin`
 
-Legacy note:
-- DB role `admin` is treated as `superadmin` in app model.
+Legacy:
+- DB role `admin` is mapped to `superadmin` in app behavior.
 
-Core rule:
-- One canonical chat room per `(buyer_id, seller_id, product_id)` regardless of delivery mode/courier/order count.
+Core chat rule:
+- Always one canonical chat room per `(buyer_id, seller_id, product_id)`.
+- This remains true across all delivery modes, multiple orders, and offer cycles.
+
+Offer rule:
+- Offer lifecycle is chat-driven (propose, accept, refuse, counter-offer).
+- Seller-side "Mes ventes" must not create shipment workload from an offer-only action.
+
+Delivery rule:
+- Courier-backed delivery can generate a label from seller side.
+- "Livraison a convenir" is chat-first and must not force label generation.
 
 ## 3) Tech stack
 Frontend:
-- Flutter (Android first, also iOS/Web/Desktop targets).
-- State/services pattern in `lib/src/services`.
-- FR/AR i18n JSON files in `assets/i18n/`.
+- Flutter (Android first, plus iOS/Web/Desktop targets).
+- Service/repository architecture in `lib/src/services`.
+- FR/AR localizations in `assets/i18n`.
 
 Backend:
 - Supabase Postgres + RLS + Realtime + Storage + Edge Functions.
-- SQL RPC for atomic flows (`create_order`, `send_message`, `ensure_order_conversation`, etc.).
+- SQL RPC for atomic operations (`create_order`, `send_message`, `ensure_order_conversation`, etc.).
 
 Ops:
-- GitHub Actions CI: `.github/workflows/ci.yml`.
-- Daily cron monitor: `.github/workflows/job-runner-cron.yml`.
+- CI workflow: `.github/workflows/ci.yml`
+- Daily cron workflow: `.github/workflows/job-runner-cron.yml`
 
 ## 4) External services
 Couriers integrated:
 - Yalidine
 - EcoTrack
 - ZR Express
+- Guepex
 
-Content moderation:
-- Sightengine via Edge Function `moderate-content`.
+Moderation provider:
+- Sightengine via `supabase/functions/moderate-content`.
 
-Courier integration reference docs:
+Reference docs:
+- `GUEPEX_INTEGRATION_DOCUMENTATION.md`
 - `skill_yallidine/SKILL.md`
 - `skill_ecotrack/ecotrack.md`
 - `skill_zrexpress/zrexpress.md`
 
 ## 5) Folder structure (high level)
-- `lib/`: Flutter app source (features/models/services/widgets).
-- `assets/i18n/`: translations FR/AR.
-- `assets/branding/`: branding UI assets.
-- `supabase.sql`: consolidated idempotent schema/bootstrap.
-- `supabase/migrations/`: incremental SQL migrations.
-- `supabase/functions/`: Edge Functions (shipment, cron, moderation, etc.).
-- `.github/workflows/`: CI and operations workflows.
-- `docs/`: project dossier and supporting docs.
-- `test/`, `integration_test/`: tests.
-- `logos/`: source brand/logo files.
+- `lib/`: Flutter app source.
+- `assets/i18n/`: FR/AR translations.
+- `supabase.sql`: baseline schema/bootstrap (idempotent).
+- `supabase/migrations/`: timestamped migrations.
+- `supabase/functions/`: Edge Functions.
+- `.github/workflows/`: CI and cron jobs.
+- `docs/`: product/business docs.
+- `test/`, `integration_test/`: automated tests.
 
 ## 6) Conventions
-Language/UX:
-- UI text must exist in FR and AR.
-- Add any new label in both:
-  - `assets/i18n/fr.json`
-  - `assets/i18n/ar.json`
+Language:
+- Every user-facing text should be available in FR and AR.
 
-Code/data:
+Naming:
 - Dart: camelCase.
 - SQL: snake_case.
-- Status values: lowercase tokens.
-- Keep role model aligned to 3 active actors (buyer/seller/superadmin).
+- Status enums: lowercase tokens.
 
-Chat/order logic:
-- System events are posted in chat via `post_order_event`.
-- Dedupe keys must be stable to avoid duplicate system messages.
+Data/flow:
+- Keep dedupe keys stable for system chat events.
+- Prefer idempotent SQL changes in `supabase.sql`.
+- Mirror production-impact DB changes in migrations.
 
-## 7) DB and migration rules (important)
-Baseline + incremental model:
-- `supabase.sql` is the central baseline schema (idempotent blocks).
-- Every production DB change should be added as a timestamped file in `supabase/migrations/`.
-- Keep `supabase.sql` synchronized with validated migration logic so fresh environments are reproducible.
+## 7) DB and migration rules
+- `supabase.sql` is baseline for fresh environments.
+- Every DB change should also exist in `supabase/migrations/*.sql`.
+- Apply latest migrations before E2E validation.
 
-Current recent migrations:
+Recent key migrations:
 - `20260211190000_chat_single_room_per_thread.sql`
 - `20260212003000_order_duplicate_guard_refine.sql`
 - `20260212170000_arranged_delivery_guards.sql`
 - `20260212200000_courier_parcel_rules.sql`
+- `20260213010000_guepex_courier_support.sql`
 
-## 8) Runtime/env variables
-Flutter app required defines:
-- `APP_ENV` (`dev|staging|prod`)
+## 8) Runtime and env variables
+Flutter runtime defines:
+- `APP_ENV`
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 
-Supabase functions required/optional secrets:
+Edge Function secrets:
 - Common: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
 - Moderation: `SIGHTENGINE_USER`, `SIGHTENGINE_SECRET`, optional `SIGHTENGINE_MODELS`, `SIGHTENGINE_TEXT_CATEGORIES`, `MODERATION_FAIL_OPEN`
-- Courier: optional `ECOTRACK_BASE_URL`
-- Cron tuning: `RETURNS_SYNC_MAX_ORDERS`, `RETURNS_SYNC_PAGE_SIZE`, `APP_ERRORS_RETENTION_DAYS`, etc.
+- Courier optional: `ECOTRACK_BASE_URL`, `GUEPEX_BASE_URL`
+- Job-runner optional: `RETURNS_SYNC_MAX_ORDERS`, `RETURNS_SYNC_PAGE_SIZE`, `LABEL_REMINDER_MAX_ORDERS`
+
+Policy note:
+- `MODERATION_FAIL_OPEN=false` means strict blocking if moderation service is unavailable.
+
+Reliability note:
+- Courier calls are protected with retry/backoff (`429/5xx/timeout`) and per-carrier throttling via `consume_rate_limit`.
+- Functions covered: `create_shipment`, `courier-locations`, `validate-courier`, `job-runner`.
 
 ## 9) Useful commands
-App run:
+Run app:
 ```bash
 flutter pub get
 flutter run --flavor dev -t lib/main.dart --dart-define-from-file=test/test_env.json
 ```
 
-USB run:
+Run on USB:
 ```bash
 flutter run -d <DEVICE_ID> --flavor dev -t lib/main.dart --dart-define-from-file=test/test_env.json --no-resident
 ```
 
-Quality:
+Quality checks:
 ```bash
 flutter analyze
 flutter test
 ```
 
-Supabase function deploy:
+Backend deploy:
 ```bash
+supabase db push
+supabase functions deploy validate-courier
+supabase functions deploy courier-locations
 supabase functions deploy create_shipment
 supabase functions deploy job-runner
 supabase functions deploy moderate-content
-supabase functions deploy validate-courier
-supabase functions deploy courier-locations
 ```
 
 ## 10) Important files and paths
 - `README.md`
-- `config.md`
+- `PROJECT_CONTEXT.md`
+- `NEXT_STEPS.md`
+- `NEXT_UPDATES.md`
 - `supabase.sql`
 - `supabase/functions/create_shipment/index.ts`
 - `supabase/functions/job-runner/index.ts`
 - `supabase/functions/moderate-content/index.ts`
+- `supabase/functions/courier-locations/index.ts`
+- `supabase/functions/validate-courier/index.ts`
 - `.github/workflows/job-runner-cron.yml`
 - `E2E_MANUAL_TEST_CASES.md`
 - `E2E_MANUAL_TEST_CASES_AR.md`
-- `NEXT_UPDATES.md`
-- `NEXT_STEPS.md`
-- `logos/Logo_DZM1.png`

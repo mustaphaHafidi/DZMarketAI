@@ -43,6 +43,7 @@ Il ne contient aucun secret, uniquement la structure, les dependances et les eta
 - courier_credentials (legacy)
 - couriers (static list, si present)
   - ZR Express: courier_id = zrexpress, api_key = secretKey, api_secret = tenantId
+  - Guepex: courier_id = guepex, api_key = API ID, api_secret = API TOKEN
 
 ## 4.6 Retours colis (score fiabilite acheteur)
 - buyer_return_events (historique factuel)
@@ -81,10 +82,10 @@ Il ne contient aucun secret, uniquement la structure, les dependances et les eta
 
 # 6) Edge Functions (Supabase Functions)
 ## 6.1 create_shipment
-Cree bordereau (Yalidine/Ecotrack/ZR Express), stocke label dans Storage `labels`, met a jour shipments + orders, poste message systeme dans chat.
+Cree bordereau (Yalidine/Ecotrack/ZR Express/Guepex), stocke label dans Storage `labels`, met a jour shipments + orders, poste message systeme dans chat.
 
 ## 6.2 validate-courier
-Verifie token/API (Yalidine/Ecotrack/ZR Express) avant enregistrement cote vendeur.
+Verifie token/API (Yalidine/Ecotrack/ZR Express/Guepex) avant enregistrement cote vendeur.
 
 ## 6.3 courier-locations
 Retourne wilayas/communes/stopdesk pour le transporteur choisi, en utilisant les credentials du vendeur.
@@ -97,7 +98,7 @@ Traitement asynchrone (jobs queue) + suivi transporteurs.
 
 ## 6.6 job retour-colis (cron)
 - Job quotidien (03:00 UTC) qui:
-  1) collecte les statuts transporteurs (Yalidine/Ecotrack/ZR Express),
+  1) collecte les statuts transporteurs (Yalidine/Ecotrack/ZR Express/Guepex),
   2) enregistre les events retours,
   3) met a jour buyer_return_stats,
   4) publie un message systeme de suivi dans la chat room,
@@ -124,7 +125,10 @@ Configurer dans Supabase Functions:
 - SUPABASE_URL
 - SUPABASE_SERVICE_ROLE_KEY
 - ECOTRACK_BASE_URL (optionnel, fallback auto)
+- GUEPEX_BASE_URL (optionnel, fallback auto)
 - APP_SETTINGS_ENC_KEY (si chiffrement des secrets)
+- SIGHTENGINE_USER / SIGHTENGINE_SECRET (si moderation active)
+- MODERATION_FAIL_OPEN (reco strict: false)
 
 # 8) Donnees de seed
 supabase.sql contient:

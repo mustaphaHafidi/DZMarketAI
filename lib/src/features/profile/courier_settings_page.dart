@@ -1,4 +1,4 @@
-﻿// ignore_for_file: deprecated_member_use
+// ignore_for_file: deprecated_member_use
 import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
@@ -94,17 +94,27 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
       final isZrExpress = ShippingService.isZrExpressCourier(
         courierName: _selectedCourierName,
       );
+      final isGuepex = ShippingService.isGuepexCourier(
+        courierName: _selectedCourierName,
+      );
       apiKey = InputSanitizer.sanitizeText(
         _apiKeyCtrl.text,
-        maxLength: (isEcotrack || isZrExpress) ? 200 : 120,
+        maxLength: (isEcotrack || isZrExpress || isGuepex) ? 200 : 120,
       );
       apiSecret = isEcotrack
-          ? InputSanitizer.sanitizeOptionalText(_apiSecretCtrl.text, maxLength: 120) ?? ''
+          ? InputSanitizer.sanitizeOptionalText(
+                  _apiSecretCtrl.text,
+                  maxLength: 120,
+                ) ??
+                ''
           : InputSanitizer.sanitizeText(
               _apiSecretCtrl.text,
-              maxLength: isZrExpress ? 200 : 120,
+              maxLength: (isZrExpress || isGuepex) ? 200 : 120,
             );
-      sender = InputSanitizer.sanitizeOptionalText(_senderCtrl.text, maxLength: 80);
+      sender = InputSanitizer.sanitizeOptionalText(
+        _senderCtrl.text,
+        maxLength: 80,
+      );
     } on FormatException catch (e) {
       setState(() => _error = e.message);
       return;
@@ -187,13 +197,17 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
       _error = null;
     });
     try {
-      await ShippingService().deleteSellerDeliverySettingsByName(_selectedCourierName);
+      await ShippingService().deleteSellerDeliverySettingsByName(
+        _selectedCourierName,
+      );
       _apiKeyCtrl.clear();
       _apiSecretCtrl.clear();
       _senderCtrl.clear();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(L10n.tr(context, 'courier_settings.snack_deleted'))),
+        SnackBar(
+          content: Text(L10n.tr(context, 'courier_settings.snack_deleted')),
+        ),
       );
     } finally {
       if (mounted) setState(() => _deleting = false);
@@ -205,6 +219,9 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
     final lower = _selectedCourierName.toLowerCase();
     final isEcotrack = lower.contains('ecotrack');
     final isZrExpress = ShippingService.isZrExpressCourier(
+      courierName: _selectedCourierName,
+    );
+    final isGuepex = ShippingService.isGuepexCourier(
       courierName: _selectedCourierName,
     );
     return Scaffold(
@@ -225,7 +242,10 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
                     value: _selectedCourierName,
                     isExpanded: true,
                     decoration: InputDecoration(
-                      labelText: L10n.tr(context, 'courier_settings.courier_label'),
+                      labelText: L10n.tr(
+                        context,
+                        'courier_settings.courier_label',
+                      ),
                       prefixIcon: const Icon(Icons.local_shipping_outlined),
                     ),
                     items: ShippingService.couriers
@@ -251,9 +271,14 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
                     decoration: InputDecoration(
                       labelText: isEcotrack
                           ? L10n.tr(context, 'courier_settings.token_label')
+                          : isGuepex
+                          ? L10n.tr(context, 'courier_settings.guepex_id_label')
                           : isZrExpress
-                              ? L10n.tr(context, 'courier_settings.zrexpress_key_label')
-                              : L10n.tr(context, 'courier_settings.api_key_label'),
+                          ? L10n.tr(
+                              context,
+                              'courier_settings.zrexpress_key_label',
+                            )
+                          : L10n.tr(context, 'courier_settings.api_key_label'),
                       prefixIcon: const Icon(Icons.vpn_key_outlined),
                     ),
                   ),
@@ -262,8 +287,16 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
                     TextField(
                       controller: _apiSecretCtrl,
                       decoration: InputDecoration(
-                        labelText: isZrExpress
-                            ? L10n.tr(context, 'courier_settings.zrexpress_tenant_label')
+                        labelText: isGuepex
+                            ? L10n.tr(
+                                context,
+                                'courier_settings.guepex_token_label',
+                              )
+                            : isZrExpress
+                            ? L10n.tr(
+                                context,
+                                'courier_settings.zrexpress_tenant_label',
+                              )
                             : L10n.tr(context, 'courier_settings.secret_label'),
                         prefixIcon: const Icon(Icons.lock_outline),
                       ),
@@ -273,7 +306,10 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
                   TextField(
                     controller: _senderCtrl,
                     decoration: InputDecoration(
-                      labelText: L10n.tr(context, 'courier_settings.sender_label'),
+                      labelText: L10n.tr(
+                        context,
+                        'courier_settings.sender_label',
+                      ),
                       prefixIcon: const Icon(Icons.person_outline),
                     ),
                   ),
@@ -298,7 +334,9 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
                     const SizedBox(height: 8),
                     Text(
                       _error!,
-                      style: TextStyle(color: Theme.of(context).colorScheme.error),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                     ),
                   ],
                   const SizedBox(height: 20),
@@ -315,8 +353,8 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
                       _saving
                           ? L10n.tr(context, 'courier_settings.saving')
                           : _validating
-                              ? L10n.tr(context, 'courier_settings.validating')
-                              : L10n.tr(context, 'courier_settings.save'),
+                          ? L10n.tr(context, 'courier_settings.validating')
+                          : L10n.tr(context, 'courier_settings.save'),
                     ),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -327,7 +365,9 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
                   ),
                   const SizedBox(height: 12),
                   TextButton.icon(
-                    onPressed: _deleting || _saving || _validating ? null : _delete,
+                    onPressed: _deleting || _saving || _validating
+                        ? null
+                        : _delete,
                     icon: _deleting
                         ? const SizedBox(
                             width: 16,
@@ -350,9 +390,3 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
     );
   }
 }
-
-
-
-
-
-

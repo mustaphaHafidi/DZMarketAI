@@ -1,65 +1,45 @@
 # NEXT_UPDATES
 
-Last update: 2026-02-12
+Last update: 2026-02-13
 
 ## Objectif
-Centraliser les prochaines etapes prioritaires de DZMarket pour une mise en production fiable.
+Centraliser les priorites de delivery produit/technique avant le prochain release candidate.
 
-## Priorite P0 - Freeze Technique (Release Candidate)
-- Stop nouvelles features pendant le freeze.
-- Autoriser uniquement bugfixs bloquants.
-- Aligner schema DB entre `supabase.sql` et `supabase/migrations/*`.
-- Verifier un setup from-scratch (DB vide + migrations + app).
-- Creer branche release: `release/0.9-rc1`.
-- Tag candidate: `v0.9.0-rc1`.
+## Etat courant
+- Guepex integre dans le meme pipeline que Yalidine, EcoTrack, ZR Express.
+- Moderation image/texte active dans la creation annonce.
+- Politique moderation stricte active (`MODERATION_FAIL_OPEN=false`).
+- Chat UX modernise (hub plus lisible, badge discret hors ligne).
+- Offre en chat stabilisee avec dedupe des actions visibles.
 
-## Priorite P1 - QA E2E 3 Acteurs
-- Executer tous les cas manuels FR: `E2E_MANUAL_TEST_CASES.md`.
-- Executer tous les cas manuels AR: `E2E_MANUAL_TEST_CASES_AR.md`.
-- Parcours complets:
-- Acheteur: annonce -> commande -> chat -> suivi.
-- Vendeur: creation annonce -> bordereau -> statut commande.
-- Superadmin: moderation users/annonces/signalements + erreurs app.
-- Reseau faible/offline:
-- Verifier retry, messages UX propres, zero crash.
+## P0 - Blocants release
+- Valider E2E complet "offre -> reponse vendeur -> re-offre" dans une seule chat room.
+- Verifier "livraison a convenir" sans faux flux bordereau cote vendeur.
+- Rejouer `supabase.sql` sur base legacy et base neuve (zero erreur bloquante).
+- Verifier que `mes ventes` ne cree pas de ligne expedition sur simple proposition d'offre.
 
-## Priorite P2 - Fiabilite Production
-- Corriger warning Firebase config (`google-services` / `google_app_id`).
-- Valider job cron + alertes:
-- Echec API transporteur.
-- Hausse erreurs.
-- Retour stats anormales.
-- Verifier backup + restore DB.
-- Verifier retention logs (`app_errors`) et cout stockage.
+## P1 - Qualite UX et fiabilite
+- Ajuster fiche produit (hierarchie visuelle, tags, prix, CTA) sans casser logique.
+- Finaliser textes FR/AR pour transport, moderation et offres.
+- Ajouter tableau de bord minimal pour echec API transporteur par run cron.
 
-## Priorite P3 - Go-Live Controle
-- Deploiement progressif:
-- Lot pilote interne.
-- Petit pourcentage utilisateurs.
-- Generalisation.
-- Dashboard de suivi go-live:
-- Erreurs critiques.
-- Latence.
-- Taux commande echouee.
-- Taux creation annonce echouee.
-- Regle rollback:
-- Seuils clairs pour revenir version precedente.
+## P2 - Post RC
+- Dashboards conversion (vue produit -> offre -> commande).
+- Optimisation media reseau faible.
+- Nettoyage final Firebase config (google_app_id) par flavor.
 
-## Definition Of Done (RC -> Prod)
-- `flutter analyze` sans erreur.
-- Flux critiques valides E2E FR/AR.
-- Aucune erreur bloquante ouverte (P0/P1).
-- Monitoring et alertes actives.
-- Build Android release testee sur appareils cibles.
+## Actions recentes confirmees
+- `supabase functions deploy moderate-content` effectue.
+- Secret `MODERATION_FAIL_OPEN=false` configure.
+- Guards SQL offers ajoutes pour compatibilite des schemas existants.
+- Support Guepex ajoute dans:
+- `create_shipment`
+- `courier-locations`
+- `validate-courier`
+- `job-runner`
 
-## Backlog Apres Production (P4)
-- Optimisation performance images et cache avance.
-- Ameliorations funnel (conversion achat/vente).
-- V2 paiement local (CIB/Edahabia, selon faisabilite legale/partenaires).
-- Outils moderation assistes IA (image+texte) avec review humaine.
-
-## Proprietaires
-- Produit/UX: Mustapha
-- Mobile app: DZMarket engineering
-- Backend/Infra: Supabase + CI/CD owner
-- QA: testeur manuel (FR/AR)
+## Definition of Done (release gate)
+- Tous les tests P0 passes.
+- Aucun bug bloquant ouvert sur Auth, Listing publish, Offer, Order, Shipment, Chat.
+- Functions critiques deployees et verifiees sur projet Supabase cible.
+- QA FR/AR validee sur device reel USB.

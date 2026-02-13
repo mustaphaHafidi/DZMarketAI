@@ -1,11 +1,12 @@
 # DZMarketAI
 
-DZMarketAI is a Flutter marketplace app for Algeria with Supabase backend.
+DZMarketAI is a Flutter marketplace app for Algeria, backed by Supabase.
 
 ## Product Scope
 - Mobile-first buyer/seller flows.
-- Built-in chat per listing thread.
-- Multi-courier shipping (Yalidine, Ecotrack, ZR Express).
+- Single canonical chat thread per `buyer + seller + product`.
+- Offer flow handled inside chat (accept/refuse/counter-offer).
+- Multi-courier shipping: Yalidine, EcoTrack, ZR Express, Guepex.
 - Superadmin moderation and app-error monitoring.
 
 ## Active Roles
@@ -13,84 +14,70 @@ DZMarketAI is a Flutter marketplace app for Algeria with Supabase backend.
 - `seller`
 - `superadmin`
 
-Note:
-- Legacy `admin` values are treated as `superadmin` in the app model.
+Legacy note:
+- DB role `admin` is mapped to `superadmin` in the app model.
 
 ## Main Workflows
 - Auth and profile setup (FR/AR).
 - Browse -> filters -> product detail.
-- Offer or buy now.
-- Order creation with stock reservation.
-- Seller label generation and shipment tracking.
-- One canonical chat thread per `buyer + seller + product`.
+- Buyer sends offer from product detail -> seller responds in same chat room.
+- Buy now with stock reservation (`create_order` RPC).
+- Seller shipment generation (`create_shipment` Edge Function).
+- Arranged delivery ("livraison a convenir") stays chat-driven and must not require label generation.
 
 ## Tech Stack
-- Flutter (Android, iOS, Web, Desktop targets).
-- Supabase (Postgres, RLS, Storage, Realtime, Edge Functions).
-- Firebase Analytics/Crashlytics (client telemetry).
+- Flutter (Android first, plus iOS/Web/Desktop targets).
+- Supabase Postgres + RLS + Storage + Realtime + Edge Functions.
+- Firebase Analytics/Crashlytics telemetry.
 
 ## Repo Layout
 - `lib/` app source.
 - `assets/i18n/` FR/AR translations.
-- `supabase.sql` main DB schema/bootstrap (idempotent sections).
+- `supabase.sql` baseline schema (idempotent blocks).
 - `supabase/migrations/` incremental SQL migrations.
 - `supabase/functions/` Edge Functions.
-- `.github/workflows/` CI + cron ops workflow.
-- `infra/` self-host plan and infra notes.
+- `.github/workflows/` CI and cron jobs.
+- `docs/` product/business documentation.
 
 ## Local Run
-1. Install Flutter and dependencies.
-2. Run:
-
 ```bash
 flutter pub get
-flutter run --flavor dev -t lib/main.dart \
-  --dart-define=APP_ENV=dev \
-  --dart-define=SUPABASE_URL=<YOUR_SUPABASE_URL> \
-  --dart-define=SUPABASE_ANON_KEY=<YOUR_SUPABASE_ANON_KEY>
+flutter run --flavor dev -t lib/main.dart --dart-define-from-file=test/test_env.json
 ```
 
-USB device example:
-
+USB run:
 ```bash
-flutter run -d <DEVICE_ID> --flavor dev -t lib/main.dart \
-  --dart-define=APP_ENV=dev \
-  --dart-define=SUPABASE_URL=<YOUR_SUPABASE_URL> \
-  --dart-define=SUPABASE_ANON_KEY=<YOUR_SUPABASE_ANON_KEY> \
-  --no-dds
+flutter run -d <DEVICE_ID> --flavor dev -t lib/main.dart --dart-define-from-file=test/test_env.json --no-resident
 ```
 
 ## Database and Backend
-- Apply base schema from `supabase.sql`.
-- Apply new migrations from `supabase/migrations/`.
-- Deploy required functions:
-
 ```bash
-supabase functions deploy create_shipment
-supabase functions deploy job-runner
+supabase db push
 supabase functions deploy validate-courier
 supabase functions deploy courier-locations
+supabase functions deploy create_shipment
+supabase functions deploy job-runner
+supabase functions deploy moderate-content
 ```
 
 ## Jobs and Operations
 - `ci.yml`: analyze + tests on push/PR.
-- `job-runner-cron.yml`: daily `03:00 UTC` background checks.
-  - Runs `job-runner` function.
-  - Opens/updates GitHub issues on failures or anomalies.
+- `job-runner-cron.yml`: daily `03:00 UTC` reliability checks.
+- Cron validates courier sync and opens/updates GitHub alerts on anomalies.
 
 ## Key Docs
-- `E2E_MANUAL_TEST_CASES.md` full manual QA matrix (FR).
-- `E2E_MANUAL_TEST_CASES_AR.md` Arabic QA matrix (same IDs).
-- `SKILL_DZmarketAI.md` current architecture and rules.
-- `Skill_DB.md` DB and Supabase reference.
-- `PLAN_1M_USERS.md` scale plan.
-- `infra/SELF_HOST_SUPABASE_PLAN.md` self-host rollout path.
+- `PROJECT_CONTEXT.md`
+- `NEXT_STEPS.md`
+- `NEXT_UPDATES.md`
+- `E2E_MANUAL_TEST_CASES.md`
+- `E2E_MANUAL_TEST_CASES_AR.md`
+- `GUEPEX_INTEGRATION_DOCUMENTATION.md`
+- `SKILL_DZmarketAI.md`
+- `Skill_DB.md`
 
 ## Security Notes
-- Do not commit secrets.
-- Keep `SUPABASE_SERVICE_ROLE_KEY` only in secure env.
-- Keep label files private (`labels` bucket).
-
-## Next Updates
-See NEXT_UPDATES.md for the current prioritized roadmap and release checklist.
+- Never commit secrets.
+- Keep `SUPABASE_SERVICE_ROLE_KEY` server-side only.
+- Keep labels private in `storage.buckets.labels`.
+- For strict moderation mode, set `MODERATION_FAIL_OPEN=false` in Edge Function secrets.
 

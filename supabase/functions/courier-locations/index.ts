@@ -70,18 +70,143 @@ const normalizeName = (value: unknown) =>
 
 const cacheTtlMs = 1000 * 60 * 60 * 24 * 15;
 
+const guepexBaseUrl = () =>
+  (Deno.env.get("GUEPEX_BASE_URL") ?? "https://api.guepex.app")
+    .trim()
+    .replace(/\/+$/, "");
+
+const codeVariants = (value: string) =>
+  Array.from(
+    new Set(
+      [
+        value,
+        value.replace(/^0+/, ""),
+        value.padStart(2, "0"),
+      ].filter((v) => v),
+    ),
+  );
+
+const inCodeVariants = (value: unknown, expected: string) => {
+  const normalized = textValue(value);
+  if (!normalized || !expected) return false;
+  const variants = codeVariants(expected);
+  return variants.includes(normalized);
+};
+
+const sleep = (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+const parseRetryAfterMs = (value: string | null) => {
+  if (!value) return null;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds > 0) {
+    return Math.min(seconds * 1000, 15000);
+  }
+  const dateMs = Date.parse(value);
+  if (Number.isFinite(dateMs)) {
+    const delta = dateMs - Date.now();
+    if (delta > 0) return Math.min(delta, 15000);
+  }
+  return null;
+};
+
+const isRetryableStatus = (status: number) =>
+  status === 408 || status === 429 || status >= 500;
+
+const fetchWithRetry = async (
+  url: string,
+  init: RequestInit,
+  maxAttempts = 4,
+) => {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const resp = await fetch(url, init);
+      if (!isRetryableStatus(resp.status) || attempt === maxAttempts) return resp;
+      const retryAfterMs = parseRetryAfterMs(resp.headers.get("Retry-After"));
+      const jitter = Math.floor(Math.random() * 120);
+      const backoff = Math.min(300 * 2 ** (attempt - 1), 5000);
+      await sleep((retryAfterMs ?? backoff) + jitter);
+    } catch (error) {
+      lastError = error;
+      if (attempt === maxAttempts) break;
+      const jitter = Math.floor(Math.random() * 120);
+      const backoff = Math.min(300 * 2 ** (attempt - 1), 5000);
+      await sleep(backoff + jitter);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("network_retry_failed");
+};
+
+type CarrierRateWindow = { limit: number; seconds: number };
+
+const locationCarrierRatePolicy = (carrierCode: string): CarrierRateWindow[] => {
+  switch (carrierCode) {
+    case "guepex":
+      return [{ limit: 4, seconds: 1 }, { limit: 40, seconds: 60 }];
+    case "ecotrack":
+      return [{ limit: 45, seconds: 60 }];
+    case "yalidine":
+      return [{ limit: 8, seconds: 1 }, { limit: 80, seconds: 60 }];
+    case "zrexpress":
+      return [{ limit: 8, seconds: 1 }, { limit: 80, seconds: 60 }];
+    default:
+      return [{ limit: 5, seconds: 1 }, { limit: 60, seconds: 60 }];
+  }
+};
+
+const enforceCarrierRateLimit = async (
+  supabase: ReturnType<typeof createClient>,
+  carrierCode: string,
+  ownerId: string,
+) => {
+  if (!carrierCode || !ownerId) return true;
+  for (const window of locationCarrierRatePolicy(carrierCode)) {
+    const ok = await consumeRateLimit(
+      supabase,
+      `carrier_loc:${carrierCode}:${ownerId}:${window.seconds}`,
+      window.limit,
+      window.seconds,
+    );
+    if (!ok) return false;
+  }
+  return true;
+};
+
+const carrierFetch = async (
+  supabase: ReturnType<typeof createClient>,
+  carrierCode: string,
+  ownerId: string,
+  url: string,
+  init: RequestInit,
+) => {
+  const allowed = await enforceCarrierRateLimit(supabase, carrierCode, ownerId);
+  if (!allowed) return null;
+  return fetchWithRetry(url, init);
+};
+
 const zrSearch = async (
+  supabase: ReturnType<typeof createClient>,
+  carrierCode: string,
+  ownerId: string,
   path: string,
   bodies: Array<Record<string, unknown>>,
   headers: Record<string, string>,
 ) => {
   const baseUrl = "https://api.zrexpress.app";
   for (const body of bodies) {
-    const resp = await fetch(`${baseUrl}${path}`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-    });
+    const resp = await carrierFetch(
+      supabase,
+      carrierCode,
+      ownerId,
+      `${baseUrl}${path}`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      },
+    );
+    if (!resp) return [];
     if (!resp.ok) continue;
     const decoded = await resp.json();
     const list = extractList(decoded);
@@ -248,6 +373,17 @@ serve(async (req) => {
   const isYalidine = normalizedVariants.some((v) => v.includes("yalidine"));
   const isEcotrack = normalizedVariants.some((v) => v.includes("ecotrack"));
   const isZrExpress = normalizedVariants.some((v) => v.includes("zrexpress"));
+  const isGuepex = normalizedVariants.some((v) => v.includes("guepex"));
+  const carrierCode = isYalidine
+    ? "yalidine"
+    : isEcotrack
+    ? "ecotrack"
+    : isZrExpress
+    ? "zrexpress"
+    : isGuepex
+    ? "guepex"
+    : "generic";
+  const carrierOwnerId = sellerId || userData.user.id;
 
   const cacheType = requestType === "wilayas" ? "wilaya" : "commune";
   if (courierKey) {
@@ -269,13 +405,21 @@ serve(async (req) => {
   if (requestType === "wilayas") {
     if (isYalidine && settingsRow.api_secret) {
       const url = "https://api.yalidine.app/v1/wilayas/";
-      const resp = await fetch(url, {
-        headers: {
-          "X-API-ID": textValue(settingsRow.api_key),
-          "X-API-TOKEN": textValue(settingsRow.api_secret),
-          Accept: "application/json",
+      const resp = await carrierFetch(
+        supabaseUser,
+        carrierCode,
+        carrierOwnerId,
+        url,
+        {
+          method: "GET",
+          headers: {
+            "X-API-ID": textValue(settingsRow.api_key),
+            "X-API-TOKEN": textValue(settingsRow.api_secret),
+            Accept: "application/json",
+          },
         },
-      });
+      );
+      if (!resp) return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
       if (resp.ok) {
         const decoded = await resp.json();
         const data = decoded?.data ?? decoded;
@@ -305,12 +449,20 @@ serve(async (req) => {
 
     if (isEcotrack) {
       const url = "https://api.ecotrack.dz/api/v1/get/fees";
-      const resp = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${textValue(settingsRow.api_key)}`,
-          Accept: "application/json",
+      const resp = await carrierFetch(
+        supabaseUser,
+        carrierCode,
+        carrierOwnerId,
+        url,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${textValue(settingsRow.api_key)}`,
+            Accept: "application/json",
+          },
         },
-      });
+      );
+      if (!resp) return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
       if (resp.ok) {
         const decoded = await resp.json();
         const livraison = decoded?.livraison;
@@ -358,6 +510,60 @@ serve(async (req) => {
       }
     }
 
+    if (isGuepex && settingsRow.api_secret) {
+      const url = `${guepexBaseUrl()}/v1/wilayas`;
+      const resp = await carrierFetch(
+        supabaseUser,
+        carrierCode,
+        carrierOwnerId,
+        url,
+        {
+          method: "GET",
+          headers: {
+            "X-API-ID": textValue(settingsRow.api_key),
+            "X-API-TOKEN": textValue(settingsRow.api_secret),
+            Accept: "application/json",
+          },
+        },
+      );
+      if (!resp) return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
+      if (resp.ok) {
+        const decoded = await resp.json();
+        const data = extractList(decoded);
+        if (Array.isArray(data)) {
+          const list = data
+            .map((m) => ({
+              id: textValue((m as Record<string, unknown>)?.id) ||
+                textValue((m as Record<string, unknown>)?.wilaya_id) ||
+                textValue((m as Record<string, unknown>)?.code) ||
+                textValue((m as Record<string, unknown>)?.wilaya_code),
+              code: textValue((m as Record<string, unknown>)?.wilaya_code) ||
+                textValue((m as Record<string, unknown>)?.code) ||
+                textValue((m as Record<string, unknown>)?.id) ||
+                textValue((m as Record<string, unknown>)?.wilaya_id),
+              name: textValue((m as Record<string, unknown>)?.wilaya_name) ||
+                textValue((m as Record<string, unknown>)?.name) ||
+                textValue((m as Record<string, unknown>)?.name_fr),
+            }))
+            .filter((m) => m.name);
+          if (list.length) {
+            await writeCache(
+              supabaseAdmin,
+              courierKey,
+              courierId,
+              "wilaya",
+              list.map((m) => ({
+                remote_id: m.id || m.code,
+                name_raw: m.name,
+                wilaya_code: m.code,
+              })),
+            );
+            return jsonResponse({ ok: true, data: list });
+          }
+        }
+      }
+    }
+
     if (isZrExpress && settingsRow.api_secret) {
       const headers = {
         "X-Api-Key": textValue(settingsRow.api_key),
@@ -378,6 +584,9 @@ serve(async (req) => {
         { pageNumber: 1, pageSize: 5000, orderBy: ["code asc"] },
       ];
       const list = await zrSearch(
+        supabaseUser,
+        carrierCode,
+        carrierOwnerId,
         "/api/v1/territories/search",
         bodies,
         headers,
@@ -445,13 +654,21 @@ serve(async (req) => {
 
   if (isYalidine && settingsRow.api_secret) {
     const url = `https://api.yalidine.app/v1/communes?wilaya_id=${encodeURIComponent(wilayaCode)}`;
-    const resp = await fetch(url, {
-      headers: {
-        "X-API-ID": textValue(settingsRow.api_key),
-        "X-API-TOKEN": textValue(settingsRow.api_secret),
-        Accept: "application/json",
+    const resp = await carrierFetch(
+      supabaseUser,
+      carrierCode,
+      carrierOwnerId,
+      url,
+      {
+        method: "GET",
+        headers: {
+          "X-API-ID": textValue(settingsRow.api_key),
+          "X-API-TOKEN": textValue(settingsRow.api_secret),
+          Accept: "application/json",
+        },
       },
-    });
+    );
+    if (!resp) return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
     if (!resp.ok) {
       return jsonResponse({ ok: false, message: "Yalidine communes failed" }, 502);
     }
@@ -497,12 +714,20 @@ serve(async (req) => {
     );
     for (const code of attempts) {
       const url = `https://api.ecotrack.dz/api/v1/get/communes?wilaya_id=${encodeURIComponent(code)}`;
-      const resp = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${textValue(settingsRow.api_key)}`,
-          Accept: "application/json",
+      const resp = await carrierFetch(
+        supabaseUser,
+        carrierCode,
+        carrierOwnerId,
+        url,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${textValue(settingsRow.api_key)}`,
+            Accept: "application/json",
+          },
         },
-      });
+      );
+      if (!resp) return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
       if (resp.ok) {
         const decoded = await resp.json();
         const data = Array.isArray(decoded) ? decoded : decoded?.data;
@@ -536,6 +761,148 @@ serve(async (req) => {
     }
   }
 
+  if (isGuepex && settingsRow.api_secret) {
+    const headers = {
+      "X-API-ID": textValue(settingsRow.api_key),
+      "X-API-TOKEN": textValue(settingsRow.api_secret),
+      Accept: "application/json",
+    };
+    const baseUrl = guepexBaseUrl();
+    const attempts = codeVariants(wilayaCode);
+
+    let communesRaw: unknown[] = [];
+    const communeUrls = [
+      ...attempts.map((code) => `${baseUrl}/v1/communes?wilaya_id=${encodeURIComponent(code)}`),
+      ...attempts.map((code) => `${baseUrl}/v1/communes?to_wilaya_id=${encodeURIComponent(code)}`),
+      `${baseUrl}/v1/communes`,
+    ];
+    for (const url of communeUrls) {
+      const resp = await carrierFetch(
+        supabaseUser,
+        carrierCode,
+        carrierOwnerId,
+        url,
+        { method: "GET", headers },
+      );
+      if (!resp) return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
+      if (!resp.ok) continue;
+      const decoded = await resp.json();
+      const list = extractList(decoded);
+      if (!list.length) continue;
+      communesRaw = list;
+      if (!url.endsWith("/communes")) break;
+    }
+
+    if (communesRaw.length) {
+      let mapped = communesRaw
+        .map((m) => ({
+          id: textValue((m as Record<string, unknown>)?.id) ||
+            textValue((m as Record<string, unknown>)?.commune_id) ||
+            textValue((m as Record<string, unknown>)?.code),
+          name: textValue((m as Record<string, unknown>)?.commune_name) ||
+            textValue((m as Record<string, unknown>)?.name),
+          wilaya_id: textValue((m as Record<string, unknown>)?.wilaya_id) ||
+            textValue((m as Record<string, unknown>)?.to_wilaya_id) ||
+            textValue((m as Record<string, unknown>)?.wilaya_code),
+          has_stop_desk: "0",
+          stopdesk_id: "",
+        }))
+        .filter((m) => m.name);
+
+      const filteredByWilaya = mapped.filter((m) =>
+        m.wilaya_id ? inCodeVariants(m.wilaya_id, wilayaCode) : true
+      );
+      if (filteredByWilaya.length > 0) mapped = filteredByWilaya;
+
+      const uniqueMap = new Map<string, (typeof mapped)[number]>();
+      for (const commune of mapped) {
+        const id = commune.id || normalizeName(commune.name);
+        const key = `${id}:${normalizeName(commune.name)}`;
+        if (!uniqueMap.has(key)) uniqueMap.set(key, commune);
+      }
+      const uniqueCommunes = Array.from(uniqueMap.values());
+
+      let centersRaw: unknown[] = [];
+      const centerUrls = [
+        ...attempts.map((code) => `${baseUrl}/v1/centers?wilaya_id=${encodeURIComponent(code)}`),
+        ...attempts.map((code) => `${baseUrl}/v1/centers?to_wilaya_id=${encodeURIComponent(code)}`),
+        `${baseUrl}/v1/centers`,
+      ];
+      for (const url of centerUrls) {
+        const resp = await carrierFetch(
+          supabaseUser,
+          carrierCode,
+          carrierOwnerId,
+          url,
+          { method: "GET", headers },
+        );
+        if (!resp) return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
+        if (!resp.ok) continue;
+        const decoded = await resp.json();
+        const list = extractList(decoded);
+        if (!list.length) continue;
+        centersRaw = list;
+        if (!url.endsWith("/centers")) break;
+      }
+
+      const stopdeskByCommuneId = new Map<string, string>();
+      const stopdeskByCommuneName = new Map<string, string>();
+      if (centersRaw.length) {
+        for (const center of centersRaw) {
+          const row = center as Record<string, unknown>;
+          const centerWilayaId = textValue(row.wilaya_id ?? row.to_wilaya_id ?? row.wilaya_code);
+          if (centerWilayaId && !inCodeVariants(centerWilayaId, wilayaCode)) continue;
+          const centerId = textValue(row.id ?? row.center_id ?? row.code);
+          if (!centerId) continue;
+          const communeId = textValue(
+            row.commune_id ?? row.to_commune_id ?? row.district_id ?? row.city_id,
+          );
+          const communeName = normalizeName(
+            row.commune_name ?? row.to_commune_name ?? row.commune ?? row.name,
+          );
+          if (communeId && !stopdeskByCommuneId.has(communeId)) {
+            stopdeskByCommuneId.set(communeId, centerId);
+          }
+          if (communeName && !stopdeskByCommuneName.has(communeName)) {
+            stopdeskByCommuneName.set(communeName, centerId);
+          }
+        }
+      }
+
+      const enriched = uniqueCommunes.map((commune) => {
+        const stopdeskId = stopdeskByCommuneId.get(commune.id) ??
+          stopdeskByCommuneName.get(normalizeName(commune.name)) ??
+          "";
+        return {
+          ...commune,
+          has_stop_desk: stopdeskId ? "1" : "0",
+          stopdesk_id: stopdeskId,
+          wilaya_id: commune.wilaya_id || wilayaCode,
+        };
+      });
+
+      if (enriched.length) {
+        await writeCache(
+          supabaseAdmin,
+          courierKey,
+          courierId,
+          "commune",
+          enriched.map((commune) => ({
+            remote_id: commune.id || normalizeName(commune.name),
+            name_raw: commune.name,
+            parent_remote_id: commune.wilaya_id || wilayaCode,
+            wilaya_code: wilayaCode,
+            extra: {
+              has_stop_desk: commune.has_stop_desk,
+              stopdesk_id: commune.stopdesk_id,
+            },
+          })),
+        );
+        return jsonResponse({ ok: true, data: enriched });
+      }
+    }
+  }
+
   if (isZrExpress && settingsRow.api_secret) {
     const headers = {
       "X-Api-Key": textValue(settingsRow.api_key),
@@ -561,6 +928,9 @@ serve(async (req) => {
       { page: 1, pageSize: 5000 },
     ];
     const list = await zrSearch(
+      supabaseUser,
+      carrierCode,
+      carrierOwnerId,
       "/api/v1/territories/search",
       bodies,
       headers,
@@ -594,7 +964,14 @@ serve(async (req) => {
         },
         { page: 1, pageSize: 5000 },
       ];
-      const hubs = await zrSearch("/api/v1/hubs/search", hubBodies, headers);
+      const hubs = await zrSearch(
+        supabaseUser,
+        carrierCode,
+        carrierOwnerId,
+        "/api/v1/hubs/search",
+        hubBodies,
+        headers,
+      );
       const hubsByCommune = new Map<string, string>();
       for (const hub of hubs) {
         const record = hub as Record<string, unknown>;

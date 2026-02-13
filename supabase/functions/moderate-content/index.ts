@@ -54,6 +54,38 @@ const NUDITY_RAW_THRESHOLD = 0.5;
 const NUDITY_PARTIAL_THRESHOLD = 0.85;
 const DEFAULT_PROB_THRESHOLD = 0.5;
 const MAX_IMAGES = 3;
+const STRICT_NUDITY_RAW_THRESHOLD = 0.25;
+const STRICT_NUDITY_PARTIAL_THRESHOLD = 0.6;
+
+const DEFAULT_BLOCK_LABELS = [
+  "nudity_raw",
+  "nudity_partial",
+  "weapon",
+  "gore",
+  "violence",
+  "self-harm",
+  "offensive",
+  "drug",
+  "extremism",
+  "content-trade",
+  "money-transaction",
+  "profanity",
+].join(",");
+
+const DEFAULT_REVIEW_LABELS = [
+  "text-content",
+  "link",
+  "spam",
+  "personal",
+].join(",");
+
+const parseCsvSet = (raw: string) =>
+  new Set(
+    raw
+      .split(",")
+      .map((v) => v.trim().toLowerCase())
+      .filter((v) => v.length > 0),
+  );
 
 const checkImage = async (
   apiUser: string,
@@ -128,14 +160,17 @@ const extractTextFlags = (data: Record<string, unknown>, categories: string) => 
   return flags;
 };
 
-const extractImageFlags = (data: Record<string, unknown>) => {
+const extractImageFlags = (
+  data: Record<string, unknown>,
+  thresholds: { nudityRaw: number; nudityPartial: number },
+) => {
   const flags: string[] = [];
   const nudity = data["nudity"] as { raw?: number; partial?: number } | undefined;
   if (nudity) {
-    if ((nudity.raw ?? 0) >= NUDITY_RAW_THRESHOLD) {
+    if ((nudity.raw ?? 0) >= thresholds.nudityRaw) {
       flags.push("nudity_raw");
     }
-    if ((nudity.partial ?? 0) >= NUDITY_PARTIAL_THRESHOLD) {
+    if ((nudity.partial ?? 0) >= thresholds.nudityPartial) {
       flags.push("nudity_partial");
     }
   }
@@ -165,12 +200,38 @@ serve(async (req) => {
     const models = Deno.env.get("SIGHTENGINE_MODELS") ?? DEFAULT_IMAGE_MODELS;
     const categories = Deno.env.get("SIGHTENGINE_TEXT_CATEGORIES") ??
       DEFAULT_TEXT_CATEGORIES;
+    const blockLabels = parseCsvSet(
+      Deno.env.get("MODERATION_BLOCK_LABELS") ?? DEFAULT_BLOCK_LABELS,
+    );
+    const reviewLabels = parseCsvSet(
+      Deno.env.get("MODERATION_REVIEW_LABELS") ?? DEFAULT_REVIEW_LABELS,
+    );
     const body = await req.json().catch(() => ({}));
     const text = toString(body?.text);
     const imageUrls = toStringArray(body?.image_urls).slice(0, MAX_IMAGES);
+    const type = toString(body?.type).toLowerCase();
+    const categorySlug = toString(body?.category_slug).toLowerCase();
+    const policyProfile = toString(body?.policy_profile).toLowerCase();
+
+    const strictVisualPolicy =
+      policyProfile === "dz_strict" ||
+      type === "listing" &&
+        (
+          categorySlug.startsWith("kids") ||
+          categorySlug.startsWith("women-lingerie")
+        );
+    const thresholds = strictVisualPolicy
+      ? {
+        nudityRaw: STRICT_NUDITY_RAW_THRESHOLD,
+        nudityPartial: STRICT_NUDITY_PARTIAL_THRESHOLD,
+      }
+      : {
+        nudityRaw: NUDITY_RAW_THRESHOLD,
+        nudityPartial: NUDITY_PARTIAL_THRESHOLD,
+      };
 
     if (!text && imageUrls.length === 0) {
-      return jsonResponse({ allowed: true, reason: "empty" });
+      return jsonResponse({ allowed: true, action: "allow", reason: "empty" });
     }
 
     const reasons: string[] = [];
@@ -182,15 +243,21 @@ serve(async (req) => {
 
     for (const url of imageUrls) {
       const imageResult = await checkImage(apiUser, apiSecret, url, models);
-      reasons.push(...extractImageFlags(imageResult));
+      reasons.push(...extractImageFlags(imageResult, thresholds));
     }
 
-    const allowed = reasons.length === 0;
+    const uniqueReasons = [...new Set(reasons)];
+    const lowerReasons = uniqueReasons.map((r) => r.toLowerCase());
+    const hasBlock = lowerReasons.some((r) => blockLabels.has(r));
+    const hasReview = !hasBlock && lowerReasons.some((r) => reviewLabels.has(r));
+    const action = hasBlock ? "block" : hasReview ? "review" : "allow";
+    const allowed = !hasBlock;
+
     return jsonResponse({
       allowed,
-      action: allowed ? "allow" : "block",
-      reason: allowed ? "" : reasons.join(","),
-      labels: reasons,
+      action,
+      reason: uniqueReasons.length ? uniqueReasons.join(",") : "",
+      labels: uniqueReasons,
     });
   } catch (error) {
     if (MODERATION_FAIL_OPEN) {

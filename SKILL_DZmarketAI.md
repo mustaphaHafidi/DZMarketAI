@@ -46,10 +46,11 @@ description: Reference synthetique et prescriptive pour DZMarketAI (Flutter + Su
    - validate-courier (Edge): verifie les tokens avant save/update cote vendeur.
    - courier-locations (Edge): renvoie wilayas/communes/stopdesk selon transporteur et credentials du vendeur.
    - create_shipment (Edge, service_role): cree bordereau, met a jour shipments + orders, poste message systeme dans la room d'ordre.
-   - Transporteurs supportes: Yalidine, Ecotrack, ZR Express.
+   - Transporteurs supportes: Yalidine, Ecotrack, ZR Express, Guepex.
    - ZR Express: telephone E.164 +213 (mobile 05/06/07), territoires par UUID (receiverWilayaId/receiverCommuneId), stopdesk via hubId.
    - Buyer choisit la societe parmi celles configurees par le vendeur.
-   - Bordereau genere cote vendeur uniquement (UI Mes ventes).
+   - Bordereau genere cote vendeur uniquement (UI Mes ventes) pour les flux courier.
+   - Pour "livraison a convenir": flux chat only, sans generation obligatoire de bordereau.
 
 7.1 Retours colis (NPAI) & score fiabilite acheteur
    - Objectif: avertir le vendeur si un acheteur a deja des retours “non reclame / retour expediteur”.
@@ -72,8 +73,11 @@ description: Reference synthetique et prescriptive pour DZMarketAI (Flutter + Su
    - RPCs: ensure_conversation, ensure_order_conversation, send_message, post_order_event, delete/restore_conversation, mark_read, get_conversations.
    - Messages systeme: order_created, order_validated, order_shipped, order_tracking, order_returned (payload i18n_key/status/tracking/label_url).
    - Dedupe: unique (conversation_id, dedupe_key) pour eviter doublons sur retries.
+   - Offres: proposer/accepter/refuser/contre-offre dans la meme room (pas de room parallele).
+   - UI offre: seule la carte offre la plus recente d'un meme offer_id reste actionnable.
    - Client: ChatRepository streams (tri client), header produit sticky, badge non-lu, hide/restore explicite.
    - Label visible vendeur uniquement; buyer voit status + tracking sans bouton label.
+   - "Mes ventes" ne doit pas creer de ligne d'expedition sur simple offre (sans commande validee).
    - Suivi: job-runner publie les mises a jour de tracking dans la room (et met a jour shipments.events).
 
 10. Securite & secrets

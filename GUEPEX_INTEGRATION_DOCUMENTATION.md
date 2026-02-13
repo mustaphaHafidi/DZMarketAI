@@ -1,10 +1,10 @@
 # GUEPEX_INTEGRATION_DOCUMENTATION
 
 Last update: 2026-02-13
-Status: Documentation only (no code changes)
+Status: Integrated in app/backend (living reference)
 
 ## 1) Objective
-Document the Guepex carrier API + webhooks end-to-end so it can be added later to DZMarket without starting from zero.
+Document the Guepex carrier API + webhooks and keep a practical reference aligned with the current DZMarket implementation.
 
 ## 2) Sources reviewed (via MCP Playwright)
 Main app and docs:
@@ -193,11 +193,11 @@ Docs indicate an HMAC-SHA256 signature header (naming in docs still mentions Yal
 ### 8.5 Retry policy
 If endpoint does not return HTTP 200 fast enough (docs mention <=10s), retries happen with exponential-ish delays and final automatic disable after the last attempt.
 
-## 9) DZMarket mapping proposal (design level only)
+## 9) DZMarket mapping (implemented)
 
 ### 9.1 Courier code and credential mapping
-- Add carrier code: `guepex`
-- Reuse existing credential fields:
+- Carrier code in DZMarket: `guepex`
+- Credentials mapping:
   - `api_key` = API ID
   - `api_secret` = API TOKEN
 
@@ -214,13 +214,18 @@ Expected create outputs to store:
 - `label_url` <- `label` (or signed copy if downloaded)
 - `orders.status` -> `shipped` when label exists
 
+Implementation notes:
+- `create_shipment` tries direct tracking extraction first.
+- If tracking is missing in first response record, a fallback lookup by `order_id` is performed.
+- Error handling returns explicit messages for missing tracking/label instead of silent failure.
+
 ### 9.3 Tracking sync mapping
 Use `GET /histories` (or by tracking) in runner to:
 - append shipment timeline events
 - post deduped chat system events
 - detect return/not-claimed/failure states
 
-## 10) Integration test plan (manual, before coding)
+## 10) Integration test plan (manual, after integration)
 1. Auth smoke: test API ID/TOKEN on `wilayas`.
 2. Territory load: fetch wilayas + communes + centers.
 3. Create parcel home delivery.
@@ -240,7 +245,7 @@ Use `GET /histories` (or by tracking) in runner to:
 5. Confirm webhook retention window and exact failure disable rules.
 6. Confirm SLA and incident contact path beyond email.
 
-## 12) Go/No-Go checklist for implementation phase
+## 12) Go/No-Go checklist for production usage
 Go only when all are confirmed:
 - API credential validation works from DZMarket backend.
 - At least one successful end-to-end label generation in sandbox/real account.
@@ -249,5 +254,4 @@ Go only when all are confirmed:
 - Error handling for 429/5xx fully tested.
 
 ---
-This document is intentionally documentation-only.
-No application code, SQL, or function logic was changed in this step.
+This document is the operational reference for the already integrated Guepex flow.

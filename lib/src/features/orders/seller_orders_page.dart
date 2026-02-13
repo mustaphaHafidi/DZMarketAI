@@ -45,12 +45,31 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
     }
   }
 
+  bool _isOfferOnlyGhostOrder(Order order) {
+    // Guardrail: offers must stay in chat only.
+    // If an old/buggy flow produced a placeholder order without any checkout
+    // metadata, hide it from "Mes ventes".
+    final hasShippingMeta =
+        (order.shippingOption?.trim().isNotEmpty ?? false) ||
+        (order.deliveryMethod?.trim().isNotEmpty ?? false) ||
+        (order.courierId?.trim().isNotEmpty ?? false) ||
+        (order.courierName?.trim().isNotEmpty ?? false) ||
+        (order.shippingAddressId?.trim().isNotEmpty ?? false);
+    final hasFulfillmentMeta =
+        (order.trackingNumber?.trim().isNotEmpty ?? false) ||
+        (order.labelUrl?.trim().isNotEmpty ?? false);
+    final hasPaymentMeta = (order.paymentMethod?.trim().isNotEmpty ?? false);
+    return !hasShippingMeta && !hasFulfillmentMeta && !hasPaymentMeta;
+  }
+
   @override
   Widget build(BuildContext context) {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) {
       return Scaffold(
-        body: Center(child: Text(L10n.tr(context, 'seller_orders.login_required'))),
+        body: Center(
+          child: Text(L10n.tr(context, 'seller_orders.login_required')),
+        ),
       );
     }
 
@@ -69,12 +88,20 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          final orders = (snapshot.data ?? const [])
-              .where((o) =>
-                  o.sellerId == userId && o.status != OrderStatus.cancelled)
-              .toList()
-            ..sort((a, b) =>
-                (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+          final orders =
+              (snapshot.data ?? const [])
+                  .where(
+                    (o) =>
+                        o.sellerId == userId &&
+                        o.status != OrderStatus.cancelled &&
+                        !_isOfferOnlyGhostOrder(o),
+                  )
+                  .toList()
+                ..sort(
+                  (a, b) => (b.createdAt ?? DateTime(0)).compareTo(
+                    a.createdAt ?? DateTime(0),
+                  ),
+                );
           final limited = orders.take(_maxOrders).toList();
           if (limited.isEmpty) {
             return Center(child: Text(L10n.tr(context, 'seller_orders.empty')));
@@ -117,7 +144,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
                       onDelete: () => _confirmDelete(context, order.id),
                       onManageArrangedDelivery: () =>
                           context.push('/order/${order.id}/chat'),
-                      canCancel: order.status == OrderStatus.pending &&
+                      canCancel:
+                          order.status == OrderStatus.pending &&
                           (order.labelUrl == null || order.labelUrl!.isEmpty),
                     );
                   },
@@ -243,7 +271,10 @@ class _SellerOrderCard extends StatelessWidget {
             if ((buyerReturnStats?.returns12m ?? 0) > 0) ...[
               const SizedBox(height: 6),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.orange.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(20),
@@ -251,13 +282,19 @@ class _SellerOrderCard extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.warning_amber_rounded, size: 16, color: Colors.orange),
+                    const Icon(
+                      Icons.warning_amber_rounded,
+                      size: 16,
+                      color: Colors.orange,
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       L10n.tr(
                         context,
                         'seller_orders.return_warning',
-                        params: {'count': '${buyerReturnStats?.returns12m ?? 0}'},
+                        params: {
+                          'count': '${buyerReturnStats?.returns12m ?? 0}',
+                        },
                       ),
                       style: const TextStyle(color: Colors.orange),
                     ),
@@ -309,15 +346,17 @@ class _SellerOrderCard extends StatelessWidget {
                         TextButton.icon(
                           onPressed: () => onOpenLabel(order.labelUrl!),
                           icon: const Icon(Icons.picture_as_pdf_outlined),
-                          label:
-                              Text(L10n.tr(context, 'seller_orders.open_label')),
+                          label: Text(
+                            L10n.tr(context, 'seller_orders.open_label'),
+                          ),
                         )
                       else if (!isArrangedOrder)
                         FilledButton.icon(
                           onPressed: onGenerateLabel,
                           icon: const Icon(Icons.local_shipping_outlined),
                           label: Text(
-                              L10n.tr(context, 'seller_orders.generate_label')),
+                            L10n.tr(context, 'seller_orders.generate_label'),
+                          ),
                         )
                       else
                         OutlinedButton.icon(

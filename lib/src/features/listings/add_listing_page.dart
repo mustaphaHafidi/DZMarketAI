@@ -11,6 +11,7 @@ import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AddListingPage extends StatefulWidget {
   const AddListingPage({super.key});
@@ -37,6 +38,7 @@ class _AddListingPageState extends State<AddListingPage> {
   String _condition = 'new';
   String? _categoryId;
   String? _categoryNameFr;
+  String? _categorySlug;
   bool _deliveryEnabled = true;
   bool _freeShipping = false;
   bool _exchangeAfterDelivery = false;
@@ -57,6 +59,9 @@ class _AddListingPageState extends State<AddListingPage> {
   List<Map<String, String>> _communes = const [];
   final List<PlatformFile> _pickedFiles = [];
   static const int _maxPhotos = 5;
+  static const String _recentCategoriesKey = 'listing.add.recent_categories.v1';
+  static const int _maxRecentCategories = 6;
+  List<String> _recentCategoryIds = const [];
 
   final _conditions = const ['new', 'like new', 'good', 'fair'];
 
@@ -81,6 +86,7 @@ class _AddListingPageState extends State<AddListingPage> {
     _loadCategories();
     _loadLocations();
     _loadEnabledCouriers();
+    _loadRecentCategories();
     _titleCtrl.addListener(_onFieldChanged);
     _descCtrl.addListener(_onFieldChanged);
     _priceCtrl.addListener(_onFieldChanged);
@@ -130,6 +136,267 @@ class _AddListingPageState extends State<AddListingPage> {
         );
       }
     });
+  }
+
+  Future<void> _loadRecentCategories() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final values = prefs.getStringList(_recentCategoriesKey) ?? const [];
+      if (!mounted) return;
+      setState(() {
+        _recentCategoryIds = values
+            .where((id) => id.trim().isNotEmpty)
+            .take(_maxRecentCategories)
+            .toList();
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _rememberRecentCategory(String categoryId) async {
+    final safeId = categoryId.trim();
+    if (safeId.isEmpty) return;
+    final next = <String>[
+      safeId,
+      ..._recentCategoryIds.where((id) => id != safeId),
+    ].take(_maxRecentCategories).toList();
+    if (!mounted) return;
+    setState(() => _recentCategoryIds = next);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_recentCategoriesKey, next);
+    } catch (_) {}
+  }
+
+  Map<String, String>? _findCategoryById(String? id) {
+    if (id == null || id.isEmpty) return null;
+    for (final item in _categories) {
+      if (item['id'] == id) return item;
+    }
+    return null;
+  }
+
+  List<Map<String, String>> _rootCategories(BuildContext context) {
+    final roots = _categories
+        .where((c) => (c['parent_id'] ?? '').trim().isEmpty)
+        .toList();
+    roots.sort(
+      (a, b) => _categoryItemLabel(
+        context,
+        a,
+      ).compareTo(_categoryItemLabel(context, b)),
+    );
+    return roots;
+  }
+
+  List<Map<String, String>> _childrenOfCategory(
+    BuildContext context,
+    String parentId,
+  ) {
+    final children = _categories
+        .where((c) => (c['parent_id'] ?? '').trim() == parentId)
+        .toList();
+    children.sort(
+      (a, b) => _categoryItemLabel(
+        context,
+        a,
+      ).compareTo(_categoryItemLabel(context, b)),
+    );
+    return children;
+  }
+
+  String _categoryPathLabel(
+    BuildContext context,
+    Map<String, String> category,
+  ) {
+    final parentId = category['parent_id'] ?? '';
+    if (parentId.isEmpty) return _categoryItemLabel(context, category);
+    final parent = _findCategoryById(parentId);
+    if (parent == null) return _categoryItemLabel(context, category);
+    return '${_categoryItemLabel(context, parent)} > ${_categoryItemLabel(context, category)}';
+  }
+
+  Future<Map<String, String>?> _showCategoryPicker(BuildContext context) {
+    final searchCtrl = TextEditingController();
+    String activeParentId = '';
+    final selected = _findCategoryById(_categoryId);
+    if (selected != null) {
+      final parentId = (selected['parent_id'] ?? '').trim();
+      activeParentId = parentId.isNotEmpty ? parentId : (selected['id'] ?? '');
+    }
+    return showModalBottomSheet<Map<String, String>>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: StatefulBuilder(
+            builder: (sheetContext, setSheetState) {
+              final query = searchCtrl.text.trim().toLowerCase();
+              final roots = _rootCategories(sheetContext);
+              final activeChildren = activeParentId.isEmpty
+                  ? const <Map<String, String>>[]
+                  : _childrenOfCategory(sheetContext, activeParentId);
+              final filtered = query.isEmpty
+                  ? <Map<String, String>>[]
+                  : _categories.where((item) {
+                      final plain = _categoryItemLabel(
+                        sheetContext,
+                        item,
+                      ).toLowerCase();
+                      final path = _categoryPathLabel(
+                        sheetContext,
+                        item,
+                      ).toLowerCase();
+                      return plain.contains(query) || path.contains(query);
+                    }).toList();
+              if (query.isNotEmpty) {
+                filtered.sort(
+                  (a, b) => _categoryPathLabel(
+                    sheetContext,
+                    a,
+                  ).compareTo(_categoryPathLabel(sheetContext, b)),
+                );
+              }
+              final recentItems = _recentCategoryIds
+                  .map(_findCategoryById)
+                  .whereType<Map<String, String>>()
+                  .toList();
+
+              Widget buildCategoryTile(
+                Map<String, String> item, {
+                required bool showPath,
+              }) {
+                final hasChildren = _childrenOfCategory(
+                  sheetContext,
+                  item['id'] ?? '',
+                ).isNotEmpty;
+                final label = showPath
+                    ? _categoryPathLabel(sheetContext, item)
+                    : _categoryItemLabel(sheetContext, item);
+                return ListTile(
+                  title: Text(label),
+                  trailing: hasChildren && query.isEmpty
+                      ? const Icon(Icons.chevron_right)
+                      : null,
+                  onTap: () {
+                    if (hasChildren && query.isEmpty) {
+                      setSheetState(() => activeParentId = item['id'] ?? '');
+                      return;
+                    }
+                    Navigator.of(sheetContext).pop(item);
+                  },
+                );
+              }
+
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: Text(
+                      L10n.tr(
+                        sheetContext,
+                        'listing.add.category_label',
+                        fallback: 'Categorie',
+                      ),
+                      style: Theme.of(sheetContext).textTheme.titleMedium,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: TextField(
+                      controller: searchCtrl,
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.search),
+                        hintText: L10n.tr(
+                          sheetContext,
+                          'common.search',
+                          fallback: 'Rechercher',
+                        ),
+                      ),
+                      onChanged: (_) => setSheetState(() {}),
+                    ),
+                  ),
+                  if (query.isEmpty &&
+                      activeParentId.isNotEmpty &&
+                      activeChildren.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          onPressed: () =>
+                              setSheetState(() => activeParentId = ''),
+                          icon: const Icon(Icons.arrow_back),
+                          label: Text(
+                            L10n.tr(
+                              sheetContext,
+                              'listing.add.category_back_to_root',
+                              fallback: 'Categories principales',
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        if (query.isEmpty && recentItems.isNotEmpty) ...[
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
+                            child: Text(
+                              L10n.tr(
+                                sheetContext,
+                                'listing.add.category_recent',
+                                fallback: 'Recentes',
+                              ),
+                              style: Theme.of(
+                                sheetContext,
+                              ).textTheme.labelLarge,
+                            ),
+                          ),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: recentItems
+                                .map(
+                                  (item) => ActionChip(
+                                    label: Text(
+                                      _categoryItemLabel(sheetContext, item),
+                                    ),
+                                    onPressed: () =>
+                                        Navigator.of(sheetContext).pop(item),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                        if (query.isNotEmpty)
+                          ...filtered.map(
+                            (item) => buildCategoryTile(item, showPath: true),
+                          )
+                        else if (activeParentId.isNotEmpty &&
+                            activeChildren.isNotEmpty)
+                          ...activeChildren.map(
+                            (item) => buildCategoryTile(item, showPath: false),
+                          )
+                        else
+                          ...roots.map(
+                            (item) => buildCategoryTile(item, showPath: false),
+                          ),
+                        const SizedBox(height: 8),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _loadLocations() async {
@@ -593,6 +860,62 @@ class _AddListingPageState extends State<AddListingPage> {
     }
   }
 
+  String _moderationListingMessage(ModerationResult moderation) {
+    final labels = (moderation.labels ?? const [])
+        .map((e) => e.toLowerCase())
+        .toSet();
+    final hasIllegal =
+        labels.contains('weapon') ||
+        labels.contains('drug') ||
+        labels.contains('extremism') ||
+        labels.contains('content-trade') ||
+        labels.contains('money-transaction');
+    if (hasIllegal) {
+      return L10n.tr(
+        context,
+        'moderation.blocked_illegal',
+        fallback: 'Annonce refusee : contenu illegal detecte.',
+      );
+    }
+    final hasViolent =
+        labels.contains('gore') ||
+        labels.contains('violence') ||
+        labels.contains('self-harm');
+    if (hasViolent) {
+      return L10n.tr(
+        context,
+        'moderation.blocked_violent',
+        fallback: 'Annonce refusee : contenu violent ou choquant detecte.',
+      );
+    }
+    final hasOffensive =
+        labels.contains('offensive') ||
+        labels.contains('profanity') ||
+        labels.contains('nudity_raw') ||
+        labels.contains('nudity_partial');
+    if (hasOffensive) {
+      return L10n.tr(
+        context,
+        'moderation.blocked_offensive',
+        fallback:
+            'Annonce refusee : contenu offensant ou non conforme detecte.',
+      );
+    }
+    if (moderation.action == 'review') {
+      return L10n.tr(
+        context,
+        'moderation.listing_review_required',
+        fallback:
+            'Annonce en attente de verification manuelle (contenu sensible detecte).',
+      );
+    }
+    return L10n.tr(
+      context,
+      'moderation.blocked_listing',
+      fallback: 'Annonce refusee : contenu non conforme.',
+    );
+  }
+
   void _clearError() {
     if (_error != null) {
       setState(() => _error = null);
@@ -729,10 +1052,6 @@ class _AddListingPageState extends State<AddListingPage> {
     if (!_validateStep(6)) return;
     setState(() => _saving = true);
     try {
-      final blockedListingMessage = L10n.tr(
-        context,
-        'moderation.blocked_listing',
-      );
       final title = InputSanitizer.sanitizeText(_titleCtrl.text, maxLength: 80);
       final description = InputSanitizer.sanitizeOptionalText(
         _descCtrl.text,
@@ -804,11 +1123,14 @@ class _AddListingPageState extends State<AddListingPage> {
         title: title,
         description: description,
         imageUrls: uploaded,
+        categorySlug: _categorySlug,
+        policyProfile: 'dz_strict',
       );
-      if (!moderation.allowed) {
+      if (!moderation.allowed || moderation.action == 'block') {
         await StorageService().deletePublicUrls(uploaded);
-        throw FormatException(blockedListingMessage);
+        throw FormatException(_moderationListingMessage(moderation));
       }
+      final requiresReview = moderation.action == 'review';
       final deliveryOptions = _effectiveDeliveryOptions();
       final weight = _parseDigits(_weightCtrl.text.trim(), fallback: 1);
       final height = _parseDigits(_heightCtrl.text.trim());
@@ -843,8 +1165,17 @@ class _AddListingPageState extends State<AddListingPage> {
         heightCm: height,
         widthCm: width,
         lengthCm: length,
+        moderationStatus: requiresReview ? 'masked' : 'approved',
+        moderationReason: moderation.reason,
+        moderationLabels: moderation.labels,
+        moderationScore: moderation.score,
       );
       if (!mounted) return;
+      if (requiresReview) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_moderationListingMessage(moderation))),
+        );
+      }
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const MyListingsPage()),
       );
@@ -1096,6 +1427,26 @@ class _AddListingPageState extends State<AddListingPage> {
                   ),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    L10n.tr(
+                      context,
+                      'listing.add.moderation_hint',
+                      fallback:
+                          'Controle automatique: les images illegales, violentes ou choquantes sont bloquees. Les contenus sensibles peuvent etre verifies manuellement.',
+                    ),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 12,
@@ -1190,30 +1541,96 @@ class _AddListingPageState extends State<AddListingPage> {
                       ),
                     ],
                   )
-                : DropdownButtonFormField<String>(
-                    initialValue: _categoryId,
-                    decoration: InputDecoration(
-                      labelText: L10n.tr(context, 'listing.add.category_label'),
-                    ),
-                    items: _categories
-                        .map(
-                          (c) => DropdownMenuItem(
-                            value: c['id'],
-                            child: Text(_categoryItemLabel(context, c)),
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        L10n.tr(context, 'listing.add.category_label'),
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      InkWell(
+                        onTap: () async {
+                          final picked = await _showCategoryPicker(context);
+                          if (picked == null) return;
+                          final pickedId = picked['id'] ?? '';
+                          if (pickedId.isEmpty) return;
+                          await _rememberRecentCategory(pickedId);
+                          setState(() {
+                            _categoryId = pickedId;
+                            _categoryNameFr = picked['name_fr'];
+                            _categorySlug = picked['slug'];
+                          });
+                        },
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
                           ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      final found = _categories
-                          .where((c) => c['id'] == value)
-                          .toList();
-                      setState(() {
-                        _categoryId = value;
-                        _categoryNameFr = found.isNotEmpty
-                            ? found.first['name_fr']
-                            : null;
-                      });
-                    },
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: Theme.of(context).dividerColor,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.category_outlined,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  _categoryLabel(context) == '-'
+                                      ? L10n.tr(
+                                          context,
+                                          'listing.add.choose_category_cta',
+                                          fallback: 'Choisir une categorie',
+                                        )
+                                      : _categoryLabel(context),
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ),
+                              const Icon(Icons.chevron_right),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (_recentCategoryIds.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          L10n.tr(
+                            context,
+                            'listing.add.category_recent',
+                            fallback: 'Recentes',
+                          ),
+                          style: Theme.of(context).textTheme.labelMedium,
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _recentCategoryIds.map((id) {
+                            final item = _findCategoryById(id);
+                            if (item == null) {
+                              return const SizedBox.shrink();
+                            }
+                            return ActionChip(
+                              onPressed: () {
+                                setState(() {
+                                  _categoryId = item['id'];
+                                  _categoryNameFr = item['name_fr'];
+                                  _categorySlug = item['slug'];
+                                });
+                              },
+                              label: Text(_categoryItemLabel(context, item)),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ],
                   ),
           ),
           Step(

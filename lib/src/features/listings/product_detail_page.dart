@@ -1,4 +1,5 @@
 // ignore_for_file: deprecated_member_use
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -192,6 +193,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         'phone': selection['phone'],
         'phone2': selection['phone2'],
         'address': selection['address'],
+        'senderWilayaId': selection['senderWilayaId'],
+        'senderWilaya': selection['senderWilaya'],
         'receiverWilaya': selection['receiverWilaya'],
         'receiverWilayaId': selection['receiverWilayaId'],
         'receiverCommune': selection['receiverCommune'],
@@ -208,6 +211,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         'courierId': selection['courierId'],
         'courierName': selection['courierName'],
         'freeshipping': selection['freeshipping'],
+        'estimatedFee': selection['estimatedFee'],
+        'estimatedFeeSource': selection['estimatedFeeSource'],
         'hasExchange': selection['hasExchange'],
         'insuranceActive': selection['insuranceActive'],
       });
@@ -231,6 +236,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     final userId = supabase.auth.currentUser?.id;
     Map<String, dynamic>? buyerProfile;
     Map<String, dynamic>? seller;
+    Offer? acceptedOffer;
     if (userId != null) {
       buyerProfile = await RateLimiter.instance.run(
         'profiles.buyer.select',
@@ -250,6 +256,27 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             .eq('id', data['owner_id'])
             .maybeSingle(),
       );
+      if (userId != null && userId != data['owner_id']) {
+        try {
+          final accepted = await RateLimiter.instance.run(
+            'offers.accepted.select',
+            () => supabase
+                .from('offers')
+                .select('*')
+                .eq('product_id', safeProductId)
+                .eq('buyer_id', userId)
+                .eq('status', 'accepted')
+                .order('responded_at', ascending: false)
+                .limit(1)
+                .maybeSingle(),
+          );
+          if (accepted != null) {
+            acceptedOffer = Offer.fromJson(accepted);
+          }
+        } catch (_) {
+          acceptedOffer = null;
+        }
+      }
     }
     if (!mounted) return;
     setState(() {
@@ -259,11 +286,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       _buyerProfile = buyerProfile;
       _sellerProfile = seller;
       _loaded = true;
+      _acceptedOffer = acceptedOffer;
       _isOwner = userId != null && data != null && data['owner_id'] == userId;
     });
   }
 
-  Future<void> _contactSeller() async {
+  Future<void> _contactSeller({bool sendIntroMessage = true}) async {
     final userId = supabase.auth.currentUser?.id;
     if (_product == null) return;
     if (userId == null) {
@@ -275,18 +303,22 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       );
       return;
     }
-    final newContactText = L10n.tr(context, 'chat.new_contact');
+    final newContactText = sendIntroMessage
+        ? L10n.tr(context, 'chat.new_contact')
+        : null;
     final repo = ChatRepository();
     final conv = await repo.ensureConversation(
       productId: _product!.id,
       buyerId: userId,
       sellerId: _product!.ownerId,
     );
-    // Try to send a hello message; ignore duplicate/race errors.
-    try {
-      await repo.sendMessage(conv.id, newContactText);
-    } catch (_) {
-      // If send failed (e.g., blocked), ignore for now; navigation still works.
+    if (sendIntroMessage && newContactText != null) {
+      // Try to send a hello message; ignore duplicate/race errors.
+      try {
+        await repo.sendMessage(conv.id, newContactText);
+      } catch (_) {
+        // If send failed (e.g., blocked), ignore for now; navigation still works.
+      }
     }
     if (!mounted) return;
     Navigator.of(context).push(
@@ -308,6 +340,153 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (slug.isEmpty) return fallback;
     final translated = L10n.tr(context, 'category.$slug', fallback: fallback);
     return _looksMojibake(translated) ? fallback : translated;
+  }
+
+  String _deliveryLabelForOption(BuildContext context, String option) {
+    return option == 'cod'
+        ? L10n.tr(context, 'listing.detail.delivery_cod')
+        : L10n.tr(context, 'listing.detail.delivery_pickup');
+  }
+
+  List<String> _buildDetailTags(BuildContext context) {
+    if (_product == null) return const [];
+    final tags = <String>[];
+    final product = _product!;
+    if (product.condition?.isNotEmpty ?? false) {
+      tags.add(product.condition!);
+    }
+    if (product.brand?.isNotEmpty ?? false) {
+      tags.add(
+        L10n.tr(
+          context,
+          'listing.brand',
+          params: {'value': product.brand ?? ''},
+        ),
+      );
+    }
+    if (product.size?.isNotEmpty ?? false) {
+      tags.add(
+        L10n.tr(context, 'listing.size', params: {'value': product.size ?? ''}),
+      );
+    }
+    if (product.color?.isNotEmpty ?? false) {
+      tags.add(
+        L10n.tr(
+          context,
+          'listing.color',
+          params: {'value': product.color ?? ''},
+        ),
+      );
+    }
+    if ((product.categoryNameFr?.isNotEmpty ?? false) ||
+        (product.category?.isNotEmpty ?? false)) {
+      tags.add(
+        L10n.tr(
+          context,
+          'listing.category',
+          params: {'value': _resolveCategoryLabel(context)},
+        ),
+      );
+    }
+    if (product.locationWilaya?.isNotEmpty ?? false) {
+      tags.add(
+        L10n.tr(
+          context,
+          'listing.detail.wilaya',
+          params: {'value': product.locationWilaya!},
+        ),
+      );
+    }
+    if (product.locationDaira?.isNotEmpty ?? false) {
+      tags.add(
+        L10n.tr(
+          context,
+          'listing.detail.daira',
+          params: {'value': product.locationDaira!},
+        ),
+      );
+    }
+    if (product.deliveryOptions.isNotEmpty) {
+      tags.add(
+        L10n.tr(
+          context,
+          'listing.detail.delivery',
+          params: {
+            'value': product.deliveryOptions
+                .map((o) => _deliveryLabelForOption(context, o))
+                .join(', '),
+          },
+        ),
+      );
+    }
+    return tags;
+  }
+
+  List<String> _buildPrimaryTags(BuildContext context) {
+    if (_product == null) return const [];
+    final product = _product!;
+    final tags = <String>[];
+    if (product.condition?.isNotEmpty ?? false) {
+      tags.add(product.condition!);
+    }
+    if (product.locationWilaya?.isNotEmpty ?? false) {
+      tags.add(
+        L10n.tr(
+          context,
+          'listing.detail.wilaya',
+          params: {'value': product.locationWilaya!},
+        ),
+      );
+    }
+    if (product.deliveryOptions.isNotEmpty) {
+      tags.add(
+        L10n.tr(
+          context,
+          'listing.detail.delivery',
+          params: {
+            'value': product.deliveryOptions
+                .map((o) => _deliveryLabelForOption(context, o))
+                .join(', '),
+          },
+        ),
+      );
+    }
+    return tags;
+  }
+
+  Future<void> _showAllTagsSheet(
+    BuildContext context,
+    List<String> tags,
+  ) async {
+    if (tags.isEmpty) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                L10n.tr(context, 'listing.details', fallback: 'Details'),
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [for (final tag in tags) Chip(label: Text(tag))],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   bool _hasArabicLetters(String value) {
@@ -491,24 +670,67 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       courierId: courierId,
       courierName: courierName,
     );
+    final isGuepex = ShippingService.isGuepexCourier(
+      courierId: courierId,
+      courierName: courierName,
+    );
     final shippingOption = courierName;
     final paymentMethod = 'cod';
     final deliveryMode = courierName;
     final freeShipping = _product?.shippingFree == true;
-    final double? shippingCost = freeShipping
+    double? shippingCost = freeShipping
         ? 0.0
-        : (isYalidine || isEcotrack || isZrExpress
-              ? (selection['estimatedFee'] as num?)?.toDouble()
-              : shippingService.estimateCost(
-                  buyerWilaya: _buyerWilaya,
-                  sellerWilaya: _sellerWilaya,
-                ));
+        : (selection['estimatedFee'] as num?)?.toDouble();
+    if (!freeShipping &&
+        (isYalidine || isEcotrack || isZrExpress || isGuepex)) {
+      final quote = await shippingService.estimateCheckoutShippingFee(
+        sellerId: sellerId,
+        courierId: courierId ?? '',
+        courierName: courierName,
+        productId: _product?.id,
+        deliveryType: selection['deliveryType']?.toString() ?? 'home',
+        senderWilayaId: selection['senderWilayaId']?.toString(),
+        senderWilayaName: selection['senderWilaya']?.toString(),
+        receiverWilayaId: selection['receiverWilayaId']?.toString(),
+        receiverWilayaName: selection['receiverWilaya']?.toString(),
+        receiverCommuneId: selection['receiverCommuneId']?.toString(),
+        receiverCommuneName: selection['receiverCommune']?.toString(),
+        price: (selection['price'] as num?)?.toDouble() ?? (agreed ?? 0),
+        declaredValue: (selection['declaredValue'] as num?)?.toDouble(),
+        weightKg:
+            (selection['weight'] as num?)?.toInt() ?? (_product?.weightKg ?? 1),
+        heightCm:
+            (selection['height'] as num?)?.toInt() ?? (_product?.heightCm ?? 0),
+        widthCm:
+            (selection['width'] as num?)?.toInt() ?? (_product?.widthCm ?? 0),
+        lengthCm:
+            (selection['length'] as num?)?.toInt() ?? (_product?.lengthCm ?? 0),
+      );
+      if (quote != null) {
+        shippingCost = quote.fee;
+        selection['estimatedFee'] = quote.fee;
+        selection['estimatedFeeSource'] = quote.source;
+      }
+    }
+    if (!mounted) return;
+    if (!freeShipping && shippingCost == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(L10n.tr(context, 'checkout.fees_unavailable')),
+          ),
+        );
+      }
+      return;
+    }
     final etaLabel = isYalidine
         ? L10n.tr(context, 'checkout.eta_yalidine')
         : isEcotrack
         ? L10n.tr(context, 'checkout.eta_ecotrack')
         : isZrExpress
         ? L10n.tr(context, 'checkout.eta_zrexpress')
+        : isGuepex
+        ? L10n.tr(context, 'checkout.eta_guepex')
         : shippingService.estimateEtaLabel(
             courierName: courierName,
             courierId: courierId,
@@ -763,8 +985,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   Future<void> _makeOffer() async {
     final amountController = TextEditingController();
-    final messageController = TextEditingController();
-    await showDialog(
+    final sent = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(L10n.tr(context, 'offers.make_offer')),
@@ -776,13 +997,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
                 labelText: L10n.tr(context, 'offers.amount_label'),
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: messageController,
-              decoration: InputDecoration(
-                labelText: L10n.tr(context, 'offers.message_optional'),
               ),
             ),
           ],
@@ -799,17 +1013,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   amountController.text,
                   min: 1,
                 );
-                final message = InputSanitizer.sanitizeOptionalText(
-                  messageController.text,
-                  maxLength: 240,
-                );
                 await _offerService.makeOffer(
                   productId: widget.productId,
                   sellerId: _product!.ownerId,
                   amount: amount,
-                  message: message,
                 );
-                if (context.mounted) Navigator.of(context).pop();
+                if (context.mounted) Navigator.of(context).pop(true);
               } on FormatException catch (e) {
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(
@@ -822,6 +1031,16 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         ],
       ),
     );
+    if (sent == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            L10n.tr(context, 'offers.sent', fallback: 'Offre envoyee.'),
+          ),
+        ),
+      );
+      await _contactSeller(sendIntroMessage: false);
+    }
   }
 
   @override
@@ -858,13 +1077,21 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         : outOfStock
         ? L10n.tr(context, 'cta.out_of_stock')
         : L10n.tr(context, 'cta.buy_now');
+    final statusLabel = outOfStock
+        ? L10n.tr(context, 'cta.out_of_stock')
+        : L10n.tr(context, 'chat.room.status_available');
+    final statusColor = outOfStock
+        ? Colors.red.shade600
+        : Theme.of(context).colorScheme.primary;
+    final primaryTags = _buildPrimaryTags(context);
+    final allTags = _buildDetailTags(context);
 
     return Scaffold(
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
             pinned: true,
-            expandedHeight: 340,
+            expandedHeight: 390,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: () => Navigator.of(context).maybePop(),
@@ -923,11 +1150,37 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Text(
+                    _product!.title,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   Row(
                     children: [
                       Text(
                         formatter.format(agreedPrice),
                         style: Theme.of(context).textTheme.headlineMedium,
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          statusLabel,
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(
+                                color: statusColor,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
                       ),
                       if (_acceptedOffer != null)
                         Padding(
@@ -940,108 +1193,33 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     ],
                   ),
                   const SizedBox(height: 8),
+                  if (primaryTags.isNotEmpty)
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final tag in primaryTags) Chip(label: Text(tag)),
+                      ],
+                    ),
+                  if (allTags.length > primaryTags.length)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: ActionChip(
+                        avatar: const Icon(Icons.tune, size: 16),
+                        label: Text(
+                          L10n.tr(
+                            context,
+                            'listing.details',
+                            fallback: 'Details',
+                          ),
+                        ),
+                        onPressed: () => _showAllTagsSheet(context, allTags),
+                      ),
+                    ),
+                  const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: [
-                      if (_product!.condition?.isNotEmpty ?? false)
-                        Chip(label: Text(_product!.condition!)),
-                      if (_product!.brand?.isNotEmpty ?? false)
-                        Chip(
-                          label: Text(
-                            L10n.tr(
-                              context,
-                              'listing.brand',
-                              params: {'value': _product!.brand ?? ''},
-                            ),
-                          ),
-                        ),
-                      if (_product!.size?.isNotEmpty ?? false)
-                        Chip(
-                          label: Text(
-                            L10n.tr(
-                              context,
-                              'listing.size',
-                              params: {'value': _product!.size ?? ''},
-                            ),
-                          ),
-                        ),
-                      if (_product!.color?.isNotEmpty ?? false)
-                        Chip(
-                          label: Text(
-                            L10n.tr(
-                              context,
-                              'listing.color',
-                              params: {'value': _product!.color ?? ''},
-                            ),
-                          ),
-                        ),
-                      if ((_product!.categoryNameFr?.isNotEmpty ?? false) ||
-                          (_product!.category?.isNotEmpty ?? false))
-                        Chip(
-                          label: Text(
-                            L10n.tr(
-                              context,
-                              'listing.category',
-                              params: {'value': _resolveCategoryLabel(context)},
-                            ),
-                          ),
-                        ),
-                      if (_product!.locationWilaya?.isNotEmpty ?? false)
-                        Chip(
-                          label: Text(
-                            L10n.tr(
-                              context,
-                              'listing.detail.wilaya',
-                              params: {'value': _product!.locationWilaya!},
-                            ),
-                          ),
-                        ),
-                      if (_product!.locationDaira?.isNotEmpty ?? false)
-                        Chip(
-                          label: Text(
-                            L10n.tr(
-                              context,
-                              'listing.detail.daira',
-                              params: {'value': _product!.locationDaira!},
-                            ),
-                          ),
-                        ),
-                      if (_product!.deliveryOptions.isNotEmpty)
-                        Chip(
-                          label: Text(
-                            L10n.tr(
-                              context,
-                              'listing.detail.delivery',
-                              params: {
-                                'value': _product!.deliveryOptions
-                                    .map(
-                                      (o) => o == 'cod'
-                                          ? L10n.tr(
-                                              context,
-                                              'listing.detail.delivery_cod',
-                                            )
-                                          : L10n.tr(
-                                              context,
-                                              'listing.detail.delivery_pickup',
-                                            ),
-                                    )
-                                    .join(', '),
-                              },
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    _product!.title,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
                     children: [
                       Chip(
                         label: Text(
@@ -1054,7 +1232,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
                       if (_product!.soldCount > 0)
                         Chip(
                           label: Text(
@@ -1067,7 +1244,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   _SellerRowFixed(
                     ownerId: _product!.ownerId,
                     sellerName: _sellerProfile?['full_name']?.toString(),
@@ -1086,30 +1263,15 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         : null,
                   ),
                   const SizedBox(height: 16),
+                  Divider(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.outlineVariant.withValues(alpha: 0.6),
+                  ),
+                  const SizedBox(height: 12),
                   Text(
                     _product!.description ??
                         L10n.tr(context, 'listing.no_description'),
-                  ),
-                  const SizedBox(height: 24),
-                  _OffersSection(
-                    productId: _product!.id,
-                    sellerId: _product!.ownerId,
-                    offerService: _offerService,
-                    onAccept: (offer, price) => _offerService.acceptOffer(
-                      offerId: offer.id,
-                      agreedAmount: price ?? offer.amount,
-                    ),
-                    onReject: (offer) => _offerService.updateStatus(
-                      offer.id,
-                      OfferStatus.rejected,
-                    ),
-                    onCounter: (offer, amount) => _offerService.counterOffer(
-                      offerId: offer.id,
-                      counterAmount: amount,
-                    ),
-                    onAcceptedOfferChanged: (offer) {
-                      setState(() => _acceptedOffer = offer);
-                    },
                   ),
                   const SizedBox(height: 100),
                 ],
@@ -1119,24 +1281,63 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         ],
       ),
       bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _isOwner || outOfStock ? null : _buyNow,
-                  icon: const Icon(Icons.shopping_bag_outlined),
-                  label: Text(buyLabel),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            border: Border(
+              top: BorderSide(
+                color: Theme.of(
+                  context,
+                ).colorScheme.outlineVariant.withValues(alpha: 0.5),
+              ),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        formatter.format(agreedPrice),
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    if (_product!.stockQuantity > 0)
+                      Text(
+                        L10n.tr(
+                          context,
+                          'listing.detail.stock',
+                          params: {'value': _product!.stockQuantity.toString()},
+                        ),
+                        style: Theme.of(context).textTheme.labelMedium,
+                      ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 12),
-              OutlinedButton.icon(
-                onPressed: _makeOffer,
-                icon: const Icon(Icons.handshake_outlined),
-                label: Text(L10n.tr(context, 'offers.make_offer')),
-              ),
-            ],
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _isOwner || outOfStock ? null : _buyNow,
+                        icon: const Icon(Icons.shopping_bag_outlined),
+                        label: Text(buyLabel),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    OutlinedButton.icon(
+                      onPressed: _isOwner || outOfStock ? null : _makeOffer,
+                      icon: const Icon(Icons.handshake_outlined),
+                      label: Text(L10n.tr(context, 'offers.make_offer')),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1207,7 +1408,10 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
   bool _supportsStopdeskList = true;
   late CourierParcelRules _parcelRules;
   double? _estimatedFee;
-  Map<String, dynamic>? _fees;
+  bool _estimatingFee = false;
+  String? _estimateError;
+  String? _feeSource;
+  Timer? _feeRefreshDebounce;
 
   late TextEditingController _firstNameCtrl;
   late TextEditingController _familyNameCtrl;
@@ -1306,6 +1510,10 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
     _widthCtrl = TextEditingController(text: widthValue.toString());
     final lengthValue = product?.lengthCm ?? 0;
     _lengthCtrl = TextEditingController(text: lengthValue.toString());
+    if (_freeShipping) {
+      _estimatedFee = 0;
+      _feeSource = 'free_shipping';
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -1331,6 +1539,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
 
   @override
   void dispose() {
+    _feeRefreshDebounce?.cancel();
     _firstNameCtrl.dispose();
     _familyNameCtrl.dispose();
     _phoneCtrl.dispose();
@@ -1347,6 +1556,16 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
     _widthCtrl.dispose();
     _lengthCtrl.dispose();
     super.dispose();
+  }
+
+  void _scheduleFeeRefresh({
+    Duration delay = const Duration(milliseconds: 350),
+  }) {
+    _feeRefreshDebounce?.cancel();
+    _feeRefreshDebounce = Timer(delay, () {
+      if (!mounted) return;
+      unawaited(_refreshEstimatedFee());
+    });
   }
 
   String _wilayaName(Map<String, String> w) => w['name'] ?? '';
@@ -1454,12 +1673,25 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
       }
     }
 
-    final senderPref = widget.sellerWilaya ?? widget.buyerWilaya;
+    final senderPrefId = widget.lastCheckout?['senderWilayaId']?.toString();
+    final senderPref =
+        widget.lastCheckout?['senderWilaya']?.toString() ??
+        widget.sellerWilaya ??
+        widget.buyerWilaya;
     if (senderPref != null && _wilayas.isNotEmpty) {
-      final match = _wilayas.firstWhere(
-        (w) => _wilayaName(w).toLowerCase() == senderPref.toLowerCase(),
-        orElse: () => {},
-      );
+      Map<String, String> match = {};
+      if (senderPrefId != null && senderPrefId.isNotEmpty) {
+        match = _wilayas.firstWhere(
+          (w) => _wilayaId(w) == senderPrefId,
+          orElse: () => {},
+        );
+      }
+      if (match.isEmpty) {
+        match = _wilayas.firstWhere(
+          (w) => _wilayaName(w).toLowerCase() == senderPref.toLowerCase(),
+          orElse: () => {},
+        );
+      }
       if (match.isNotEmpty) {
         _senderWilayaId = _wilayaId(match);
         _senderWilayaName = _wilayaName(match);
@@ -1494,7 +1726,10 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
       await _loadCommunes(_receiverWilayaId!);
     }
 
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+      _scheduleFeeRefresh(delay: Duration.zero);
+    }
   }
 
   Future<void> _loadCommunes(String wilayaId) async {
@@ -1575,34 +1810,85 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
         _receiverCommuneId = match['id']?.toString();
       }
     }
-    _updateEstimatedFee();
+    unawaited(_refreshEstimatedFee());
   }
 
-  void _updateEstimatedFee({Map<String, dynamic>? fees}) {
-    if (!_isEcotrack || _receiverWilayaId == null) return;
-    final data = fees ?? _fees;
-    if (data == null) return;
-    final livraison = data['livraison'];
-    if (livraison is! List) return;
-    final receiverId = int.tryParse(_receiverWilayaId ?? '');
-    final entry = livraison.cast<Map>().firstWhere(
-      (e) =>
-          receiverId != null &&
-          int.tryParse(e['wilaya_id']?.toString() ?? '') == receiverId,
-      orElse: () => {},
-    );
-    if (entry.isEmpty) return;
-    final raw = _deliveryType == 'stopdesk'
-        ? entry['tarif_stopdesk']
-        : entry['tarif'];
-    final parsed = double.tryParse(raw?.toString() ?? '');
-    if (parsed == null) return;
-    if (mounted) {
+  Future<void> _refreshEstimatedFee() async {
+    if (!mounted) return;
+    if (_freeShipping) {
       setState(() {
-        _estimatedFee = parsed;
+        _estimatedFee = 0;
+        _estimateError = null;
+        _feeSource = 'free_shipping';
+        _estimatingFee = false;
       });
-    } else {
-      _estimatedFee = parsed;
+      return;
+    }
+    if (_senderWilayaId == null || _receiverWilayaId == null) {
+      setState(() {
+        _estimatedFee = null;
+        _estimateError = null;
+        _feeSource = null;
+        _estimatingFee = false;
+      });
+      return;
+    }
+    final weight = int.tryParse(_weightCtrl.text.trim());
+    final height = int.tryParse(_heightCtrl.text.trim());
+    final width = int.tryParse(_widthCtrl.text.trim());
+    final length = int.tryParse(_lengthCtrl.text.trim());
+    final price = double.tryParse(_priceCtrl.text.trim());
+    final declaredValue = double.tryParse(_declaredValueCtrl.text.trim());
+    if (weight == null || height == null || width == null || length == null) {
+      setState(() {
+        _estimatedFee = null;
+        _estimateError = null;
+        _feeSource = null;
+        _estimatingFee = false;
+      });
+      return;
+    }
+    setState(() {
+      _estimatingFee = true;
+      _estimateError = null;
+    });
+    try {
+      final quote = await _shippingService.estimateCheckoutShippingFee(
+        sellerId: widget.sellerId,
+        courierId: widget.courierId,
+        courierName: widget.courierName,
+        productId: widget.product?.id,
+        deliveryType: _deliveryType,
+        senderWilayaId: _senderWilayaId,
+        senderWilayaName: _senderWilayaName,
+        receiverWilayaId: _receiverWilayaId,
+        receiverWilayaName: _receiverWilayaName,
+        receiverCommuneId: _receiverCommuneId,
+        receiverCommuneName: _receiverCommuneName,
+        price: price ?? widget.defaultPrice,
+        declaredValue: declaredValue,
+        weightKg: weight,
+        heightCm: height,
+        widthCm: width,
+        lengthCm: length,
+      );
+      if (!mounted) return;
+      setState(() {
+        _estimatedFee = quote?.fee;
+        _feeSource = quote?.source;
+        _estimatingFee = false;
+        _estimateError = quote == null
+            ? L10n.tr(context, 'checkout.fees_unavailable')
+            : null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _estimatedFee = null;
+        _feeSource = null;
+        _estimatingFee = false;
+        _estimateError = L10n.tr(context, 'checkout.fees_unavailable');
+      });
     }
   }
 
@@ -1803,6 +2089,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
         _acceptTerms;
     if (!baseValid) return false;
     if (_parcelValidation() != null) return false;
+    if (!_freeShipping && _estimatedFee == null) return false;
     if (_deliveryType == 'stopdesk') {
       if (_supportsStopdeskList) {
         return _stopdeskId != null && _stopdeskCommuneName != null;
@@ -1831,6 +2118,18 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
       }
       return;
     }
+    if (!_freeShipping) {
+      await _refreshEstimatedFee();
+      if (!mounted) return;
+      if (_estimatedFee == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(L10n.tr(context, 'checkout.fees_unavailable')),
+          ),
+        );
+        return;
+      }
+    }
 
     final phoneMain = _phoneCtrl.text.trim();
     final phone2 = _phone2Ctrl.text.trim();
@@ -1848,6 +2147,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
       'courierId': widget.courierId,
       'courierName': widget.courierName,
       'deliveryType': _deliveryType,
+      'senderWilayaId': _senderWilayaId,
       'senderWilaya': _senderWilayaName,
       'receiverWilaya': _receiverWilayaName,
       'receiverWilayaId': _receiverWilayaId,
@@ -1880,6 +2180,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
       'insurance_active': _insuranceActive,
       'acceptTerms': _acceptTerms,
       'estimatedFee': _estimatedFee,
+      'estimatedFeeSource': _feeSource,
     };
 
     await widget.onSaveLastCheckout(selection);
@@ -1915,7 +2216,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                 title: Text(L10n.tr(context, 'checkout.delivery_home')),
                 onChanged: (v) {
                   setState(() => _deliveryType = v ?? 'home');
-                  _updateEstimatedFee();
+                  _scheduleFeeRefresh(delay: Duration.zero);
                 },
               ),
               if (_allowStopdesk)
@@ -1925,7 +2226,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                   title: Text(L10n.tr(context, 'checkout.delivery_stopdesk')),
                   onChanged: (v) {
                     setState(() => _deliveryType = v ?? 'stopdesk');
-                    _updateEstimatedFee();
+                    _scheduleFeeRefresh(delay: Duration.zero);
                   },
                 ),
               _buildParcelRulesCta(context),
@@ -1956,6 +2257,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                     _senderWilayaId = v;
                     _senderWilayaName = _wilayaName(match);
                   });
+                  _scheduleFeeRefresh();
                 },
                 validator: (_) => _senderWilayaId == null
                     ? L10n.tr(context, 'checkout.error_wilaya_required')
@@ -2124,6 +2426,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                     _receiverCommuneName = v;
                     _receiverCommuneId = match['id']?.toString();
                   });
+                  _scheduleFeeRefresh();
                 },
                 validator: (_) => _receiverCommuneName == null
                     ? L10n.tr(context, 'checkout.error_commune_required')
@@ -2159,6 +2462,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                         _receiverCommuneId = match['id']?.toString();
                       }
                     });
+                    _scheduleFeeRefresh();
                   },
                   validator: (_) => _stopdeskCommuneName == null
                       ? L10n.tr(context, 'checkout.error_agency_required')
@@ -2222,7 +2526,10 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(6),
                 ],
-                onChanged: (_) => setState(() {}),
+                onChanged: (_) {
+                  setState(() {});
+                  _scheduleFeeRefresh();
+                },
                 validator: (v) => v == null || v.trim().isEmpty
                     ? L10n.tr(context, 'checkout.error_price_required')
                     : null,
@@ -2317,18 +2624,57 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                 L10n.tr(context, 'checkout.price_summary'),
                 style: Theme.of(context).textTheme.titleSmall,
               ),
-              if (_isEcotrack)
+              if (_freeShipping)
                 Text(
-                  _estimatedFee == null
-                      ? L10n.tr(context, 'checkout.fees_unavailable')
-                      : L10n.tr(
-                          context,
-                          'checkout.fees_estimated',
-                          params: {'amount': _estimatedFee!.toStringAsFixed(0)},
-                        ),
+                  L10n.tr(
+                    context,
+                    'checkout.fees_estimated',
+                    params: {'amount': '0'},
+                  ),
+                )
+              else if (_estimatingFee)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4),
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              else if (_estimatedFee != null)
+                Text(
+                  L10n.tr(
+                    context,
+                    'checkout.fees_estimated',
+                    params: {'amount': _estimatedFee!.toStringAsFixed(0)},
+                  ),
                 )
               else
-                Text(L10n.tr(context, 'checkout.fees_by_yalidine')),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _estimateError ??
+                          L10n.tr(context, 'checkout.fees_unavailable'),
+                    ),
+                    TextButton.icon(
+                      onPressed: () =>
+                          _scheduleFeeRefresh(delay: Duration.zero),
+                      icon: const Icon(Icons.refresh),
+                      label: Text(L10n.tr(context, 'common.retry')),
+                    ),
+                  ],
+                ),
+              if (!_freeShipping && _feeSource != null)
+                Text(
+                  L10n.tr(
+                    context,
+                    'checkout.fees_by_carrier',
+                    params: {'carrier': widget.courierName},
+                    fallback: L10n.tr(context, 'checkout.fees_by_yalidine'),
+                  ),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               CheckboxListTile(
                 value: _acceptTerms,
                 onChanged: (v) => setState(() => _acceptTerms = v ?? false),
@@ -2373,6 +2719,15 @@ class _ImageCarousel extends StatefulWidget {
 class _ImageCarouselState extends State<_ImageCarousel> {
   int _index = 0;
 
+  Future<void> _goTo(int page) async {
+    if (!widget.controller.hasClients) return;
+    await widget.controller.animateToPage(
+      page,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final imagePrefs = NetworkPreferencesService.instance;
@@ -2397,6 +2752,78 @@ class _ImageCarouselState extends State<_ImageCarousel> {
           ),
         ),
         Positioned(
+          top: MediaQuery.of(context).padding.top + 10,
+          right: 12,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              '${_index + 1}/${widget.images.length}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+        if (widget.images.length > 1)
+          Positioned(
+            left: 12,
+            right: 12,
+            bottom: 48,
+            child: SizedBox(
+              height: 52,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: widget.images.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, i) {
+                  final active = i == _index;
+                  return InkWell(
+                    onTap: () => _goTo(i),
+                    borderRadius: BorderRadius.circular(10),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      width: 52,
+                      height: 52,
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: active
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.white.withValues(alpha: 0.7),
+                          width: active ? 2 : 1,
+                        ),
+                        color: Colors.black.withValues(alpha: 0.18),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: CachedNetworkImage(
+                          imageUrl: widget.images[i],
+                          fit: BoxFit.cover,
+                          memCacheWidth: 140,
+                          memCacheHeight: 140,
+                          fadeInDuration: imagePrefs.imageFadeInDuration,
+                          fadeOutDuration: imagePrefs.imageFadeOutDuration,
+                          imageRenderMethodForWeb:
+                              ImageRenderMethodForWeb.HtmlImage,
+                          errorWidget: (_, __, ___) => const ColoredBox(
+                            color: Colors.black12,
+                            child: Icon(Icons.image_not_supported, size: 16),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        Positioned(
           bottom: 16,
           left: 0,
           right: 0,
@@ -2420,202 +2847,6 @@ class _ImageCarouselState extends State<_ImageCarousel> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _OffersSection extends StatelessWidget {
-  const _OffersSection({
-    required this.productId,
-    required this.sellerId,
-    required this.offerService,
-    required this.onAccept,
-    required this.onReject,
-    required this.onCounter,
-    required this.onAcceptedOfferChanged,
-  });
-
-  final String productId;
-  final String sellerId;
-  final OfferService offerService;
-  final Future<void> Function(Offer, double?) onAccept;
-  final void Function(Offer) onReject;
-  final void Function(Offer, double) onCounter;
-  final void Function(Offer?) onAcceptedOfferChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final userId = supabase.auth.currentUser?.id;
-    final isSeller = userId == sellerId;
-
-    return StreamBuilder<List<Offer>>(
-      stream: offerService.streamOffersForProduct(productId),
-      builder: (context, snapshot) {
-        final offers = snapshot.data ?? const [];
-        if (offers.isEmpty) return const SizedBox.shrink();
-        final accepted = offers.firstWhere(
-          (o) => o.status == OfferStatus.accepted,
-          orElse: () => const Offer(
-            id: '',
-            productId: '',
-            buyerId: '',
-            sellerId: '',
-            amount: 0,
-          ),
-        );
-        if (accepted.id.isNotEmpty) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            onAcceptedOfferChanged(accepted);
-          });
-        }
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              L10n.tr(context, 'offers.title'),
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            ...offers.map((o) {
-              final canRespond = isSeller && o.status == OfferStatus.pending;
-              final statusLabel = o.statusLabel(context);
-              return Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            'DA ${o.amount.toStringAsFixed(0)}',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          const Spacer(),
-                          Chip(
-                            label: Text(statusLabel),
-                            visualDensity: VisualDensity.compact,
-                          ),
-                        ],
-                      ),
-                      if (o.counterAmount != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            L10n.tr(
-                              context,
-                              'offer.counter',
-                              params: {
-                                'amount': o.counterAmount!.toStringAsFixed(0),
-                              },
-                            ),
-                          ),
-                        ),
-                      if (o.agreedAmount != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            L10n.tr(
-                              context,
-                              'offer.accepted_amount',
-                              params: {
-                                'amount': o.agreedAmount!.toStringAsFixed(0),
-                              },
-                            ),
-                          ),
-                        ),
-                      if (o.message?.isNotEmpty ?? false)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(o.message!),
-                        ),
-                      if (canRespond) ...[
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            TextButton(
-                              onPressed: () => onAccept(o, o.amount),
-                              child: Text(L10n.tr(context, 'offer.accept')),
-                            ),
-                            TextButton(
-                              onPressed: () => onReject(o),
-                              child: Text(L10n.tr(context, 'offer.reject')),
-                            ),
-                            TextButton(
-                              onPressed: () async {
-                                final ctrl = TextEditingController(
-                                  text:
-                                      o.counterAmount?.toStringAsFixed(0) ??
-                                      o.amount.toStringAsFixed(0),
-                                );
-                                final val = await showDialog<double>(
-                                  context: context,
-                                  builder: (context) => AlertDialog(
-                                    title: Text(
-                                      L10n.tr(context, 'offer.counter_title'),
-                                    ),
-                                    content: TextField(
-                                      controller: ctrl,
-                                      keyboardType: TextInputType.number,
-                                      decoration: InputDecoration(
-                                        labelText: L10n.tr(
-                                          context,
-                                          'offers.amount_label',
-                                        ),
-                                      ),
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () => Navigator.pop(context),
-                                        child: Text(
-                                          L10n.tr(context, 'common.cancel'),
-                                        ),
-                                      ),
-                                      TextButton(
-                                        onPressed: () {
-                                          try {
-                                            final v =
-                                                InputSanitizer.parseAmount(
-                                                  ctrl.text,
-                                                  min: 1,
-                                                );
-                                            Navigator.pop(context, v);
-                                          } on FormatException catch (e) {
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
-                                              SnackBar(
-                                                content: Text(e.message),
-                                              ),
-                                            );
-                                          }
-                                        },
-                                        child: Text(
-                                          L10n.tr(context, 'common.send'),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                                if (val != null) {
-                                  onCounter(o, val);
-                                }
-                              },
-                              child: Text(
-                                L10n.tr(context, 'offer.counter_action'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              );
-            }),
-          ],
-        );
-      },
     );
   }
 }
@@ -2648,52 +2879,78 @@ class _SellerRowFixed extends StatelessWidget {
             : (sellerEmail?.trim().isNotEmpty ?? false)
             ? sellerEmail!.trim()
             : fallbackName;
-        return Row(
-          children: [
-            InkWell(
-              onTap: onViewProfile,
-              borderRadius: BorderRadius.circular(28),
-              child: const CircleAvatar(child: Icon(Icons.person)),
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: Theme.of(
+                context,
+              ).colorScheme.outlineVariant.withValues(alpha: 0.45),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: InkWell(
+          ),
+          child: Row(
+            children: [
+              InkWell(
                 onTap: onViewProfile,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      L10n.tr(context, 'seller.label'),
-                      style: Theme.of(context).textTheme.labelMedium,
-                    ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            displayName,
-                            style: Theme.of(context).textTheme.bodyMedium,
-                            overflow: TextOverflow.ellipsis,
+                borderRadius: BorderRadius.circular(28),
+                child: const CircleAvatar(child: Icon(Icons.person)),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: InkWell(
+                  onTap: onViewProfile,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        L10n.tr(context, 'seller.label'),
+                        style: Theme.of(context).textTheme.labelMedium,
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              displayName,
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(fontWeight: FontWeight.w600),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
-                        if (rating != null) ...[
-                          const SizedBox(width: 8),
-                          const Icon(Icons.star, color: Colors.amber, size: 18),
-                          Text(rating.toStringAsFixed(1)),
+                          if (rating != null) ...[
+                            const SizedBox(width: 8),
+                            const Icon(
+                              Icons.star,
+                              color: Colors.amber,
+                              size: 18,
+                            ),
+                            Text(rating.toStringAsFixed(1)),
+                          ],
                         ],
-                      ],
-                    ),
-                  ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        L10n.tr(
+                          context,
+                          'listing.seller_hint',
+                          fallback: 'Réponse via chat',
+                        ),
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            TextButton.icon(
-              onPressed: onContact,
-              icon: const Icon(Icons.chat_bubble_outline),
-              label: Text(L10n.tr(context, 'cta.contact')),
-            ),
-          ],
+              TextButton.icon(
+                onPressed: onContact,
+                icon: const Icon(Icons.chat_bubble_outline),
+                label: Text(L10n.tr(context, 'cta.contact')),
+              ),
+            ],
+          ),
         );
       },
     );

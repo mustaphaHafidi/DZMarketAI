@@ -198,6 +198,10 @@ class ProductService {
     bool allowStopdesk = true,
     int stockQuantity = 1,
     double? costPrice,
+    String moderationStatus = 'approved',
+    String? moderationReason,
+    List<String>? moderationLabels,
+    double? moderationScore,
   }) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) {
@@ -265,6 +269,18 @@ class ProductService {
     final safeWidth = widthCm;
     final safeLength = lengthCm;
     final safeAllowStopdesk = allowStopdesk;
+    final safeModerationStatus = InputSanitizer.sanitizeText(
+      moderationStatus,
+      maxLength: 20,
+    );
+    final safeModerationReason = InputSanitizer.sanitizeOptionalText(
+      moderationReason,
+      maxLength: 300,
+    );
+    final safeModerationLabels = (moderationLabels ?? const [])
+        .map((e) => InputSanitizer.sanitizeText(e, maxLength: 60))
+        .where((e) => e.isNotEmpty)
+        .toList();
 
     final payload = <String, dynamic>{
       'title': safeTitle,
@@ -294,7 +310,13 @@ class ProductService {
       'owner_id': userId,
       'stock_quantity': stockQuantity,
       'cost_price': safeCostPrice,
-      'moderation_status': 'approved',
+      'moderation_status': safeModerationStatus,
+      if (safeModerationReason != null)
+        'moderation_reason': safeModerationReason,
+      if (safeModerationLabels.isNotEmpty)
+        'moderation_labels': safeModerationLabels,
+      if (moderationScore != null) 'moderation_score': moderationScore,
+      'moderation_updated_at': DateTime.now().toIso8601String(),
     };
 
     await _insertProductWithSchemaFallback(payload);

@@ -72,10 +72,146 @@ const consumeRateLimit = async (
   return data === true;
 };
 
+const sleep = (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+const parseRetryAfterMs = (value: string | null) => {
+  if (!value) return null;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds > 0) {
+    return Math.min(seconds * 1000, 15000);
+  }
+  const dateMs = Date.parse(value);
+  if (Number.isFinite(dateMs)) {
+    const delta = dateMs - Date.now();
+    if (delta > 0) return Math.min(delta, 15000);
+  }
+  return null;
+};
+
+const isRetryableStatus = (status: number) =>
+  status === 408 || status === 429 || status >= 500;
+
+type RetryPolicy = {
+  maxAttempts?: number;
+  baseDelayMs?: number;
+  maxDelayMs?: number;
+  timeoutMs?: number;
+};
+
+const fetchWithRetry = async (
+  url: string,
+  init: RequestInit,
+  policy: RetryPolicy = {},
+): Promise<Response> => {
+  const maxAttempts = Math.max(1, policy.maxAttempts ?? 4);
+  const baseDelayMs = Math.max(100, policy.baseDelayMs ?? 350);
+  const maxDelayMs = Math.max(baseDelayMs, policy.maxDelayMs ?? 5000);
+  const timeoutMs = Math.max(1000, policy.timeoutMs ?? 12000);
+
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, { ...init, signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (!isRetryableStatus(response.status) || attempt === maxAttempts) {
+        return response;
+      }
+      const retryAfterMs = parseRetryAfterMs(response.headers.get("Retry-After"));
+      const jitter = Math.floor(Math.random() * 120);
+      const backoff = Math.min(baseDelayMs * 2 ** (attempt - 1), maxDelayMs);
+      await sleep((retryAfterMs ?? backoff) + jitter);
+      continue;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      lastError = error;
+      if (attempt === maxAttempts) break;
+      const jitter = Math.floor(Math.random() * 120);
+      const backoff = Math.min(baseDelayMs * 2 ** (attempt - 1), maxDelayMs);
+      await sleep(backoff + jitter);
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("network_retry_failed");
+};
+
+type CarrierRateWindow = { limit: number; seconds: number };
+
+const carrierRatePolicy = (carrierCode: string): CarrierRateWindow[] => {
+  switch (carrierCode) {
+    case "guepex":
+      return [
+        { limit: 4, seconds: 1 },
+        { limit: 45, seconds: 60 },
+        { limit: 900, seconds: 3600 },
+      ];
+    case "ecotrack":
+      return [
+        { limit: 45, seconds: 60 },
+        { limit: 1300, seconds: 3600 },
+        { limit: 13000, seconds: 86400 },
+      ];
+    case "yalidine":
+      return [
+        { limit: 8, seconds: 1 },
+        { limit: 90, seconds: 60 },
+      ];
+    case "zrexpress":
+      return [
+        { limit: 8, seconds: 1 },
+        { limit: 80, seconds: 60 },
+      ];
+    default:
+      return [
+        { limit: 6, seconds: 1 },
+        { limit: 60, seconds: 60 },
+      ];
+  }
+};
+
+const enforceCarrierRateLimit = async (
+  supabase: ReturnType<typeof createClient>,
+  carrierCode: string,
+  ownerId: string,
+) => {
+  if (!carrierCode || !ownerId) return true;
+  const windows = carrierRatePolicy(carrierCode);
+  for (const window of windows) {
+    const ok = await consumeRateLimit(
+      supabase,
+      `carrier_api:${carrierCode}:${ownerId}:${window.seconds}`,
+      window.limit,
+      window.seconds,
+    );
+    if (!ok) return false;
+  }
+  return true;
+};
+
+const carrierFetch = async (
+  supabase: ReturnType<typeof createClient>,
+  carrierCode: string,
+  ownerId: string,
+  url: string,
+  init: RequestInit,
+) => {
+  const allowed = await enforceCarrierRateLimit(supabase, carrierCode, ownerId);
+  if (!allowed) return null;
+  return fetchWithRetry(url, init);
+};
+
 const loadLabelBytes = async (labelValue: string) => {
   const trimmed = labelValue.trim();
   if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-    const resp = await fetch(trimmed);
+    const resp = await fetchWithRetry(trimmed, { method: "GET" }, {
+      maxAttempts: 3,
+      baseDelayMs: 350,
+      maxDelayMs: 3000,
+      timeoutMs: 15000,
+    });
     if (!resp.ok) throw new Error(`Label download failed: ${resp.status}`);
     return new Uint8Array(await resp.arrayBuffer());
   }
@@ -128,6 +264,11 @@ const ecotrackBaseUrls = () => {
   });
 };
 
+const guepexBaseUrl = () =>
+  (Deno.env.get("GUEPEX_BASE_URL") ?? "https://api.guepex.app")
+    .trim()
+    .replace(/\/+$/, "");
+
 const joinUrl = (base: string, path: string) =>
   `${base.replace(/\/+$/, "")}${path}`;
 
@@ -160,6 +301,7 @@ const parcelRulesForCourier = (normalizedCourier: string): CourierParcelRules =>
   if (normalizedCourier.includes("yalidine")) return genericParcelRules;
   if (normalizedCourier.includes("ecotrack")) return genericParcelRules;
   if (normalizedCourier.includes("zrexpress")) return genericParcelRules;
+  if (normalizedCourier.includes("guepex")) return genericParcelRules;
   return genericParcelRules;
 };
 
@@ -176,6 +318,7 @@ const canonicalCourierCode = (
   if (merged.includes("yalidine")) return "yalidine";
   if (merged.includes("ecotrack")) return "ecotrack";
   if (merged.includes("zrexpress")) return "zrexpress";
+  if (merged.includes("guepex")) return "guepex";
   return idKey || "";
 };
 
@@ -451,6 +594,18 @@ serve(async (req) => {
   const isYalidine = normalizedCourier.includes("yalidine");
   const isEcotrack = normalizedCourier.includes("ecotrack");
   const isZrExpress = normalizedCourier.includes("zrexpress");
+  const isGuepex = normalizedCourier.includes("guepex");
+  const outboundCarrierCode = courierCode ||
+    (isYalidine
+      ? "yalidine"
+      : isEcotrack
+      ? "ecotrack"
+      : isZrExpress
+      ? "zrexpress"
+      : isGuepex
+      ? "guepex"
+      : "generic");
+  const outboundOwnerId = effectiveUserId || userId || "unknown";
 
   let trackingNumber = textValue(order.tracking_number);
   let labelUrl = textValue(order.label_url);
@@ -536,7 +691,12 @@ serve(async (req) => {
         stopdesk_id: isStopdesk ? numberValue(pick(selection, "stopdesk_id"), 0) || null : null,
       },
     ];
-    const resp = await fetch("https://api.yalidine.app/v1/parcels/", {
+    const resp = await carrierFetch(
+      supabaseUser,
+      outboundCarrierCode,
+      outboundOwnerId,
+      "https://api.yalidine.app/v1/parcels/",
+      {
       method: "POST",
       headers: {
         "X-API-ID": textValue(settingsRow?.api_key),
@@ -545,7 +705,11 @@ serve(async (req) => {
         Accept: "application/json",
       },
       body: JSON.stringify(payloadYalidine),
-    });
+      },
+    );
+    if (!resp) {
+      return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
+    }
     if (!resp.ok) {
       return jsonResponse({ ok: false, message: `Yalidine ${resp.status}` }, 502);
     }
@@ -571,7 +735,7 @@ serve(async (req) => {
       const bytes = await loadLabelBytes(textValue(labelValue));
       labelUrl = await uploadLabel(
         supabaseAdmin,
-        userId,
+        outboundOwnerId,
         `yalidine-${orderId}.pdf`,
         bytes,
       );
@@ -582,6 +746,265 @@ serve(async (req) => {
       delivery_fee: first?.delivery_fee,
       taxe_percentage: first?.taxe_percentage,
       taxe_retour: first?.taxe_retour,
+      price: first?.price ?? price,
+      declared_value: first?.declared_value ?? declaredValue,
+      tracking: trackingNumber,
+      label_url: labelUrl,
+    };
+  } else if (isGuepex) {
+    if (!selection) {
+      return jsonResponse({ ok: false, message: "Missing shipment selection" }, 400);
+    }
+    if (!settingsRow.api_secret) {
+      return jsonResponse({ ok: false, message: "Missing courier token" }, 400);
+    }
+
+    const senderWilaya =
+      textValue(pick(selection, "senderWilaya")) ||
+      textValue(pick(selection, "from_wilaya_name")) ||
+      "Alger";
+    const receiverWilaya =
+      textValue(pick(selection, "receiverWilaya")) ||
+      textValue(pick(selection, "to_wilaya_name"));
+    const receiverCommune =
+      textValue(pick(selection, "receiverCommune")) ||
+      textValue(pick(selection, "stopdeskCommune")) ||
+      textValue(pick(selection, "to_commune_name"));
+    const firstName = textValue(pick(selection, "firstname"));
+    const familyName = textValue(pick(selection, "familyname"));
+    const phone =
+      textValue(pick(selection, "phone_main")) ||
+      textValue(pick(selection, "phone"));
+    const address = textValue(pick(selection, "address"));
+    const productList = textValue(pick(selection, "productList"));
+    const price = numberValue(pick(selection, "price"), 0);
+    const weight = intValue(pick(selection, "weight"), 1);
+    const height = intValue(pick(selection, "height"), 0);
+    const width = intValue(pick(selection, "width"), 0);
+    const length = intValue(pick(selection, "length"), 0);
+    const declaredValue = numberValue(pick(selection, "declaredValue"), price);
+    const freeShipping =
+      pick(selection, "freeshipping") === true ||
+      textValue(pick(selection, "freeshipping")).toLowerCase() === "true";
+    const insuranceActive =
+      pick(selection, "insuranceActive") === true ||
+      pick(selection, "insurance_active") === true;
+    const isStopdesk =
+      pick(selection, "deliveryType") === "stopdesk" ||
+      pick(selection, "is_stopdesk") === true;
+    const stopdeskId =
+      textValue(pick(selection, "stopdesk_id")) ||
+      textValue(pick(selection, "stopdeskId"));
+    const hasExchange = pick(selection, "hasExchange") === true;
+    const productToCollect = textValue(
+      pick(selection, "product_to_collect") || pick(selection, "productToCollect"),
+    );
+    const orderRef =
+      textValue(pick(selection, "order_ref")) || `${orderId}`;
+
+    const validationError = validateParcelAgainstRules({
+      rules: parcelRules,
+      weightKg: weight,
+      heightCm: height,
+      widthCm: width,
+      lengthCm: length,
+      declaredValue,
+      insuranceActive,
+    });
+    if (validationError) {
+      return jsonResponse({ ok: false, ...validationError }, 400);
+    }
+
+    if (!senderWilaya || !receiverWilaya || !receiverCommune || !phone || !address) {
+      return jsonResponse({ ok: false, message: "Missing receiver data" }, 400);
+    }
+    if (isStopdesk && !stopdeskId) {
+      return jsonResponse({ ok: false, message: "Missing pickup point" }, 400);
+    }
+
+    const guepexPayload: Record<string, unknown> = {
+      order_id: orderRef,
+      from_wilaya_name: senderWilaya,
+      firstname: firstName,
+      familyname: familyName,
+      contact_phone: phone,
+      address,
+      to_commune_name: receiverCommune,
+      to_wilaya_name: receiverWilaya,
+      product_list: productList,
+      price: Math.round(price),
+      do_insurance: insuranceActive,
+      declared_value: Math.round(declaredValue),
+      height,
+      width,
+      length,
+      weight: Math.round(weight),
+      freeshipping: freeShipping,
+      is_stopdesk: isStopdesk,
+      has_exchange: hasExchange,
+    };
+    if (isStopdesk) {
+      guepexPayload.stopdesk_id = stopdeskId;
+    }
+    if (hasExchange && productToCollect) {
+      guepexPayload.product_to_collect = productToCollect;
+    }
+
+    const url = `${guepexBaseUrl()}/v1/parcels`;
+    const headers = {
+      "X-API-ID": textValue(settingsRow?.api_key),
+      "X-API-TOKEN": textValue(settingsRow?.api_secret),
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    };
+    let resp = await carrierFetch(
+      supabaseUser,
+      outboundCarrierCode,
+      outboundOwnerId,
+      url,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify(guepexPayload),
+      },
+    );
+    if (!resp) {
+      return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
+    }
+    if (!resp.ok) {
+      // Fallback: some carriers accept list payloads for bulk create.
+      resp = await carrierFetch(
+        supabaseUser,
+        outboundCarrierCode,
+        outboundOwnerId,
+        url,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify([guepexPayload]),
+        },
+      );
+      if (!resp) {
+        return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
+      }
+    }
+    if (!resp.ok) {
+      const bodyText = await resp.text();
+      return jsonResponse(
+        { ok: false, message: `Guepex ${resp.status}: ${bodyText}` },
+        502,
+      );
+    }
+
+    const decoded = await resp.json();
+    const data = decoded?.data ?? decoded?.items ?? decoded?.results ?? decoded;
+    const pickGuepexRecord = (value: unknown): Record<string, unknown> | undefined => {
+      if (Array.isArray(value)) {
+        const firstArrayItem = value[0];
+        return firstArrayItem && typeof firstArrayItem === "object"
+          ? firstArrayItem as Record<string, unknown>
+          : undefined;
+      }
+      if (!value || typeof value !== "object") return undefined;
+      const obj = value as Record<string, unknown>;
+      if (
+        "success" in obj ||
+        "tracking" in obj ||
+        "tracking_number" in obj ||
+        "tracking_id" in obj ||
+        "parcel_id" in obj
+      ) {
+        return obj;
+      }
+      const keys = Object.keys(obj);
+      for (const key of keys) {
+        const nested = obj[key];
+        if (!nested || typeof nested !== "object") continue;
+        const nestedObj = nested as Record<string, unknown>;
+        if (
+          "success" in nestedObj ||
+          "tracking" in nestedObj ||
+          "tracking_number" in nestedObj ||
+          "tracking_id" in nestedObj ||
+          "parcel_id" in nestedObj
+        ) {
+          return nestedObj;
+        }
+      }
+      if (keys.length === 1) {
+        const nested = obj[keys[0]];
+        if (nested && typeof nested === "object") {
+          return nested as Record<string, unknown>;
+        }
+      }
+      return undefined;
+    };
+    const first = pickGuepexRecord(data) ?? pickGuepexRecord(decoded);
+    if (!first) {
+      return jsonResponse({ ok: false, message: "Unexpected Guepex response" }, 502);
+    }
+    if (first?.success === false) {
+      return jsonResponse({ ok: false, message: textValue(first?.message) }, 400);
+    }
+
+    trackingNumber = textValue(
+      first?.tracking ?? first?.tracking_number ?? first?.tracking_id ?? first?.parcel_id,
+    );
+    let labelValue =
+      first?.label ?? first?.label_url ?? first?.label_pdf ?? first?.labels;
+    if (!trackingNumber) {
+      const lookupUrl = `${guepexBaseUrl()}/v1/parcels?order_id=${encodeURIComponent(orderRef)}&page_size=1`;
+      const lookupResp = await carrierFetch(
+        supabaseUser,
+        outboundCarrierCode,
+        outboundOwnerId,
+        lookupUrl,
+        { method: "GET", headers },
+      );
+      if (!lookupResp) {
+        return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
+      }
+      if (lookupResp.ok) {
+        const lookupDecoded = await lookupResp.json();
+        const lookupData =
+          lookupDecoded?.data ??
+          lookupDecoded?.items ??
+          lookupDecoded?.results ??
+          lookupDecoded;
+        const lookupFirst = pickGuepexRecord(lookupData) ?? pickGuepexRecord(lookupDecoded);
+        if (lookupFirst) {
+          trackingNumber = textValue(
+            lookupFirst?.tracking ??
+              lookupFirst?.tracking_number ??
+              lookupFirst?.tracking_id ??
+              lookupFirst?.parcel_id,
+          );
+          if (!labelValue) {
+            labelValue =
+              lookupFirst?.label ??
+              lookupFirst?.label_url ??
+              lookupFirst?.label_pdf ??
+              lookupFirst?.labels;
+          }
+        }
+      }
+    }
+    if (!trackingNumber) {
+      return jsonResponse({ ok: false, message: "Tracking missing" }, 500);
+    }
+    if (labelValue) {
+      const bytes = await loadLabelBytes(textValue(labelValue));
+      labelUrl = await uploadLabel(
+        supabaseAdmin,
+        outboundOwnerId,
+        `guepex-${orderId}.pdf`,
+        bytes,
+      );
+    } else {
+      labelUrl = "";
+    }
+
+    summary = {
       price: first?.price ?? price,
       declared_value: first?.declared_value ?? declaredValue,
       tracking: trackingNumber,
@@ -639,13 +1062,22 @@ serve(async (req) => {
       let errorBody = "";
       for (const base of baseUrls) {
         const url = `${joinUrl(base, "/api/v1/create/order")}?${params.toString()}`;
-        resp = await fetch(url, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${textValue(settingsRow?.api_key)}`,
-            Accept: "application/json",
+        resp = await carrierFetch(
+          supabaseUser,
+          outboundCarrierCode,
+          outboundOwnerId,
+          url,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${textValue(settingsRow?.api_key)}`,
+              Accept: "application/json",
+            },
           },
-        });
+        );
+        if (!resp) {
+          return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
+        }
         if (resp.ok) break;
         try {
           errorBody = await resp.text();
@@ -676,12 +1108,22 @@ serve(async (req) => {
       let labelError = "";
       for (const base of labelUrls) {
         const labelUrlCandidate = `${joinUrl(base, "/api/v1/get/order/label")}?tracking=${encodeURIComponent(trackingNumber)}`;
-        labelResp = await fetch(labelUrlCandidate, {
-          headers: {
-            Authorization: `Bearer ${textValue(settingsRow?.api_key)}`,
-            Accept: "application/pdf,application/json",
+        labelResp = await carrierFetch(
+          supabaseUser,
+          outboundCarrierCode,
+          outboundOwnerId,
+          labelUrlCandidate,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${textValue(settingsRow?.api_key)}`,
+              Accept: "application/pdf,application/json",
+            },
           },
-        });
+        );
+        if (!labelResp) {
+          return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
+        }
         if (labelResp.ok) break;
         try {
           labelError = await labelResp.text();
@@ -717,7 +1159,7 @@ serve(async (req) => {
     if (bytes) {
       labelUrl = await uploadLabel(
         supabaseAdmin,
-        userId,
+        outboundOwnerId,
         `ecotrack-${trackingNumber}.pdf`,
         bytes,
       );
@@ -978,11 +1420,20 @@ serve(async (req) => {
       payloadZr.hubId = hubId;
     }
 
-    const resp = await fetch("https://api.zrexpress.app/api/v1/parcels", {
-      method: "POST",
-      headers,
-      body: JSON.stringify(payloadZr),
-    });
+    const resp = await carrierFetch(
+      supabaseUser,
+      outboundCarrierCode,
+      outboundOwnerId,
+      "https://api.zrexpress.app/api/v1/parcels",
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payloadZr),
+      },
+    );
+    if (!resp) {
+      return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
+    }
     if (!resp.ok) {
       let bodyText = "";
       try {
@@ -1017,10 +1468,16 @@ serve(async (req) => {
         parcel?.code,
     );
     if (!trackingNumber && createdId) {
-      const detailResp = await fetch(
+      const detailResp = await carrierFetch(
+        supabaseUser,
+        outboundCarrierCode,
+        outboundOwnerId,
         `https://api.zrexpress.app/api/v1/parcels/${createdId}`,
-        { headers },
+        { method: "GET", headers },
       );
+      if (!detailResp) {
+        return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
+      }
       if (detailResp.ok) {
         const detail = await detailResp.json();
         trackingNumber = textValue(
@@ -1036,7 +1493,10 @@ serve(async (req) => {
       return jsonResponse({ ok: false, message: "Tracking missing" }, 500);
     }
 
-    const labelResp = await fetch(
+    const labelResp = await carrierFetch(
+      supabaseUser,
+      outboundCarrierCode,
+      outboundOwnerId,
       "https://api.zrexpress.app/api/v1/parcels/labels/individual/pdf",
       {
         method: "POST",
@@ -1044,6 +1504,9 @@ serve(async (req) => {
         body: JSON.stringify({ trackingNumbers: [trackingNumber] }),
       },
     );
+    if (!labelResp) {
+      return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
+    }
     if (!labelResp.ok) {
       const bodyText = await labelResp.text();
       return jsonResponse(
@@ -1172,7 +1635,10 @@ serve(async (req) => {
       labelLink = parsed.labelUrl;
     }
     if (!labelBytes && !labelLink) {
-      const htmlResp = await fetch(
+      const htmlResp = await carrierFetch(
+        supabaseUser,
+        outboundCarrierCode,
+        outboundOwnerId,
         "https://api.zrexpress.app/api/v1/parcels/labels/individual",
         {
           method: "POST",
@@ -1180,6 +1646,9 @@ serve(async (req) => {
           body: JSON.stringify({ trackingNumbers: [trackingNumber] }),
         },
       );
+      if (!htmlResp) {
+        return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
+      }
       if (htmlResp.ok) {
         const parsed = await parseLabelResponse(htmlResp);
         labelBytes = parsed.labelBytes;
@@ -1198,7 +1667,7 @@ serve(async (req) => {
     if (labelBytes) {
       labelUrl = await uploadLabel(
         supabaseAdmin,
-        userId,
+        outboundOwnerId,
         `zrexpress-${trackingNumber}.pdf`,
         labelBytes,
       );
