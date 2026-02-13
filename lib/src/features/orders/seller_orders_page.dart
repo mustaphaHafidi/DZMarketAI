@@ -4,6 +4,7 @@ import 'package:dzmarket/src/models/order.dart';
 import 'package:dzmarket/src/services/buyer_return_service.dart';
 import 'package:dzmarket/src/services/order_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/utils/delivery_mode_utils.dart';
 import 'package:dzmarket/src/widgets/refresh_controller.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:flutter/material.dart';
@@ -114,6 +115,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
                         }
                       },
                       onDelete: () => _confirmDelete(context, order.id),
+                      onManageArrangedDelivery: () =>
+                          context.push('/order/${order.id}/chat'),
                       canCancel: order.status == OrderStatus.pending &&
                           (order.labelUrl == null || order.labelUrl!.isEmpty),
                     );
@@ -184,6 +187,7 @@ class _SellerOrderCard extends StatelessWidget {
     required this.onGenerateLabel,
     required this.onOpenLabel,
     required this.onDelete,
+    required this.onManageArrangedDelivery,
     required this.canCancel,
   });
 
@@ -193,10 +197,15 @@ class _SellerOrderCard extends StatelessWidget {
   final VoidCallback onGenerateLabel;
   final void Function(String labelUrl) onOpenLabel;
   final VoidCallback onDelete;
+  final VoidCallback onManageArrangedDelivery;
   final bool canCancel;
 
   @override
   Widget build(BuildContext context) {
+    final isArrangedOrder = isArrangedDelivery(
+      deliveryMethod: order.deliveryMethod,
+      shippingOption: order.shippingOption,
+    );
     final priceText = order.productPrice != null
         ? currency.format(order.productPrice)
         : L10n.tr(
@@ -303,12 +312,20 @@ class _SellerOrderCard extends StatelessWidget {
                           label:
                               Text(L10n.tr(context, 'seller_orders.open_label')),
                         )
-                      else
+                      else if (!isArrangedOrder)
                         FilledButton.icon(
                           onPressed: onGenerateLabel,
                           icon: const Icon(Icons.local_shipping_outlined),
                           label: Text(
                               L10n.tr(context, 'seller_orders.generate_label')),
+                        )
+                      else
+                        OutlinedButton.icon(
+                          onPressed: onManageArrangedDelivery,
+                          icon: const Icon(Icons.chat_bubble_outline),
+                          label: Text(
+                            L10n.tr(context, 'seller_orders.arranged_delivery'),
+                          ),
                         ),
                     ],
                   ),

@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cached_network_image_platform_interface/cached_network_image_platform_interface.dart';
 import 'package:dzmarket/src/models/product.dart';
 import 'package:dzmarket/src/services/i18n.dart';
+import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -103,9 +104,11 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                     children: [
                       CircleAvatar(
                         radius: 28,
-                        backgroundColor:
-                            Theme.of(context).colorScheme.secondaryContainer,
-                        backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
+                        backgroundColor: Theme.of(
+                          context,
+                        ).colorScheme.secondaryContainer,
+                        backgroundImage:
+                            (avatarUrl != null && avatarUrl.isNotEmpty)
                             ? CachedNetworkImageProvider(
                                 avatarUrl,
                                 imageRenderMethodForWeb:
@@ -126,7 +129,8 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
                             const SizedBox(height: 4),
-                            if ((_profile?['wilaya'] as String?)?.isNotEmpty == true)
+                            if ((_profile?['wilaya'] as String?)?.isNotEmpty ==
+                                true)
                               Text(_profile!['wilaya'].toString()),
                           ],
                         ),
@@ -145,13 +149,13 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                     ..._products.map(
                       (p) => Card(
                         child: ListTile(
-                          leading: _ProductThumb(url: p.imageUrls.isNotEmpty
-                              ? p.imageUrls.first
-                              : p.imageUrl),
-                          title: Text(p.title),
-                          subtitle: Text(
-                            currency.format(p.price),
+                          leading: _ProductThumb(
+                            url: p.imageUrls.isNotEmpty
+                                ? p.imageUrls.first
+                                : p.imageUrl,
                           ),
+                          title: Text(p.title),
+                          subtitle: Text(currency.format(p.price)),
                           onTap: () => context.push('/product/${p.id}'),
                         ),
                       ),
@@ -173,6 +177,7 @@ class _ProductThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final imagePrefs = NetworkPreferencesService.instance;
     if (url == null || url!.isEmpty) {
       return const CircleAvatar(child: Icon(Icons.image_not_supported));
     }
@@ -183,6 +188,10 @@ class _ProductThumb extends StatelessWidget {
         width: 48,
         height: 48,
         fit: BoxFit.cover,
+        memCacheWidth: imagePrefs.listImageMemCacheWidth,
+        memCacheHeight: imagePrefs.listImageMemCacheHeight,
+        fadeInDuration: imagePrefs.imageFadeInDuration,
+        fadeOutDuration: imagePrefs.imageFadeOutDuration,
         imageRenderMethodForWeb: ImageRenderMethodForWeb.HtmlImage,
         errorWidget: (_, __, ___) =>
             const CircleAvatar(child: Icon(Icons.image_not_supported)),

@@ -13,8 +13,25 @@ const jsonResponse = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+const textValue = (value: unknown) =>
+  typeof value === "string" ? value.trim() : value == null ? "" : String(value);
+
 const normalizeCourier = (value: string) =>
   value.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+const normalizeDeliveryToken = (value: unknown) =>
+  textValue(value).toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+const isArrangedDelivery = (value: unknown) => {
+  const token = normalizeDeliveryToken(value);
+  if (!token) return false;
+  return token === "pickup" ||
+    token === "livraisonaconvenir" ||
+    token === "deliveryarranged" ||
+    token === "arrangeddelivery" ||
+    token === "remiseenmainpropre" ||
+    token === "mainpropre";
+};
 
 const returnMarkers = [
   "retour",
@@ -513,6 +530,91 @@ const syncBuyerReturns = async (
   return metrics;
 };
 
+const sendLabelReminders = async (
+  supabase: ReturnType<typeof createClient>,
+): Promise<number> => {
+  const now = Date.now();
+  const olderThan = new Date(now - 3 * 24 * 60 * 60 * 1000).toISOString();
+  const newerThan = new Date(now - 2 * 24 * 60 * 60 * 1000).toISOString();
+  const maxOrders = parseEnvInt("LABEL_REMINDER_MAX_ORDERS", 500, 20, 5000);
+
+  const { data: orders, error: ordersError } = await supabase
+    .from("orders")
+    .select("id,status,label_url,tracking_number,created_at,delivery_method,shipping_option")
+    .in("status", ["pending", "paid"])
+    .gte("created_at", olderThan)
+    .lt("created_at", newerThan)
+    .order("created_at", { ascending: true })
+    .limit(maxOrders);
+  if (ordersError) throw ordersError;
+
+  const orderList = Array.isArray(orders) ? orders : [];
+  if (orderList.length === 0) return 0;
+
+  const orderIds = orderList
+    .map((order) => Number(order?.id))
+    .filter((id) => Number.isFinite(id)) as number[];
+  if (orderIds.length === 0) return 0;
+
+  const { data: shipments, error: shipmentsError } = await supabase
+    .from("shipments")
+    .select("order_id,label_url,tracking_number")
+    .in("order_id", orderIds);
+  if (shipmentsError) throw shipmentsError;
+
+  const shipmentByOrder = new Map<
+    number,
+    { label_url: string | null; tracking_number: string | null }
+  >();
+  for (const row of shipments ?? []) {
+    const id = Number(row?.order_id);
+    if (!Number.isFinite(id)) continue;
+    shipmentByOrder.set(id, {
+      label_url: row?.label_url ?? null,
+      tracking_number: row?.tracking_number ?? null,
+    });
+  }
+
+  let sent = 0;
+  for (const order of orderList) {
+    const orderId = Number(order?.id);
+    if (!Number.isFinite(orderId)) continue;
+    if (
+      isArrangedDelivery(order?.delivery_method) ||
+      isArrangedDelivery(order?.shipping_option)
+    ) {
+      continue;
+    }
+
+    const hasOrderLabel =
+      textValue(order?.label_url) !== "" ||
+      textValue(order?.tracking_number) !== "";
+    const shipment = shipmentByOrder.get(orderId);
+    const hasShipmentLabel = shipment != null &&
+      (textValue(shipment.label_url) !== "" ||
+        textValue(shipment.tracking_number) !== "");
+    if (hasOrderLabel || hasShipmentLabel) continue;
+
+    try {
+      await supabase.rpc("post_order_event", {
+        p_order_id: orderId,
+        p_event: "order_label_reminder",
+        p_payload: {
+          i18n_key: "order.system.label_reminder",
+          status: "pending",
+          status_i18n: "order.status.pending",
+        },
+        p_dedupe_key: `order:${orderId}:label_reminder_48h`,
+      });
+      sent += 1;
+    } catch (_) {
+      // Do not fail runner on one reminder event.
+    }
+  }
+
+  return sent;
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") {
@@ -580,8 +682,14 @@ serve(async (req) => {
   }
 
   let cancelled = 0;
+  let labelRemindersSent = 0;
   let returnsMetrics = emptyReturnsMetrics();
   let purgedErrors = 0;
+  try {
+    labelRemindersSent = await sendLabelReminders(supabase);
+  } catch (_) {
+    labelRemindersSent = 0;
+  }
   try {
     const { data: cancelledCount } = await supabase.rpc("cancel_stale_orders", {});
     if (typeof cancelledCount === "number") cancelled = cancelledCount;
@@ -612,6 +720,7 @@ serve(async (req) => {
     ok: true,
     processed: results.length,
     create_shipment_failures: createShipmentFailures,
+    label_reminders_sent: labelRemindersSent,
     cancelled,
     returns: returnsMetrics.returns_inserted,
     returns_metrics: returnsMetrics,

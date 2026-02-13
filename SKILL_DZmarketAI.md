@@ -4,7 +4,8 @@ description: Reference synthetique et prescriptive pour DZMarketAI (Flutter + Su
 ---
 
 1. Vision & perimetre
-   - Marketplace algerienne C2C/B2C. Roles: buyer, seller, admin (service_role backend uniquement).
+   - Marketplace algerienne C2C/B2C. Roles actifs: buyer, seller, superadmin.
+   - Compatibilite legacy: un role DB `admin` est mappe vers `superadmin` dans l'app.
    - Flux clefs: Auth -> Profil -> Parcourir -> Favoris -> Contacter vendeur -> Commande (COD) -> Livraison/suivi -> Avis.
    - Objectifs: mobile-first, pas d'exposition de coordonnees perso (chat in-app), perfs/realtime fiables, soft-delete partout.
 
@@ -97,7 +98,9 @@ description: Reference synthetique et prescriptive pour DZMarketAI (Flutter + Su
    - Integration: chat_flow, order_system_messages, shipping_validation_* (yallidine/ecotrack/zrexpress).
 
 14. CI/CD
-   - GitHub Actions: lint + tests.
+   - GitHub Actions:
+     * `ci.yml` -> flutter analyze + flutter test.
+     * `job-runner-cron.yml` -> run quotidien des verifications de fiabilite + alertes GitHub issues.
    - Fichiers volumineux: verifier Git LFS ou ignore.
    - Secrets via env/CI only.
 
@@ -123,3 +126,7 @@ description: Reference synthetique et prescriptive pour DZMarketAI (Flutter + Su
      * Run dev: `flutter run -d <device> --flavor dev -t lib/main.dart --dart-define=APP_ENV=dev --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=... --no-dds --no-enable-impeller`
      * Tests: `flutter test`, `flutter test integration_test/shipping_validation_zrexpress_test.dart`
      * SQL: appliquer `supabase.sql` via SQL editor (sections idempotentes).
+
+## Next Updates
+See NEXT_UPDATES.md for the current prioritized roadmap and release checklist.
+

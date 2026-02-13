@@ -5,6 +5,7 @@ import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:dzmarket/src/services/rate_limiter.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ProductService {
   static final Map<String, _ProductCacheEntry> _cache = {};
@@ -222,7 +223,7 @@ class ProductService {
     final safeImageUrl = InputSanitizer.sanitizeUrl(imageUrl);
     final safeImageUrls = InputSanitizer.sanitizeUrlList(
       imageUrls,
-      maxItems: 10,
+      maxItems: 5,
     );
     final safeCategoryId = InputSanitizer.sanitizeOptionalText(
       categoryId,
@@ -265,39 +266,63 @@ class ProductService {
     final safeLength = lengthCm;
     final safeAllowStopdesk = allowStopdesk;
 
-    await RateLimiter.instance.run(
-      'products.insert',
-      () => supabase.from(SupabaseTables.products).insert({
-        'title': safeTitle,
-        'price': price,
-        'description': safeDescription,
-        'image_url': safeImageUrl,
-        'image_urls': safeImageUrls,
-        'category_id': safeCategoryId != null
-            ? int.tryParse(safeCategoryId) ?? safeCategoryId
-            : null,
-        'condition': safeCondition,
-        'brand': safeBrand,
-        'size': safeSize,
-        'color': safeColor,
-        'location_wilaya': safeWilaya,
-        'location_daira': safeDaira,
-        'delivery_options': safeDelivery,
-        'shipping_free': shippingFree,
-        'exchange_after_delivery': exchangeAfterDelivery,
-        'insurance_active': insuranceActive,
-        'declared_value': safeDeclaredValue,
-        'weight_kg': safeWeight,
-        'height_cm': safeHeight,
-        'width_cm': safeWidth,
-        'length_cm': safeLength,
-        'allow_stopdesk': safeAllowStopdesk,
-        'owner_id': userId,
-        'stock_quantity': stockQuantity,
-        'cost_price': safeCostPrice,
-        'moderation_status': 'approved',
-      }),
-    );
+    final payload = <String, dynamic>{
+      'title': safeTitle,
+      'price': price,
+      'description': safeDescription,
+      'image_url': safeImageUrl,
+      'image_urls': safeImageUrls,
+      'category_id': safeCategoryId != null
+          ? int.tryParse(safeCategoryId) ?? safeCategoryId
+          : null,
+      'condition': safeCondition,
+      'brand': safeBrand,
+      'size': safeSize,
+      'color': safeColor,
+      'location_wilaya': safeWilaya,
+      'location_daira': safeDaira,
+      'delivery_options': safeDelivery,
+      'shipping_free': shippingFree,
+      'exchange_after_delivery': exchangeAfterDelivery,
+      'insurance_active': insuranceActive,
+      'declared_value': safeDeclaredValue,
+      'weight_kg': safeWeight,
+      'height_cm': safeHeight,
+      'width_cm': safeWidth,
+      'length_cm': safeLength,
+      'allow_stopdesk': safeAllowStopdesk,
+      'owner_id': userId,
+      'stock_quantity': stockQuantity,
+      'cost_price': safeCostPrice,
+      'moderation_status': 'approved',
+    };
+
+    await _insertProductWithSchemaFallback(payload);
+  }
+
+  Future<void> _insertProductWithSchemaFallback(
+    Map<String, dynamic> payload,
+  ) async {
+    final mutable = Map<String, dynamic>.from(payload);
+    while (true) {
+      try {
+        await RateLimiter.instance.run(
+          'products.insert',
+          () => supabase.from(SupabaseTables.products).insert(mutable),
+        );
+        return;
+      } on PostgrestException catch (e) {
+        if (e.code != '42703') rethrow;
+        final missing = _extractMissingColumn(e.message);
+        if (missing == null || !mutable.containsKey(missing)) rethrow;
+        mutable.remove(missing);
+      }
+    }
+  }
+
+  String? _extractMissingColumn(String message) {
+    final match = RegExp(r'column \"([^\"]+)\"').firstMatch(message);
+    return match?.group(1);
   }
 
   Future<void> updateProduct({
@@ -384,7 +409,7 @@ class ProductService {
     if (imageUrls != null) {
       payload['image_urls'] = InputSanitizer.sanitizeUrlList(
         imageUrls,
-        maxItems: 10,
+        maxItems: 5,
       );
     }
     if (safeCategoryId != null) {

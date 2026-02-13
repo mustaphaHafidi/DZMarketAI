@@ -43,3 +43,7 @@ Accounts:
 
 ## Notes
 - The message flow is now correct after the dedupe index fix.
+
+## Next Updates
+See NEXT_UPDATES.md for the current prioritized roadmap and release checklist.
+

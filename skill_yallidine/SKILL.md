@@ -71,3 +71,7 @@ Source consultee via portail dev connecte : https://yalidine.app/app/dev/docs/ap
 - Generation de bordereau OK cote vendeur.
 - Message systeme order_created apres create_order.
 - Message systeme order_shipped apres bordereau.
+
+## Next Updates
+See NEXT_UPDATES.md for the current prioritized roadmap and release checklist.
+

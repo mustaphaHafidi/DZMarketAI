@@ -10,17 +10,29 @@ class ConnectivityService {
   static final ConnectivityService instance = ConnectivityService._();
 
   final ValueNotifier<bool> isOnline = ValueNotifier<bool>(true);
+  final ValueNotifier<Set<ConnectivityResult>> activeConnections =
+      ValueNotifier<Set<ConnectivityResult>>({
+        ConnectivityResult.none,
+      });
   StreamSubscription<dynamic>? _subscription;
 
   Future<void> start() async {
     try {
       final initial = await Connectivity().checkConnectivity();
-      isOnline.value = _isOnlineFromResult(initial);
-      _subscription = Connectivity()
-          .onConnectivityChanged
-          .listen((event) => isOnline.value = _isOnlineFromResult(event));
+      final initialResults = _resultsFromEvent(initial);
+      activeConnections.value = initialResults;
+      isOnline.value = _isOnlineFromResults(initialResults);
+      _subscription = Connectivity().onConnectivityChanged.listen((event) {
+        final results = _resultsFromEvent(event);
+        activeConnections.value = results;
+        isOnline.value = _isOnlineFromResults(results);
+      });
     } catch (error, stackTrace) {
-      AppLogger.warn('Connectivity init failed', error: error, stackTrace: stackTrace);
+      AppLogger.warn(
+        'Connectivity init failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
       isOnline.value = true;
     }
   }
@@ -30,13 +42,18 @@ class ConnectivityService {
     _subscription = null;
   }
 
-  bool _isOnlineFromResult(dynamic result) {
+  Set<ConnectivityResult> _resultsFromEvent(dynamic result) {
     if (result is ConnectivityResult) {
-      return result != ConnectivityResult.none;
+      return {result};
     }
     if (result is List<ConnectivityResult>) {
-      return result.any((r) => r != ConnectivityResult.none);
+      if (result.isEmpty) return {ConnectivityResult.none};
+      return result.toSet();
     }
-    return true;
+    return {ConnectivityResult.none};
+  }
+
+  bool _isOnlineFromResults(Set<ConnectivityResult> results) {
+    return results.any((r) => r != ConnectivityResult.none);
   }
 }

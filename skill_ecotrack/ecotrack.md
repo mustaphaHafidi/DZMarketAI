@@ -67,3 +67,7 @@
    - Confirm exact base URL per environment.
    - Confirm if Authorization header is mandatory for all endpoints.
    - Confirm mapping wilaya/commune naming for stopdesk validation.
+
+## Next Updates
+See NEXT_UPDATES.md for the current prioritized roadmap and release checklist.
+

@@ -48,10 +48,17 @@
 ## 5) Monitoring / alertes
 - Grafana + Loki + Prometheus.
 - Alertes: latence API, erreurs 5xx, CPU > 70%, disque > 70%.
+- Workflow GitHub `job-runner-cron.yml` pour verifier quotidiennement:
+  - echec API courier,
+  - anomalies returns=0 avec streak,
+  - erreurs job-runner.
 
 ## 6) Checklist avant lancement
 - Tests de charge auth + upload + chat.
 - Verifier backups et restauration.
 - Verifier RLS et policies Storage.
 - Activer WAF Cloudflare.
+
+## Next Updates
+See NEXT_UPDATES.md for the current prioritized roadmap and release checklist.
 

@@ -1,33 +1,66 @@
-# Project Configuration (DZMarketAI)
+# DZMarketAI Configuration
 
-## Packages & Flavors
-- Android namespace/applicationId: `com.dzmarket.app`
-- Flavors: `dev` (suffix .dev, name DZMarketAI Dev), `staging` (suffix .staging, name DZMarketAI Staging), `prod` (no suffix, name DZMarketAI)
-- Google Maps placeholder: `GOOGLE_MAPS_API_KEY`
+This file documents runtime configuration without exposing secrets.
 
-## Firebase
-- Prod google-services.json present for package `com.dzmarket.app`
-- Dev/staging google-services.json: placeholders (need real files)
-- Web config: `web/config.json` with dev/staging/prod; values currently REPLACE_ME placeholders with __PLACEHOLDER__ flags.
+## Android Flavors
+- Base package: `com.dzmarket.app`
+- `dev`: app id suffix `.dev`, app name `DZMarketAI Dev`
+- `staging`: app id suffix `.staging`, app name `DZMarketAI Staging`
+- `prod`: no suffix, app name `DZMarketAI`
 
-## Supabase
-- SUPABASE_URL: https://maumwzbvzbcamvlivqpe.supabase.co
-- SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hdW13emJ2emJjYW12bGl2cXBlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ3MDk5ODAsImV4cCI6MjA4MDI4NTk4MH0.fSrV_4iVQcmykf2hkk_CPN8w8E3iEsbiM8m5Cxxjd7Q
+Source:
+- `android/app/build.gradle.kts`
+
+## Required Dart Defines
+- `APP_ENV` (`dev`, `staging`, `prod`)
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+
+If missing, app startup fails by design (`main.dart` guard).
 
 ## Run Commands
-- Dev:    flutter run --flavor dev -t lib/main.dart --dart-define=APP_ENV=dev --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...
-- Stg:    flutter run --flavor staging -t lib/main.dart --dart-define=APP_ENV=staging --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...
-- Prod:   flutter run --flavor prod -t lib/main.dart --dart-define=APP_ENV=prod --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...
-- Web:    flutter run -d chrome --dart-define=APP_ENV=dev (or staging/prod)
-- Doctor: .\scripts\doctor_firebase.ps1
 
-## Files of Interest
-- android/app/src/prod/google-services.json (real for com.dzmarket.app)
-- android/app/src/dev|staging/google-services.json (placeholders)
-- web/config.json (placeholders)
-- lib/src/config/firebase_web_config_loader.dart (rootBundle loader, returns null on placeholders)
-- scripts/doctor_firebase.ps1 (checks placeholder/missing)
+### Dev
+```bash
+flutter run --flavor dev -t lib/main.dart \
+  --dart-define=APP_ENV=dev \
+  --dart-define=SUPABASE_URL=<YOUR_SUPABASE_URL> \
+  --dart-define=SUPABASE_ANON_KEY=<YOUR_SUPABASE_ANON_KEY>
+```
 
-## Known Issues/Notes
-- App crashes at startup if SUPABASE_URL/ANON_KEY not supplied via dart-define.
-- To run without Firebase, need real google-services.json per flavor or adjust plugin; currently prod only is real.
+### Staging
+```bash
+flutter run --flavor staging -t lib/main.dart \
+  --dart-define=APP_ENV=staging \
+  --dart-define=SUPABASE_URL=<YOUR_SUPABASE_URL> \
+  --dart-define=SUPABASE_ANON_KEY=<YOUR_SUPABASE_ANON_KEY>
+```
+
+### Prod
+```bash
+flutter run --flavor prod -t lib/main.dart \
+  --dart-define=APP_ENV=prod \
+  --dart-define=SUPABASE_URL=<YOUR_SUPABASE_URL> \
+  --dart-define=SUPABASE_ANON_KEY=<YOUR_SUPABASE_ANON_KEY>
+```
+
+### USB (debug stability)
+```bash
+flutter run -d <DEVICE_ID> --flavor dev -t lib/main.dart \
+  --dart-define=APP_ENV=dev \
+  --dart-define=SUPABASE_URL=<YOUR_SUPABASE_URL> \
+  --dart-define=SUPABASE_ANON_KEY=<YOUR_SUPABASE_ANON_KEY> \
+  --no-dds
+```
+
+## Firebase Notes
+- Keep per-flavor `google-services.json` valid.
+- Keep Web config values outside Git when possible.
+
+## Security
+- Never commit `SUPABASE_SERVICE_ROLE_KEY`.
+- Keep transporter tokens server-side only (Edge Functions or encrypted DB fields).
+
+## Next Updates
+See NEXT_UPDATES.md for the current prioritized roadmap and release checklist.
+

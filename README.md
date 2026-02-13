@@ -1,177 +1,96 @@
-# Supabase CLI
+# DZMarketAI
 
-[![Coverage Status](https://coveralls.io/repos/github/supabase/cli/badge.svg?branch=main)](https://coveralls.io/github/supabase/cli?branch=main) [![Bitbucket Pipelines](https://img.shields.io/bitbucket/pipelines/supabase-cli/setup-cli/master?style=flat-square&label=Bitbucket%20Canary)](https://bitbucket.org/supabase-cli/setup-cli/pipelines) [![Gitlab Pipeline Status](https://img.shields.io/gitlab/pipeline-status/sweatybridge%2Fsetup-cli?label=Gitlab%20Canary)
-](https://gitlab.com/sweatybridge/setup-cli/-/pipelines)
+DZMarketAI is a Flutter marketplace app for Algeria with Supabase backend.
 
-[Supabase](https://supabase.io) is an open source Firebase alternative. We're building the features of Firebase using enterprise-grade open source tools.
+## Product Scope
+- Mobile-first buyer/seller flows.
+- Built-in chat per listing thread.
+- Multi-courier shipping (Yalidine, Ecotrack, ZR Express).
+- Superadmin moderation and app-error monitoring.
 
-This repository contains all the functionality for Supabase CLI.
+## Active Roles
+- `buyer`
+- `seller`
+- `superadmin`
 
-- [x] Running Supabase locally
-- [x] Managing database migrations
-- [x] Creating and deploying Supabase Functions
-- [x] Generating types directly from your database schema
-- [x] Making authenticated HTTP requests to [Management API](https://supabase.com/docs/reference/api/introduction)
+Note:
+- Legacy `admin` values are treated as `superadmin` in the app model.
 
-## Getting started
+## Main Workflows
+- Auth and profile setup (FR/AR).
+- Browse -> filters -> product detail.
+- Offer or buy now.
+- Order creation with stock reservation.
+- Seller label generation and shipment tracking.
+- One canonical chat thread per `buyer + seller + product`.
 
-### Install the CLI
+## Tech Stack
+- Flutter (Android, iOS, Web, Desktop targets).
+- Supabase (Postgres, RLS, Storage, Realtime, Edge Functions).
+- Firebase Analytics/Crashlytics (client telemetry).
 
-Available via [NPM](https://www.npmjs.com) as dev dependency. To install:
+## Repo Layout
+- `lib/` app source.
+- `assets/i18n/` FR/AR translations.
+- `supabase.sql` main DB schema/bootstrap (idempotent sections).
+- `supabase/migrations/` incremental SQL migrations.
+- `supabase/functions/` Edge Functions.
+- `.github/workflows/` CI + cron ops workflow.
+- `infra/` self-host plan and infra notes.
 
-```bash
-npm i supabase --save-dev
-```
-
-When installing with yarn 4, you need to disable experimental fetch with the following nodejs config.
-
-```
-NODE_OPTIONS=--no-experimental-fetch yarn add supabase
-```
-
-> **Note**
-For Bun versions below v1.0.17, you must add `supabase` as a [trusted dependency](https://bun.sh/guides/install/trusted) before running `bun add -D supabase`.
-
-<details>
-  <summary><b>macOS</b></summary>
-
-  Available via [Homebrew](https://brew.sh). To install:
-
-  ```sh
-  brew install supabase/tap/supabase
-  ```
-
-  To install the beta release channel:
-  
-  ```sh
-  brew install supabase/tap/supabase-beta
-  brew link --overwrite supabase-beta
-  ```
-  
-  To upgrade:
-
-  ```sh
-  brew upgrade supabase
-  ```
-</details>
-
-<details>
-  <summary><b>Windows</b></summary>
-
-  Available via [Scoop](https://scoop.sh). To install:
-
-  ```powershell
-  scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
-  scoop install supabase
-  ```
-
-  To upgrade:
-
-  ```powershell
-  scoop update supabase
-  ```
-</details>
-
-<details>
-  <summary><b>Linux</b></summary>
-
-  Available via [Homebrew](https://brew.sh) and Linux packages.
-
-  #### via Homebrew
-
-  To install:
-
-  ```sh
-  brew install supabase/tap/supabase
-  ```
-
-  To upgrade:
-
-  ```sh
-  brew upgrade supabase
-  ```
-
-  #### via Linux packages
-
-  Linux packages are provided in [Releases](https://github.com/supabase/cli/releases). To install, download the `.apk`/`.deb`/`.rpm`/`.pkg.tar.zst` file depending on your package manager and run the respective commands.
-
-  ```sh
-  sudo apk add --allow-untrusted <...>.apk
-  ```
-
-  ```sh
-  sudo dpkg -i <...>.deb
-  ```
-
-  ```sh
-  sudo rpm -i <...>.rpm
-  ```
-
-  ```sh
-  sudo pacman -U <...>.pkg.tar.zst
-  ```
-</details>
-
-<details>
-  <summary><b>Other Platforms</b></summary>
-
-  You can also install the CLI via [go modules](https://go.dev/ref/mod#go-install) without the help of package managers.
-
-  ```sh
-  go install github.com/supabase/cli@latest
-  ```
-
-  Add a symlink to the binary in `$PATH` for easier access:
-
-  ```sh
-  ln -s "$(go env GOPATH)/bin/cli" /usr/bin/supabase
-  ```
-
-  This works on other non-standard Linux distros.
-</details>
-
-<details>
-  <summary><b>Community Maintained Packages</b></summary>
-
-  Available via [pkgx](https://pkgx.sh/). Package script [here](https://github.com/pkgxdev/pantry/blob/main/projects/supabase.com/cli/package.yml).
-  To install in your working directory:
-
-  ```bash
-  pkgx install supabase
-  ```
-
-  Available via [Nixpkgs](https://nixos.org/). Package script [here](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/tools/supabase-cli/default.nix).
-</details>
-
-### Run the CLI
+## Local Run
+1. Install Flutter and dependencies.
+2. Run:
 
 ```bash
-supabase bootstrap
+flutter pub get
+flutter run --flavor dev -t lib/main.dart \
+  --dart-define=APP_ENV=dev \
+  --dart-define=SUPABASE_URL=<YOUR_SUPABASE_URL> \
+  --dart-define=SUPABASE_ANON_KEY=<YOUR_SUPABASE_ANON_KEY>
 ```
 
-Or using npx:
+USB device example:
 
 ```bash
-npx supabase bootstrap
+flutter run -d <DEVICE_ID> --flavor dev -t lib/main.dart \
+  --dart-define=APP_ENV=dev \
+  --dart-define=SUPABASE_URL=<YOUR_SUPABASE_URL> \
+  --dart-define=SUPABASE_ANON_KEY=<YOUR_SUPABASE_ANON_KEY> \
+  --no-dds
 ```
 
-The bootstrap command will guide you through the process of setting up a Supabase project using one of the [starter](https://github.com/supabase-community/supabase-samples/blob/main/samples.json) templates.
+## Database and Backend
+- Apply base schema from `supabase.sql`.
+- Apply new migrations from `supabase/migrations/`.
+- Deploy required functions:
 
-## Docs
-
-Command & config reference can be found [here](https://supabase.com/docs/reference/cli/about).
-
-## Breaking changes
-
-We follow semantic versioning for changes that directly impact CLI commands, flags, and configurations.
-
-However, due to dependencies on other service images, we cannot guarantee that schema migrations, seed.sql, and generated types will always work for the same CLI major version. If you need such guarantees, we encourage you to pin a specific version of CLI in package.json.
-
-## Developing
-
-To run from source:
-
-```sh
-# Go >= 1.22
-go run . help
+```bash
+supabase functions deploy create_shipment
+supabase functions deploy job-runner
+supabase functions deploy validate-courier
+supabase functions deploy courier-locations
 ```
+
+## Jobs and Operations
+- `ci.yml`: analyze + tests on push/PR.
+- `job-runner-cron.yml`: daily `03:00 UTC` background checks.
+  - Runs `job-runner` function.
+  - Opens/updates GitHub issues on failures or anomalies.
+
+## Key Docs
+- `E2E_MANUAL_TEST_CASES.md` full manual QA matrix (FR).
+- `E2E_MANUAL_TEST_CASES_AR.md` Arabic QA matrix (same IDs).
+- `SKILL_DZmarketAI.md` current architecture and rules.
+- `Skill_DB.md` DB and Supabase reference.
+- `PLAN_1M_USERS.md` scale plan.
+- `infra/SELF_HOST_SUPABASE_PLAN.md` self-host rollout path.
+
+## Security Notes
+- Do not commit secrets.
+- Keep `SUPABASE_SERVICE_ROLE_KEY` only in secure env.
+- Keep label files private (`labels` bucket).
+
+## Next Updates
+See NEXT_UPDATES.md for the current prioritized roadmap and release checklist.
+

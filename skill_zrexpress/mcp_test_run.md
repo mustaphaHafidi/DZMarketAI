@@ -63,3 +63,7 @@ Validate the ZR Express order flow after the latest updates:
   - Shipping fields locked to product values (read-only).
   - Seller generated bordereau without phone validation errors.
   - Chat shows 2 system messages (created + expediee) and label button for seller.
+
+## Next Updates
+See NEXT_UPDATES.md for the current prioritized roadmap and release checklist.
+

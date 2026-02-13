@@ -96,3 +96,7 @@ GET /api/v1/delivery-pricing/rates
 ## 10) Notes securite
 - Ne jamais loguer X-Api-Key / X-Tenant.
 - Secrets chiffres via enc_key; appels sortants uniquement via service_role.
+
+## Next Updates
+See NEXT_UPDATES.md for the current prioritized roadmap and release checklist.
+

@@ -10,6 +10,7 @@ import 'package:dzmarket/src/services/firebase_service.dart';
 import 'package:dzmarket/src/services/crashlytics_service.dart';
 import 'package:dzmarket/src/services/app_error_service.dart';
 import 'package:dzmarket/src/services/app_logger.dart';
+import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -17,6 +18,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await LocaleService.instance.init();
+  await NetworkPreferencesService.instance.init();
 
   final config = await AppConfig.load();
   if (config.supabaseUrl.isEmpty || config.supabaseAnonKey.isEmpty) {
@@ -27,8 +29,9 @@ Future<void> main() async {
   // Log in debug to confirm the runtime config actually matches the project (helps diagnose "invalid API key").
   assert(() {
     debugPrint('Supabase URL: ${config.supabaseUrl}');
-    final prefixLen =
-        config.supabaseAnonKey.length < 8 ? config.supabaseAnonKey.length : 8;
+    final prefixLen = config.supabaseAnonKey.length < 8
+        ? config.supabaseAnonKey.length
+        : 8;
     debugPrint(
       'Supabase anon key (prefix): ${config.supabaseAnonKey.substring(0, prefixLen)}...',
     );
@@ -43,6 +46,9 @@ Future<void> main() async {
   await FirebaseService.instance.init(config);
   await TranslationService.instance.load();
   await ConnectivityService.instance.start();
+  NetworkPreferencesService.instance.bindToConnectivity(
+    ConnectivityService.instance,
+  );
   final messengerKey = GlobalKey<ScaffoldMessengerState>();
   NotificationService.instance.start(messengerKey);
 

@@ -49,3 +49,7 @@ DROP INDEX IF EXISTS public.messages_dedupe_uniq;
 CREATE UNIQUE INDEX IF NOT EXISTS messages_dedupe_uniq
   ON public.messages(conversation_id, dedupe_key);
 ```
+
+## Next Updates
+See NEXT_UPDATES.md for the current prioritized roadmap and release checklist.
+

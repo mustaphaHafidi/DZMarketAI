@@ -1,7 +1,6 @@
 import 'package:dzmarket/src/router.dart';
 import 'package:dzmarket/src/theme.dart';
 import 'package:dzmarket/src/widgets/app_state_scope.dart';
-import 'package:dzmarket/src/widgets/connectivity_banner.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:dzmarket/src/services/i18n.dart';
@@ -73,15 +72,7 @@ class DZMarketApp extends StatelessWidget {
                   notifier: SessionController.instance,
                   child: Directionality(
                     textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
-                    child: Stack(
-                      children: [
-                        child ?? const SizedBox.shrink(),
-                        const Align(
-                          alignment: Alignment.topCenter,
-                          child: ConnectivityBanner(),
-                        ),
-                      ],
-                    ),
+                    child: child ?? const SizedBox.shrink(),
                   ),
                 );
               },

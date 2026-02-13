@@ -99,7 +99,7 @@ class _MyListingsPageState extends State<MyListingsPage> {
                 );
               }
               final p = limited[index - 1];
-              final raw = p.imageUrls.isNotEmpty ? p.imageUrls.first : p.imageUrl;
+              final raw = p.firstDisplayableImageUrl();
               final img = InputSanitizer.safeUrl(raw);
               final stockLabel = L10n.tr(
                 context,

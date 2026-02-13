@@ -1,49 +1,44 @@
-# Supabase self-host - DZMarket (App/Edge server)
+# Supabase Self-Host (App/Edge Node)
 
-## Prerequis
-- Docker + Docker Compose
-- Acces aux 3 serveurs:
-  - DB (PostgreSQL)
-  - App/Edge (ce serveur)
-  - Storage (MinIO)
+This folder documents deployment on the App/Edge server when DB and object storage are external.
 
-## 1) Recuperer la config officielle (recommended)
-Dans un dossier temporaire:
+## Prerequisites
+- Docker + Docker Compose plugin.
+- External PostgreSQL server ready.
+- External MinIO/S3-compatible storage ready.
+
+## 1) Get official stack baseline
 
 ```bash
 git clone https://github.com/supabase/supabase.git
 cd supabase/docker
-```
-
-Copier le docker-compose et les fichiers de config dans `infra/supabase/` :
-
-```bash
 cp docker-compose.yml ../../infra/supabase/docker-compose.prod.yml
 cp .env.example ../../infra/supabase/.env.example
 ```
 
-## 2) Configurer `.env` (exemple)
-Dupliquer `.env.example` en `.env` puis remplir:
-
-- `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
-- `JWT_SECRET`, `ANON_KEY`, `SERVICE_ROLE_KEY`
-- `SITE_URL`, `API_EXTERNAL_URL`, `SUPABASE_PUBLIC_URL`
+## 2) Configure `.env`
+Create `.env` from `.env.example` and fill:
+- Postgres: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
+- Auth keys: `JWT_SECRET`, `ANON_KEY`, `SERVICE_ROLE_KEY`
+- Public URLs: `SITE_URL`, `API_EXTERNAL_URL`, `SUPABASE_PUBLIC_URL`
 - Storage: `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`
 
-## 3) Lancer
-Depuis `infra/supabase/` :
+## 3) Start services
 
 ```bash
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-## 4) Ports recommandés
-- 8000 (Kong) -> api.app.dz
-- 3000 (Studio) -> studio.app.dz (optionnel)
-- 5432 (DB) -> interne uniquement
+## 4) Recommended exposure
+- `api.app.dz` -> Kong/API (HTTPS)
+- `studio.app.dz` -> Studio (optional, protected)
+- DB and MinIO admin ports must stay private/internal.
 
-## 5) Notes
-- La DB est externe (Serveur A).
-- MinIO est externe (Serveur C).
-- Mettre les secrets dans un gestionnaire ou fichier .env non versionne.
+## 5) Post-start checklist
+- Apply schema: `supabase.sql` + migrations.
+- Deploy functions: `create_shipment`, `job-runner`, `courier-locations`, `validate-courier`.
+- Verify cron workflow secrets (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`) in GitHub.
+
+## Next Updates
+See NEXT_UPDATES.md for the current prioritized roadmap and release checklist.
 

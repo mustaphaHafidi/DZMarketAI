@@ -54,3 +54,6 @@ Create a new product listing end-to-end and capture any UX/data issues.
 ## Follow-up
 - Verify stock persistence in DB (products.stock_quantity) for this listing.
 - Re-test creation once stock mapping is fixed.
+## Next Updates
+See NEXT_UPDATES.md for the current prioritized roadmap and release checklist.
+

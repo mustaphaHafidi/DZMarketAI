@@ -62,3 +62,7 @@ Erreurs à surveiller
 - 403 Forbidden : `order.seller_id` ≠ JWT ou auth absent.
 - 429 Rate limit exceeded : retester après 1 minute.
 - 502/400 Yalidine : problème côté Yalidine (crédentials invalides, commune/wilaya incorrectes, poids/prix hors plage).
+
+## Next Updates
+See NEXT_UPDATES.md for the current prioritized roadmap and release checklist.
+

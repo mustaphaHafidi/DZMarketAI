@@ -96,7 +96,7 @@ class _SignUpPageState extends State<SignUpPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   SvgPicture.asset(
-                    'assets/branding/dzmarket_logo.svg',
+                    'assets/branding/dzmarket_logo_ui.svg',
                     height: 72,
                     width: 72,
                     fit: BoxFit.contain,

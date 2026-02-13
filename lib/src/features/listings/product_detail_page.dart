@@ -19,6 +19,7 @@ import 'package:dzmarket/src/services/phone_formatter.dart';
 import 'package:dzmarket/src/services/rate_limiter.dart';
 import 'package:dzmarket/src/services/review_service.dart';
 import 'package:dzmarket/src/services/location_data_service.dart';
+import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:flutter/material.dart';
@@ -317,12 +318,44 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     return value.contains('Ã') || value.contains('Â') || value.contains('�');
   }
 
-  Future<String?> _chooseDeliveryMode() async {
-    String method = 'cod';
+  Future<String?> _chooseDeliveryMode({
+    required List<Map<String, dynamic>> enabledCouriers,
+  }) async {
+    String method = 'pickup';
     final deliveryOptions = _product?.deliveryOptions ?? const [];
-    final allowCod = deliveryOptions.isEmpty || deliveryOptions.contains('cod');
-    final allowPickup = deliveryOptions.contains('pickup');
-    if (!allowCod && allowPickup) {
+    final sellerHasEnabledCouriers = enabledCouriers.isNotEmpty;
+    final allowCod =
+        sellerHasEnabledCouriers &&
+        (deliveryOptions.isEmpty || deliveryOptions.contains('cod'));
+    final courierNames = <String>[];
+    for (final row in enabledCouriers) {
+      final name = row['courier_name']?.toString().trim() ?? '';
+      if (name.isEmpty || courierNames.contains(name)) continue;
+      courierNames.add(name);
+    }
+    final codSubtitle = allowCod && courierNames.isNotEmpty
+        ? L10n.tr(
+            context,
+            'checkout.delivery_cod_desc_with_couriers',
+            params: {'couriers': courierNames.join(', ')},
+          )
+        : (!sellerHasEnabledCouriers
+              ? L10n.tr(context, 'checkout.no_courier_enabled')
+              : L10n.tr(context, 'checkout.delivery_cod_desc'));
+    // "Arranged delivery" fallback is always possible.
+    const allowPickup = true;
+    if (allowCod) {
+      method = 'cod';
+    }
+    if (deliveryOptions.isNotEmpty) {
+      final preferred = deliveryOptions.first.toLowerCase();
+      if (preferred == 'pickup' && allowPickup) {
+        method = 'pickup';
+      } else if (preferred == 'cod' && allowCod) {
+        method = 'cod';
+      }
+    }
+    if (!allowCod) {
       method = 'pickup';
     }
     return showModalBottomSheet<String>(
@@ -331,39 +364,49 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              L10n.tr(context, 'checkout.choose_delivery_mode'),
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 12),
-            RadioListTile<String>(
-              value: 'pickup',
-              groupValue: method,
-              onChanged: allowPickup ? (v) => method = v ?? method : null,
-              title: Text(L10n.tr(context, 'checkout.delivery_pickup_title')),
-              subtitle: Text(L10n.tr(context, 'checkout.delivery_pickup_desc')),
-              enabled: allowPickup,
-            ),
-            RadioListTile<String>(
-              value: 'cod',
-              groupValue: method,
-              onChanged: allowCod ? (v) => method = v ?? 'cod' : null,
-              title: Text(L10n.tr(context, 'checkout.delivery_cod_title')),
-              subtitle: Text(L10n.tr(context, 'checkout.delivery_cod_desc')),
-              enabled: allowCod,
-            ),
-            const SizedBox(height: 8),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, method),
-              child: Text(L10n.tr(context, 'common.continue')),
-            ),
-          ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                L10n.tr(context, 'checkout.choose_delivery_mode'),
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 12),
+              RadioListTile<String>(
+                value: 'pickup',
+                groupValue: method,
+                onChanged: (v) {
+                  setSheetState(() => method = v ?? method);
+                },
+                title: Text(L10n.tr(context, 'checkout.delivery_pickup_title')),
+                subtitle: Text(
+                  L10n.tr(context, 'checkout.delivery_pickup_desc'),
+                ),
+                enabled: true,
+              ),
+              RadioListTile<String>(
+                value: 'cod',
+                groupValue: method,
+                onChanged: allowCod
+                    ? (v) {
+                        setSheetState(() => method = v ?? 'cod');
+                      }
+                    : null,
+                title: Text(L10n.tr(context, 'checkout.delivery_cod_title')),
+                subtitle: Text(codSubtitle),
+                enabled: allowCod,
+              ),
+              const SizedBox(height: 8),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, method),
+                child: Text(L10n.tr(context, 'common.continue')),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -381,7 +424,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       return;
     }
 
-    final deliveryChoice = await _chooseDeliveryMode();
+    final shippingService = ShippingService();
+    final sellerId = _product!.ownerId;
+    final enabledCouriers = await shippingService.fetchEnabledCouriersForSeller(
+      sellerId,
+    );
+    final deliveryChoice = await _chooseDeliveryMode(
+      enabledCouriers: enabledCouriers,
+    );
     if (deliveryChoice == null) return;
     if (!mounted) return;
     if (deliveryChoice == 'pickup') {
@@ -391,9 +441,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           _product?.price;
       final confirmed = await _confirmCheckoutSummary(
         price: agreed ?? 0,
-        shippingOption: 'pickup',
+        shippingOption: L10n.tr(context, 'checkout.delivery_pickup_title'),
         paymentMethod: 'cod',
-        deliveryMode: 'pickup',
+        deliveryMode: L10n.tr(context, 'checkout.delivery_pickup_title'),
         shippingCost: 0,
         etaLabel: L10n.tr(context, 'checkout.eta_pickup'),
       );
@@ -417,8 +467,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       return;
     }
 
-    final shippingService = ShippingService();
-    final sellerId = _product!.ownerId;
     final agreed =
         _acceptedOffer?.agreedAmount ??
         _acceptedOffer?.amount ??
@@ -427,6 +475,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       sellerId,
       price: agreed ?? 0,
       productTitle: _product?.title ?? 'Article',
+      preloadedEnabledCouriers: enabledCouriers,
     );
     if (selection == null) return;
     if (!mounted) return;
@@ -542,12 +591,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     String sellerId, {
     required double price,
     required String productTitle,
+    List<Map<String, dynamic>>? preloadedEnabledCouriers,
   }) async {
     final shippingService = ShippingService();
     final lastCheckout = await _loadLastCheckout();
-    final enabled = await shippingService.fetchEnabledCouriersForSeller(
-      sellerId,
-    );
+    final enabled =
+        preloadedEnabledCouriers ??
+        await shippingService.fetchEnabledCouriersForSeller(sellerId);
     if (enabled.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -789,9 +839,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
     const fallbackImage =
         'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80';
-    final heroImages = _product!.imageUrls.isNotEmpty
-        ? _product!.imageUrls
-        : [_product!.imageUrl ?? fallbackImage];
+    final heroImages = _product!.displayableImageUrls(fallback: fallbackImage);
     final agreedPrice =
         _acceptedOffer?.agreedAmount ??
         _acceptedOffer?.amount ??
@@ -1128,9 +1176,6 @@ class _CheckoutAddressSheet extends StatefulWidget {
 }
 
 class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
-  static const int _minWeightKg = 1;
-  static const int _maxWeightKg = 60;
-
   final _formKey = GlobalKey<FormState>();
   final _shippingService = ShippingService();
 
@@ -1160,6 +1205,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
   bool _isEcotrack = false;
   bool _isZrExpress = false;
   bool _supportsStopdeskList = true;
+  late CourierParcelRules _parcelRules;
   double? _estimatedFee;
   Map<String, dynamic>? _fees;
 
@@ -1189,6 +1235,11 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
       courierId: widget.courierId,
       courierName: widget.courierName,
     );
+    _parcelRules = ShippingService.parcelRulesFor(
+      courierId: widget.courierId,
+      courierName: widget.courierName,
+    );
+    _loadParcelRules();
     final product = widget.product;
     _freeShipping = product?.shippingFree ?? false;
     _exchangeAfterDelivery = product?.exchangeAfterDelivery ?? false;
@@ -1261,6 +1312,21 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
         _loadWilayas();
       }
     });
+  }
+
+  Future<void> _loadParcelRules() async {
+    try {
+      final remoteRules = await ShippingService.parcelRulesForAsync(
+        courierId: widget.courierId,
+        courierName: widget.courierName,
+      );
+      if (!mounted) return;
+      setState(() {
+        _parcelRules = remoteRules;
+      });
+    } catch (_) {
+      // Keep default fallback rules if DB/rules fetch is unavailable.
+    }
   }
 
   @override
@@ -1543,16 +1609,177 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
   bool _isPhoneValid(String value) =>
       RegExp(r'^(05|06|07)\d{8}$').hasMatch(value.trim());
 
-  bool _isWeightValid(String value) {
-    final parsed = int.tryParse(value.trim());
-    if (parsed == null) return false;
-    return parsed >= _minWeightKg && parsed <= _maxWeightKg;
+  CourierParcelValidation? _parcelValidation() {
+    final weight = int.tryParse(_weightCtrl.text.trim());
+    final height = int.tryParse(_heightCtrl.text.trim());
+    final width = int.tryParse(_widthCtrl.text.trim());
+    final length = int.tryParse(_lengthCtrl.text.trim());
+    final declaredValue = double.tryParse(_declaredValueCtrl.text.trim());
+    return ShippingService.validateParcel(
+      rules: _parcelRules,
+      weightKg: weight,
+      heightCm: height,
+      widthCm: width,
+      lengthCm: length,
+      declaredValue: declaredValue,
+      insuranceActive: _insuranceActive,
+    );
   }
 
-  bool _isDimensionValid(String value) {
-    final parsed = int.tryParse(value.trim());
-    if (parsed == null) return false;
-    return parsed >= 0 && parsed <= 200;
+  String _parcelValidationMessage(CourierParcelValidation validation) {
+    switch (validation.code) {
+      case 'weight_range':
+        return L10n.tr(
+          context,
+          'checkout.error_weight_range',
+          params: validation.params,
+        );
+      case 'height_max':
+        return L10n.tr(
+          context,
+          'checkout.error_height_max',
+          params: validation.params,
+          fallback: L10n.tr(context, 'checkout.error_height_invalid'),
+        );
+      case 'width_max':
+        return L10n.tr(
+          context,
+          'checkout.error_width_max',
+          params: validation.params,
+          fallback: L10n.tr(context, 'checkout.error_width_invalid'),
+        );
+      case 'length_max':
+        return L10n.tr(
+          context,
+          'checkout.error_length_max',
+          params: validation.params,
+          fallback: L10n.tr(context, 'checkout.error_length_invalid'),
+        );
+      case 'volume_max':
+        return L10n.tr(
+          context,
+          'checkout.error_volume_max',
+          params: validation.params,
+          fallback: L10n.tr(context, 'checkout.error_length_invalid'),
+        );
+      case 'declared_value_max':
+        return L10n.tr(
+          context,
+          'checkout.error_declared_value_max',
+          params: validation.params,
+          fallback: L10n.tr(context, 'checkout.error_price_required'),
+        );
+      default:
+        return L10n.tr(context, 'common.error');
+    }
+  }
+
+  Widget _buildParcelRulesCard(BuildContext context) {
+    final chips = <Widget>[
+      _buildRuleChip(
+        context,
+        L10n.tr(
+          context,
+          'checkout.parcel_limits_weight',
+          params: {
+            'min': _parcelRules.minWeightKg.toString(),
+            'max': _parcelRules.maxWeightKg.toString(),
+          },
+        ),
+      ),
+      _buildRuleChip(
+        context,
+        L10n.tr(
+          context,
+          'checkout.parcel_limits_dimensions',
+          params: {
+            'h': _parcelRules.maxHeightCm.toString(),
+            'w': _parcelRules.maxWidthCm.toString(),
+            'l': _parcelRules.maxLengthCm.toString(),
+          },
+        ),
+      ),
+      _buildRuleChip(
+        context,
+        L10n.tr(
+          context,
+          'checkout.parcel_limits_volume',
+          params: {'max': _parcelRules.maxVolumeCm3.toString()},
+        ),
+      ),
+      _buildRuleChip(
+        context,
+        L10n.tr(
+          context,
+          'checkout.parcel_limits_overweight',
+          params: {'kg': _parcelRules.overweightThresholdKg.toString()},
+        ),
+      ),
+      _buildRuleChip(
+        context,
+        L10n.tr(
+          context,
+          'checkout.parcel_limits_declared_value',
+          params: {'max': _parcelRules.maxDeclaredValue.toStringAsFixed(0)},
+        ),
+      ),
+    ];
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 6, bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Theme.of(context).dividerColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            L10n.tr(context, 'checkout.parcel_limits_title'),
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 8),
+          Wrap(spacing: 8, runSpacing: 8, children: chips),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRuleChip(BuildContext context, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(label, style: Theme.of(context).textTheme.bodySmall),
+    );
+  }
+
+  void _openParcelLimitsSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: _buildParcelRulesCard(sheetContext),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildParcelRulesCta(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: TextButton.icon(
+        onPressed: _openParcelLimitsSheet,
+        icon: const Icon(Icons.info_outline),
+        label: Text(L10n.tr(context, 'checkout.view_limits')),
+      ),
+    );
   }
 
   bool get _canSubmit {
@@ -1573,12 +1800,9 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
         _addressCtrl.text.trim().isNotEmpty &&
         _productListCtrl.text.trim().isNotEmpty &&
         _priceCtrl.text.trim().isNotEmpty &&
-        _isWeightValid(_weightCtrl.text) &&
-        _isDimensionValid(_heightCtrl.text) &&
-        _isDimensionValid(_widthCtrl.text) &&
-        _isDimensionValid(_lengthCtrl.text) &&
         _acceptTerms;
     if (!baseValid) return false;
+    if (_parcelValidation() != null) return false;
     if (_deliveryType == 'stopdesk') {
       if (_supportsStopdeskList) {
         return _stopdeskId != null && _stopdeskCommuneName != null;
@@ -1598,6 +1822,15 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
     if (price == null || weight == null) return;
     final declaredValue =
         double.tryParse(_declaredValueCtrl.text.trim()) ?? price.toDouble();
+    final validation = _parcelValidation();
+    if (validation != null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_parcelValidationMessage(validation))),
+        );
+      }
+      return;
+    }
 
     final phoneMain = _phoneCtrl.text.trim();
     final phone2 = _phone2Ctrl.text.trim();
@@ -1695,6 +1928,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                     _updateEstimatedFee();
                   },
                 ),
+              _buildParcelRulesCta(context),
               const SizedBox(height: 8),
               Text(
                 L10n.tr(context, 'checkout.sender'),
@@ -2069,7 +2303,8 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                       params: {
                         'value':
                             (int.tryParse(_weightCtrl.text.trim()) != null &&
-                                int.parse(_weightCtrl.text.trim()) > 5)
+                                int.parse(_weightCtrl.text.trim()) >
+                                    _parcelRules.overweightThresholdKg)
                             ? L10n.tr(context, 'common.yes')
                             : L10n.tr(context, 'common.no'),
                       },
@@ -2140,6 +2375,7 @@ class _ImageCarouselState extends State<_ImageCarousel> {
 
   @override
   Widget build(BuildContext context) {
+    final imagePrefs = NetworkPreferencesService.instance;
     return Stack(
       children: [
         PageView.builder(
@@ -2149,6 +2385,10 @@ class _ImageCarouselState extends State<_ImageCarousel> {
           itemBuilder: (context, i) => CachedNetworkImage(
             imageUrl: widget.images[i],
             fit: BoxFit.cover,
+            memCacheWidth: imagePrefs.detailImageMemCacheWidth,
+            memCacheHeight: imagePrefs.detailImageMemCacheHeight,
+            fadeInDuration: imagePrefs.imageFadeInDuration,
+            fadeOutDuration: imagePrefs.imageFadeOutDuration,
             imageRenderMethodForWeb: ImageRenderMethodForWeb.HtmlImage,
             errorWidget: (_, __, ___) => const ColoredBox(
               color: Colors.black12,

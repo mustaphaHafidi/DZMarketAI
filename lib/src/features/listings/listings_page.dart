@@ -5,9 +5,12 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cached_network_image_platform_interface/cached_network_image_platform_interface.dart';
 import 'package:dzmarket/src/features/listings/add_listing_page.dart';
 import 'package:dzmarket/src/models/product.dart';
+import 'package:dzmarket/src/services/app_error_service.dart';
 import 'package:dzmarket/src/services/category_service.dart';
+import 'package:dzmarket/src/services/connectivity_service.dart';
 import 'package:dzmarket/src/services/favorite_service.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
+import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:dzmarket/src/services/product_service.dart';
 import 'package:dzmarket/src/services/saved_search_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
@@ -46,6 +49,9 @@ class _ListingsPageState extends State<ListingsPage> {
   int _page = 0;
   static const int _pageSize = 30;
   String? _activeQueryKey;
+  String? _loadError;
+  bool _loadErrorOffline = false;
+  String? _lastLoggedLoadError;
 
   List<Map<String, String>> _categories = const [
     {'id': 'any'},
@@ -77,7 +83,12 @@ class _ListingsPageState extends State<ListingsPage> {
   }
 
   Future<void> _loadCategories() async {
-    final data = await CategoryService().fetchCategories();
+    List<Map<String, String>> data = const [];
+    try {
+      data = await CategoryService().fetchCategories();
+    } catch (error, stackTrace) {
+      _logLoadError(error, stackTrace, contextTag: 'listings.load_categories');
+    }
     if (!mounted) return;
     setState(() {
       _categories = [
@@ -224,14 +235,6 @@ class _ListingsPageState extends State<ListingsPage> {
               },
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8, left: 12, right: 12),
-            child: Text(
-              L10n.tr(context, 'legal.footer'),
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.labelSmall,
-            ),
-          ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -297,15 +300,21 @@ class _ListingsPageState extends State<ListingsPage> {
     _activeQueryKey = key;
     final min = _safeMinPrice();
     final max = _safeMaxPrice();
+    final previousProducts = _products;
+    final wasEmpty = previousProducts.isEmpty;
     setState(() {
       _loading = true;
-      _initialLoad = _products.isEmpty;
+      _initialLoad = wasEmpty;
       _page = 0;
       _hasMore = true;
-      _products = const [];
+      _loadError = null;
+      _loadErrorOffline = false;
     });
 
     List<Product> results = const [];
+    var failed = false;
+    var offline = false;
+    var timedOut = false;
     try {
       results = await ProductService()
           .fetchProducts(
@@ -325,34 +334,48 @@ class _ListingsPageState extends State<ListingsPage> {
           )
           .timeout(const Duration(seconds: 10));
     } on TimeoutException {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(L10n.tr(context, 'common.refresh_timeout'))),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              L10n.tr(
-                context,
-                'common.error_with',
-                params: {'error': e.toString()},
-              ),
-            ),
-          ),
-        );
-      }
+      failed = true;
+      timedOut = true;
+      offline = !ConnectivityService.instance.isOnline.value;
+    } catch (error, stackTrace) {
+      failed = true;
+      offline = _looksOfflineError(error);
+      _logLoadError(error, stackTrace);
     }
 
     if (!mounted || _activeQueryKey != key) return;
+    if (failed) {
+      final friendlyMessage = timedOut
+          ? L10n.tr(context, 'common.refresh_timeout')
+          : L10n.tr(
+              context,
+              offline ? 'common.offline_action' : 'listing.load_error_friendly',
+              fallback: L10n.tr(context, 'common.offline_action'),
+            );
+      if (!wasEmpty) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(friendlyMessage)));
+      }
+      setState(() {
+        _products = previousProducts;
+        _loading = false;
+        _initialLoad = false;
+        _hasMore = previousProducts.length == _pageSize;
+        _loadError = wasEmpty ? friendlyMessage : null;
+        _loadErrorOffline = offline;
+      });
+      return;
+    }
+
     setState(() {
       _products = results;
       _loading = false;
       _initialLoad = false;
       _hasMore = results.length == _pageSize;
       _page = 1;
+      _loadError = null;
+      _loadErrorOffline = false;
     });
   }
 
@@ -401,6 +424,32 @@ class _ListingsPageState extends State<ListingsPage> {
     _searchDebounce = Timer(const Duration(milliseconds: 350), _refresh);
   }
 
+  bool _looksOfflineError(Object? error) {
+    final msg = error?.toString().toLowerCase() ?? '';
+    if (msg.isEmpty) return !ConnectivityService.instance.isOnline.value;
+    return msg.contains('socketexception') ||
+        msg.contains('failed host lookup') ||
+        msg.contains('dns') ||
+        msg.contains('network') ||
+        msg.contains('connection closed') ||
+        msg.contains('timed out') ||
+        msg.contains('clientexception') ||
+        msg.contains('no address associated with hostname');
+  }
+
+  void _logLoadError(
+    Object error,
+    StackTrace? stackTrace, {
+    String contextTag = 'listings.refresh',
+  }) {
+    final signature = '$contextTag|${error.toString()}';
+    if (_lastLoggedLoadError == signature) return;
+    _lastLoggedLoadError = signature;
+    unawaited(
+      AppErrorService.instance.logError(error, stackTrace, context: contextTag),
+    );
+  }
+
   Widget _buildProductsGrid(
     Set<String> favorites,
     String? userId,
@@ -413,6 +462,31 @@ class _ListingsPageState extends State<ListingsPage> {
       return const _GridSkeleton();
     }
     if (filtered.isEmpty) {
+      if (_loadError != null) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _loadErrorOffline
+                      ? Icons.wifi_off_rounded
+                      : Icons.error_outline,
+                  size: 28,
+                ),
+                const SizedBox(height: 10),
+                Text(_loadError!, textAlign: TextAlign.center),
+                const SizedBox(height: 12),
+                OutlinedButton(
+                  onPressed: _refresh,
+                  child: Text(L10n.tr(context, 'common.retry')),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
       return Center(child: Text(L10n.tr(context, 'listing.empty')));
     }
     final showLoader = _loading && _products.isNotEmpty;
@@ -1139,9 +1213,9 @@ class _ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     const fallbackImage =
         'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80';
-    final firstImage = product.imageUrls.isNotEmpty
-        ? product.imageUrls.first
-        : (product.imageUrl ?? fallbackImage);
+    final firstImage = product.firstDisplayableImageUrl(fallback: fallbackImage) ??
+        fallbackImage;
+    final imagePrefs = NetworkPreferencesService.instance;
     return InkWell(
       onTap: () => context.push('/product/${product.id}'),
       borderRadius: BorderRadius.circular(16),
@@ -1172,6 +1246,10 @@ class _ProductCard extends StatelessWidget {
                       child: CachedNetworkImage(
                         imageUrl: firstImage,
                         fit: BoxFit.cover,
+                        memCacheWidth: imagePrefs.listImageMemCacheWidth,
+                        memCacheHeight: imagePrefs.listImageMemCacheHeight,
+                        fadeInDuration: imagePrefs.imageFadeInDuration,
+                        fadeOutDuration: imagePrefs.imageFadeOutDuration,
                         imageRenderMethodForWeb:
                             ImageRenderMethodForWeb.HtmlImage,
                         errorWidget: (_, __, ___) => Container(

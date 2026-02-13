@@ -4,6 +4,7 @@ import 'package:dzmarket/src/services/chat_repository.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/rate_limiter.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/utils/delivery_mode_utils.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -176,9 +177,11 @@ class OrderService {
     } catch (_) {
       // Do not block order creation if chat event fails.
     }
-    final isPickup = (safeDeliveryMethod ?? '').toLowerCase() == 'pickup' ||
-        (safeShippingOption ?? '').toLowerCase() == 'pickup';
-    if (isPickup) {
+    final isArranged = isArrangedDelivery(
+      deliveryMethod: safeDeliveryMethod,
+      shippingOption: safeShippingOption,
+    );
+    if (isArranged) {
       try {
         await ChatRepository().postOrderSystemMessage(
           orderId: orderId,

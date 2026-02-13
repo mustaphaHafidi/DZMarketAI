@@ -20,6 +20,7 @@ Il ne contient aucun secret, uniquement la structure, les dependances et les eta
 ## 4.1 Auth / Profiles
 - profiles (id = auth.users.id)
 - Champs: email, full_name, avatar_url, role, is_seller, phone, wilaya, daira, ...
+- Roles metier actifs: buyer, seller, superadmin (legacy `admin` mappe vers superadmin cote app).
 - Trigger auto-create profile apres insertion user.
 
 ## 4.2 Listings / Catalog
@@ -102,6 +103,13 @@ Traitement asynchrone (jobs queue) + suivi transporteurs.
   4) publie un message systeme de suivi dans la chat room,
   5) met a jour shipments.status + shipments.events (timeline transporteur).
 
+## 6.7 Monitoring cron (GitHub Actions)
+- Workflow: `.github/workflows/job-runner-cron.yml`.
+- Ouvre/met a jour des issues `ops-monitor` si:
+  - echec job-runner,
+  - echec API courier,
+  - anomalie `returns=0` sur plusieurs runs consecutifs.
+
 ### Deploiement CLI
 ```
 supabase functions deploy create_shipment --project-ref <PROJECT_REF>
@@ -142,3 +150,7 @@ supabase.sql contient:
 - Ne jamais exposer service_role cote client.
 - Labels dans Storage labels (private).
 - Realtime doit rester active pour chat + orders.
+
+## Next Updates
+See NEXT_UPDATES.md for the current prioritized roadmap and release checklist.
+

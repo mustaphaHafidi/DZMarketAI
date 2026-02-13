@@ -109,3 +109,7 @@ Invoke-RestMethod -Method Post -Uri 'https://api.yalidine.app/v1/parcels/' `
 - Le bouton **Générer bordereau** est disponible côté vendeur (Profil > Mes ventes).  
 - La sélection (`selection`) est auto-construite à partir de l'order/adresse/produit.
 
+
+## Next Updates
+See NEXT_UPDATES.md for the current prioritized roadmap and release checklist.
+

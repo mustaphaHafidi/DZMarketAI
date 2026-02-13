@@ -2,6 +2,7 @@ import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:dzmarket/src/models/profile.dart';
+import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:dzmarket/src/services/rate_limiter.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -169,16 +170,31 @@ class AuthService {
         return null;
       }
       // Fallback if some columns (lang) are missing in schema cache.
-      final response = await RateLimiter.instance.run(
-        'profiles.select.fallback',
-        () => supabase
-            .from('profiles')
-            .select(
-              'id,email,full_name,avatar_url,role,status,phone,wilaya,daira,location_lat,location_lng,bio,is_public,is_seller,preferences',
-            )
-            .eq('id', user.id)
-            .maybeSingle(),
-      );
+      Map<String, dynamic>? response;
+      try {
+        response = await RateLimiter.instance.run(
+          'profiles.select.fallback',
+          () => supabase
+              .from('profiles')
+              .select(
+                'id,email,full_name,avatar_url,role,status,phone,wilaya,daira,location_lat,location_lng,bio,is_public,is_seller,preferences',
+              )
+              .eq('id', user.id)
+              .maybeSingle(),
+        );
+      } on PostgrestException catch (fallbackError) {
+        if (!fallbackError.message.contains('preferences')) rethrow;
+        response = await RateLimiter.instance.run(
+          'profiles.select.fallback.legacy',
+          () => supabase
+              .from('profiles')
+              .select(
+                'id,email,full_name,avatar_url,role,status,phone,wilaya,daira,location_lat,location_lng,bio,is_public,is_seller',
+              )
+              .eq('id', user.id)
+              .maybeSingle(),
+        );
+      }
       if (response == null) return null;
       return _applyProfileLocale(
         Profile.fromJson({
@@ -187,6 +203,7 @@ class AuthService {
           'role': response['role'] ?? 'buyer',
           'status': response['status'] ?? 'active',
           'is_seller': response['is_seller'] ?? false,
+          'preferences': response['preferences'] ?? const <String, dynamic>{},
         }),
       );
     }
@@ -264,6 +281,7 @@ class AuthService {
       if (e.message.contains('daira')) fallback.remove('daira');
       if (e.message.contains('location_lat')) fallback.remove('location_lat');
       if (e.message.contains('location_lng')) fallback.remove('location_lng');
+      if (e.message.contains('preferences')) fallback.remove('preferences');
       await attempt(fallback);
     } catch (_) {
       // last resort: try without lang
@@ -339,6 +357,9 @@ class AuthService {
     if (lang != null && lang.isNotEmpty) {
       await LocaleService.instance.setLocale(lang);
     }
+    await NetworkPreferencesService.instance.applyProfilePreferences(
+      profile.preferences,
+    );
     return profile;
   }
 }

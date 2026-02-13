@@ -20,8 +20,6 @@ class AddListingPage extends StatefulWidget {
 }
 
 class _AddListingPageState extends State<AddListingPage> {
-  static const int _minWeightKg = 1;
-  static const int _maxWeightKg = 60;
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
@@ -39,13 +37,14 @@ class _AddListingPageState extends State<AddListingPage> {
   String _condition = 'new';
   String? _categoryId;
   String? _categoryNameFr;
-  bool _deliveryCod = true;
-  bool _deliveryPickup = false;
+  bool _deliveryEnabled = true;
   bool _freeShipping = false;
   bool _exchangeAfterDelivery = false;
   bool _insuranceActive = false;
   bool _allowStopdesk = true;
+  bool _sellerHasEnabledCouriers = true;
   CourierCapabilities _courierCaps = CourierCapabilities.all;
+  CourierParcelRules _parcelRules = CourierParcelRules.generic;
   int _step = 0;
   bool _saving = false;
   String? _error;
@@ -57,6 +56,7 @@ class _AddListingPageState extends State<AddListingPage> {
   List<Map<String, String>> _wilayas = const [];
   List<Map<String, String>> _communes = const [];
   final List<PlatformFile> _pickedFiles = [];
+  static const int _maxPhotos = 5;
 
   final _conditions = const ['new', 'like new', 'good', 'fair'];
 
@@ -151,7 +151,6 @@ class _AddListingPageState extends State<AddListingPage> {
   void _applyCourierCaps() {
     if (!_courierCaps.supportsStopdesk) {
       _allowStopdesk = false;
-      _deliveryPickup = false;
     }
     if (!_courierCaps.supportsExchange) {
       _exchangeAfterDelivery = false;
@@ -168,9 +167,21 @@ class _AddListingPageState extends State<AddListingPage> {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return;
     final rows = await ShippingService().fetchEnabledCouriersForSeller(userId);
+    CourierParcelRules parcelRules = CourierParcelRules.generic;
+    if (rows.isNotEmpty) {
+      try {
+        parcelRules = await ShippingService.aggregateParcelRulesAsync(rows);
+      } catch (_) {
+        parcelRules = ShippingService.aggregateParcelRules(rows);
+      }
+    }
     if (!mounted) return;
     setState(() {
-      _courierCaps = ShippingService.aggregateCapabilities(rows);
+      _sellerHasEnabledCouriers = rows.isNotEmpty;
+      _courierCaps = rows.isEmpty
+          ? CourierCapabilities.none
+          : ShippingService.aggregateCapabilities(rows);
+      _parcelRules = parcelRules;
       _applyCourierCaps();
     });
   }
@@ -288,16 +299,142 @@ class _AddListingPageState extends State<AddListingPage> {
     );
   }
 
+  Widget _buildParcelRulesCard(BuildContext context) {
+    final chips = <Widget>[
+      _buildRuleChip(
+        context,
+        L10n.tr(
+          context,
+          'checkout.parcel_limits_weight',
+          params: {
+            'min': _parcelRules.minWeightKg.toString(),
+            'max': _parcelRules.maxWeightKg.toString(),
+          },
+        ),
+      ),
+      _buildRuleChip(
+        context,
+        L10n.tr(
+          context,
+          'checkout.parcel_limits_dimensions',
+          params: {
+            'h': _parcelRules.maxHeightCm.toString(),
+            'w': _parcelRules.maxWidthCm.toString(),
+            'l': _parcelRules.maxLengthCm.toString(),
+          },
+        ),
+      ),
+      _buildRuleChip(
+        context,
+        L10n.tr(
+          context,
+          'checkout.parcel_limits_volume',
+          params: {'max': _parcelRules.maxVolumeCm3.toString()},
+        ),
+      ),
+      _buildRuleChip(
+        context,
+        L10n.tr(
+          context,
+          'checkout.parcel_limits_overweight',
+          params: {'kg': _parcelRules.overweightThresholdKg.toString()},
+        ),
+      ),
+    ];
+    if (_courierCaps.supportsInsurance) {
+      chips.add(
+        _buildRuleChip(
+          context,
+          L10n.tr(
+            context,
+            'checkout.parcel_limits_declared_value',
+            params: {'max': _parcelRules.maxDeclaredValue.toStringAsFixed(0)},
+          ),
+        ),
+      );
+    }
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Theme.of(context).dividerColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            L10n.tr(context, 'checkout.parcel_limits_title'),
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 8),
+          Wrap(spacing: 8, runSpacing: 8, children: chips),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRuleChip(BuildContext context, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(label, style: Theme.of(context).textTheme.bodySmall),
+    );
+  }
+
+  bool _isSupportedImageFile(PlatformFile file) {
+    final ext = (file.extension ?? '').trim().toLowerCase();
+    if (ext.isNotEmpty) {
+      return ext != 'heic' && ext != 'heif';
+    }
+    final name = file.name.trim().toLowerCase();
+    return !name.endsWith('.heic') && !name.endsWith('.heif');
+  }
+
   Future<void> _pickImages() async {
+    final remainingSlots = _maxPhotos - _pickedFiles.length;
+    if (remainingSlots <= 0) {
+      _setError(
+        L10n.tr(
+          context,
+          'listing.add.error_max_photos',
+          params: {'max': _maxPhotos.toString()},
+        ),
+      );
+      return;
+    }
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: true,
       withData: true,
       type: FileType.image,
     );
+    if (!mounted) return;
     if (result == null || result.files.isEmpty) return;
+    final supported = result.files.where(_isSupportedImageFile).toList();
+    final unsupportedCount = result.files.length - supported.length;
+    if (supported.isEmpty) {
+      _setError(L10n.tr(context, 'listing.add.error_unsupported_image'));
+      return;
+    }
+    final selected = supported.take(remainingSlots).toList();
     setState(() {
-      _pickedFiles.addAll(result.files);
+      _pickedFiles.addAll(selected);
     });
+    if (unsupportedCount > 0) {
+      _setError(L10n.tr(context, 'listing.add.error_unsupported_image'));
+    } else if (supported.length > remainingSlots) {
+      _setError(
+        L10n.tr(
+          context,
+          'listing.add.error_max_photos',
+          params: {'max': _maxPhotos.toString()},
+        ),
+      );
+    }
   }
 
   void _removeImage(int index) {
@@ -311,6 +448,16 @@ class _AddListingPageState extends State<AddListingPage> {
       case 0:
         if (_pickedFiles.isEmpty) {
           _setError(L10n.tr(context, 'listing.add.error_min_photo'));
+          return false;
+        }
+        if (_pickedFiles.length > _maxPhotos) {
+          _setError(
+            L10n.tr(
+              context,
+              'listing.add.error_max_photos',
+              params: {'max': _maxPhotos.toString()},
+            ),
+          );
           return false;
         }
         return true;
@@ -353,47 +500,39 @@ class _AddListingPageState extends State<AddListingPage> {
         }
         return true;
       case 5:
-        if (_isLargeVolumeListing()) {
-          _enforcePickupOnlyForLargeVolume();
-          return true;
-        }
-        if (!_deliveryCod && !_deliveryPickup) {
-          _setError(L10n.tr(context, 'listing.add.error_choose_delivery'));
-          return false;
-        }
         return true;
       case 6:
         final weight = _parseDigitsNullable(_weightCtrl.text.trim());
         final height = _parseDigitsNullable(_heightCtrl.text.trim());
         final width = _parseDigitsNullable(_widthCtrl.text.trim());
         final length = _parseDigitsNullable(_lengthCtrl.text.trim());
-        if (weight == null || weight < _minWeightKg || weight > _maxWeightKg) {
-          _setError(
-            L10n.tr(
-              context,
-              'checkout.error_weight_range',
-              params: {
-                'min': _minWeightKg.toString(),
-                'max': _maxWeightKg.toString(),
-              },
-            ),
-          );
-          return false;
-        }
-        if (height == null || height < 0 || height > 200) {
-          _setError(L10n.tr(context, 'checkout.error_height_invalid'));
-          return false;
-        }
-        if (width == null || width < 0 || width > 200) {
-          _setError(L10n.tr(context, 'checkout.error_width_invalid'));
-          return false;
-        }
-        if (length == null || length < 0 || length > 200) {
-          _setError(L10n.tr(context, 'checkout.error_length_invalid'));
-          return false;
-        }
+        double? declaredValue;
         if (_insuranceActive && _declaredValueCtrl.text.trim().isEmpty) {
           _setError(L10n.tr(context, 'checkout.error_price_required'));
+          return false;
+        }
+        if (_declaredValueCtrl.text.trim().isNotEmpty) {
+          try {
+            declaredValue = InputSanitizer.parseAmount(
+              _declaredValueCtrl.text,
+              min: 0,
+            );
+          } on FormatException catch (e) {
+            _setError(e.message);
+            return false;
+          }
+        }
+        final validation = ShippingService.validateParcel(
+          rules: _parcelRules,
+          weightKg: weight,
+          heightCm: height,
+          widthCm: width,
+          lengthCm: length,
+          declaredValue: declaredValue,
+          insuranceActive: _insuranceActive,
+        );
+        if (validation != null) {
+          _setError(_parcelValidationMessage(validation));
           return false;
         }
         return true;
@@ -404,6 +543,54 @@ class _AddListingPageState extends State<AddListingPage> {
 
   void _setError(String message) {
     setState(() => _error = message);
+  }
+
+  String _parcelValidationMessage(CourierParcelValidation validation) {
+    switch (validation.code) {
+      case 'weight_range':
+        return L10n.tr(
+          context,
+          'checkout.error_weight_range',
+          params: validation.params,
+        );
+      case 'height_max':
+        return L10n.tr(
+          context,
+          'checkout.error_height_max',
+          params: validation.params,
+          fallback: L10n.tr(context, 'checkout.error_height_invalid'),
+        );
+      case 'width_max':
+        return L10n.tr(
+          context,
+          'checkout.error_width_max',
+          params: validation.params,
+          fallback: L10n.tr(context, 'checkout.error_width_invalid'),
+        );
+      case 'length_max':
+        return L10n.tr(
+          context,
+          'checkout.error_length_max',
+          params: validation.params,
+          fallback: L10n.tr(context, 'checkout.error_length_invalid'),
+        );
+      case 'volume_max':
+        return L10n.tr(
+          context,
+          'checkout.error_volume_max',
+          params: validation.params,
+          fallback: L10n.tr(context, 'checkout.error_length_invalid'),
+        );
+      case 'declared_value_max':
+        return L10n.tr(
+          context,
+          'checkout.error_declared_value_max',
+          params: validation.params,
+          fallback: L10n.tr(context, 'checkout.error_price_required'),
+        );
+      default:
+        return L10n.tr(context, 'common.error');
+    }
   }
 
   void _clearError() {
@@ -428,6 +615,61 @@ class _AddListingPageState extends State<AddListingPage> {
     return int.tryParse(digits);
   }
 
+  List<int> _buildWeightOptions() {
+    final min = _parcelRules.minWeightKg < 1 ? 1 : _parcelRules.minWeightKg;
+    final max = _parcelRules.maxWeightKg < min ? min : _parcelRules.maxWeightKg;
+    final values = <int>{};
+    for (var kg = min; kg <= max; kg++) {
+      if (kg <= 10 || kg % 2 == 0 || kg == max) {
+        values.add(kg);
+      }
+    }
+    return values.toList()..sort();
+  }
+
+  List<int> _buildDimensionOptions(int max) {
+    final safeMax = max < 0 ? 0 : max;
+    final values = <int>{};
+    for (var cm = 0; cm <= safeMax; cm++) {
+      if (cm <= 30 || cm % 5 == 0 || cm == safeMax) {
+        values.add(cm);
+      }
+    }
+    return values.toList()..sort();
+  }
+
+  List<int> _withCurrentValue(List<int> options, int? value) {
+    if (value == null || options.contains(value)) return options;
+    final merged = <int>{...options, value}.toList()..sort();
+    return merged;
+  }
+
+  Widget _buildNumericDropdown({
+    required String label,
+    required String helperText,
+    required TextEditingController controller,
+    required List<int> options,
+  }) {
+    final currentValue = _parseDigitsNullable(controller.text.trim());
+    final safeOptions = _withCurrentValue(options, currentValue);
+    return DropdownButtonFormField<int>(
+      initialValue: currentValue,
+      decoration: InputDecoration(labelText: label, helperText: helperText),
+      items: safeOptions
+          .map(
+            (value) => DropdownMenuItem<int>(
+              value: value,
+              child: Text(value.toString()),
+            ),
+          )
+          .toList(),
+      onChanged: (value) {
+        if (value == null) return;
+        setState(() => controller.text = value.toString());
+      },
+    );
+  }
+
   bool _isLargeVolumeListing() {
     final weight = _parseDigitsNullable(_weightCtrl.text.trim()) ?? 0;
     final height = _parseDigitsNullable(_heightCtrl.text.trim()) ?? 0;
@@ -450,18 +692,27 @@ class _AddListingPageState extends State<AddListingPage> {
         keywordMatch;
   }
 
-  void _enforcePickupOnlyForLargeVolume() {
-    if (!_isLargeVolumeListing()) return;
-    _deliveryCod = false;
-    _deliveryPickup = true;
-    _allowStopdesk = false;
+  bool _isForcedArrangedDelivery() {
+    return _isLargeVolumeListing() || !_sellerHasEnabledCouriers;
+  }
+
+  bool _usesCourierDelivery() {
+    return _deliveryEnabled && !_isForcedArrangedDelivery();
+  }
+
+  List<String> _effectiveDeliveryOptions() {
+    if (_isForcedArrangedDelivery()) return const ['pickup'];
+    if (!_sellerHasEnabledCouriers) return const ['pickup'];
+    // Keep both modes available when at least one courier is configured.
+    // The seller toggle only sets preferred default order.
+    if (_deliveryEnabled) return const ['cod', 'pickup'];
+    return const ['pickup', 'cod'];
   }
 
   void _next() {
     _clearError();
     if (!_validateStep(_step)) return;
     setState(() {
-      _enforcePickupOnlyForLargeVolume();
       _step = (_step + 1).clamp(0, 7);
     });
   }
@@ -536,6 +787,15 @@ class _AddListingPageState extends State<AddListingPage> {
       if (bytes.length != _pickedFiles.length) {
         throw StateError(L10n.tr(context, 'listing.add.error_file_read'));
       }
+      if (bytes.length > _maxPhotos) {
+        throw FormatException(
+          L10n.tr(
+            context,
+            'listing.add.error_max_photos',
+            params: {'max': _maxPhotos.toString()},
+          ),
+        );
+      }
       final uploaded = await StorageService().uploadImages(
         files: bytes,
         fileNames: names,
@@ -549,11 +809,7 @@ class _AddListingPageState extends State<AddListingPage> {
         await StorageService().deletePublicUrls(uploaded);
         throw FormatException(blockedListingMessage);
       }
-      _enforcePickupOnlyForLargeVolume();
-      final deliveryOptions = <String>[
-        if (_deliveryCod) 'cod',
-        if (_deliveryPickup) 'pickup',
-      ];
+      final deliveryOptions = _effectiveDeliveryOptions();
       final weight = _parseDigits(_weightCtrl.text.trim(), fallback: 1);
       final height = _parseDigits(_heightCtrl.text.trim());
       final width = _parseDigits(_widthCtrl.text.trim());
@@ -602,14 +858,14 @@ class _AddListingPageState extends State<AddListingPage> {
   }
 
   List<String> _deliveryOptionsPreview(BuildContext context) {
-    final options = <String>[];
-    if (_deliveryCod) {
-      options.add(L10n.tr(context, 'listing.add.delivery_cod'));
-    }
-    if (_deliveryPickup) {
-      options.add(L10n.tr(context, 'listing.add.delivery_pickup'));
-    }
-    return options;
+    final options = _effectiveDeliveryOptions();
+    return options
+        .map(
+          (value) => value == 'cod'
+              ? L10n.tr(context, 'listing.add.delivery_cod')
+              : L10n.tr(context, 'listing.add.delivery_pickup'),
+        )
+        .toList();
   }
 
   bool _hasArabicLetters(String value) {
@@ -737,19 +993,36 @@ class _AddListingPageState extends State<AddListingPage> {
       case 4:
         return _selectedWilayaCode != null && _selectedCommune != null;
       case 5:
-        return _deliveryCod || _deliveryPickup;
+        return true;
       case 6:
-        final weight = _parseDigits(_weightCtrl.text.trim());
-        final height = _parseDigits(_heightCtrl.text.trim(), fallback: -1);
-        final width = _parseDigits(_widthCtrl.text.trim(), fallback: -1);
-        final length = _parseDigits(_lengthCtrl.text.trim(), fallback: -1);
-        if (weight < _minWeightKg || weight > _maxWeightKg) return false;
-        if (height < 0 || height > 200) return false;
-        if (width < 0 || width > 200) return false;
-        if (length < 0 || length > 200) return false;
+        final weight = _parseDigitsNullable(_weightCtrl.text.trim());
+        final height = _parseDigitsNullable(_heightCtrl.text.trim());
+        final width = _parseDigitsNullable(_widthCtrl.text.trim());
+        final length = _parseDigitsNullable(_lengthCtrl.text.trim());
+        double? declaredValue;
         if (_insuranceActive && _declaredValueCtrl.text.trim().isEmpty) {
           return false;
         }
+        if (_declaredValueCtrl.text.trim().isNotEmpty) {
+          try {
+            declaredValue = InputSanitizer.parseAmount(
+              _declaredValueCtrl.text,
+              min: 0,
+            );
+          } catch (_) {
+            return false;
+          }
+        }
+        final validation = ShippingService.validateParcel(
+          rules: _parcelRules,
+          weightKg: weight,
+          heightCm: height,
+          widthCm: width,
+          lengthCm: length,
+          declaredValue: declaredValue,
+          insuranceActive: _insuranceActive,
+        );
+        if (validation != null) return false;
         return true;
       default:
         return true;
@@ -811,6 +1084,18 @@ class _AddListingPageState extends State<AddListingPage> {
                   L10n.tr(context, 'listing.add.photos_hint'),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
+                const SizedBox(height: 6),
+                Text(
+                  L10n.tr(
+                    context,
+                    'listing.add.photos_count',
+                    params: {
+                      'count': _pickedFiles.length.toString(),
+                      'max': _maxPhotos.toString(),
+                    },
+                  ),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 12,
@@ -856,7 +1141,9 @@ class _AddListingPageState extends State<AddListingPage> {
                         ],
                       ),
                     InkWell(
-                      onTap: _pickImages,
+                      onTap: _pickedFiles.length >= _maxPhotos
+                          ? null
+                          : _pickImages,
                       child: Container(
                         width: 96,
                         height: 96,
@@ -866,7 +1153,14 @@ class _AddListingPageState extends State<AddListingPage> {
                             color: Theme.of(context).dividerColor,
                           ),
                         ),
-                        child: const Icon(Icons.add_photo_alternate_outlined),
+                        child: Icon(
+                          _pickedFiles.length >= _maxPhotos
+                              ? Icons.check_circle_outline
+                              : Icons.add_photo_alternate_outlined,
+                          color: _pickedFiles.length >= _maxPhotos
+                              ? Theme.of(context).disabledColor
+                              : null,
+                        ),
                       ),
                     ),
                   ],
@@ -1115,24 +1409,47 @@ class _AddListingPageState extends State<AddListingPage> {
                       L10n.tr(context, 'listing.add.delivery_pickup_required'),
                     ),
                   ),
+                if (!_sellerHasEnabledCouriers)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      L10n.tr(context, 'checkout.no_courier_enabled'),
+                    ),
+                  ),
                 SwitchListTile(
-                  value: _isLargeVolumeListing() ? false : _deliveryCod,
-                  onChanged: _isLargeVolumeListing()
+                  value: _usesCourierDelivery(),
+                  onChanged: _isForcedArrangedDelivery()
                       ? null
-                      : (value) => setState(() => _deliveryCod = value),
-                  title: Text(L10n.tr(context, 'listing.add.delivery_cod')),
+                      : (value) => setState(() => _deliveryEnabled = value),
+                  title: Text(L10n.tr(context, 'listing.add.delivery_toggle')),
                   subtitle: Text(
-                    L10n.tr(context, 'listing.add.delivery_cod_hint'),
+                    L10n.tr(context, 'listing.add.delivery_toggle_hint'),
                   ),
                 ),
-                SwitchListTile(
-                  value: _isLargeVolumeListing() ? true : _deliveryPickup,
-                  onChanged: _isLargeVolumeListing()
-                      ? null
-                      : (value) => setState(() => _deliveryPickup = value),
-                  title: Text(L10n.tr(context, 'listing.add.delivery_pickup')),
-                  subtitle: Text(
-                    L10n.tr(context, 'listing.add.delivery_pickup_hint'),
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(top: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Theme.of(context).dividerColor),
+                  ),
+                  child: Text(
+                    _usesCourierDelivery()
+                        ? L10n.tr(context, 'listing.add.delivery_auto_courier')
+                        : L10n.tr(
+                            context,
+                            'listing.add.delivery_auto_arranged',
+                          ),
                   ),
                 ),
               ],
@@ -1144,6 +1461,7 @@ class _AddListingPageState extends State<AddListingPage> {
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (_sellerHasEnabledCouriers) _buildParcelRulesCard(context),
                 CheckboxListTile(
                   value: _freeShipping,
                   onChanged: (v) => setState(() => _freeShipping = v ?? false),
@@ -1181,6 +1499,10 @@ class _AddListingPageState extends State<AddListingPage> {
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
                       labelText: L10n.tr(context, 'checkout.declared_value'),
+                      helperText: L10n.tr(
+                        context,
+                        'checkout.declared_value_hint',
+                      ),
                     ),
                   ),
                 ],
@@ -1189,52 +1511,51 @@ class _AddListingPageState extends State<AddListingPage> {
                   L10n.tr(context, 'checkout.dimensions_weight'),
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
-                TextField(
+                _buildNumericDropdown(
                   controller: _weightCtrl,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: InputDecoration(
-                    labelText: L10n.tr(context, 'checkout.weight_kg'),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _heightCtrl,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: InputDecoration(
-                    labelText: L10n.tr(context, 'checkout.height_cm'),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _widthCtrl,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: InputDecoration(
-                    labelText: L10n.tr(context, 'checkout.width_cm'),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _lengthCtrl,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: InputDecoration(
-                    labelText: L10n.tr(context, 'checkout.length_cm'),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  L10n.tr(
+                  label: L10n.tr(context, 'checkout.weight_kg'),
+                  helperText: L10n.tr(
                     context,
-                    'checkout.overweight_label',
+                    'checkout.weight_hint',
                     params: {
-                      'value': (_parseDigits(_weightCtrl.text.trim()) > 5)
-                          ? L10n.tr(context, 'common.yes')
-                          : L10n.tr(context, 'common.no'),
+                      'min': _parcelRules.minWeightKg.toString(),
+                      'max': _parcelRules.maxWeightKg.toString(),
                     },
                   ),
+                  options: _buildWeightOptions(),
+                ),
+                const SizedBox(height: 8),
+                _buildNumericDropdown(
+                  controller: _heightCtrl,
+                  label: L10n.tr(context, 'checkout.height_cm'),
+                  helperText: L10n.tr(
+                    context,
+                    'checkout.height_hint',
+                    params: {'max': _parcelRules.maxHeightCm.toString()},
+                  ),
+                  options: _buildDimensionOptions(_parcelRules.maxHeightCm),
+                ),
+                const SizedBox(height: 8),
+                _buildNumericDropdown(
+                  controller: _widthCtrl,
+                  label: L10n.tr(context, 'checkout.width_cm'),
+                  helperText: L10n.tr(
+                    context,
+                    'checkout.width_hint',
+                    params: {'max': _parcelRules.maxWidthCm.toString()},
+                  ),
+                  options: _buildDimensionOptions(_parcelRules.maxWidthCm),
+                ),
+                const SizedBox(height: 8),
+                _buildNumericDropdown(
+                  controller: _lengthCtrl,
+                  label: L10n.tr(context, 'checkout.length_cm'),
+                  helperText: L10n.tr(
+                    context,
+                    'checkout.length_hint',
+                    params: {'max': _parcelRules.maxLengthCm.toString()},
+                  ),
+                  options: _buildDimensionOptions(_parcelRules.maxLengthCm),
                 ),
               ],
             ),

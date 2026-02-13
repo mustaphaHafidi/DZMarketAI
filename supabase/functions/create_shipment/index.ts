@@ -24,6 +24,26 @@ const numberValue = (value: unknown, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const intValue = (value: unknown, fallback: number) => {
+  const parsed = Number(textValue(value));
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.round(parsed);
+};
+
+const normalizeDeliveryToken = (value: unknown) =>
+  textValue(value).toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+const isArrangedDelivery = (value: unknown) => {
+  const token = normalizeDeliveryToken(value);
+  if (!token) return false;
+  return token === "pickup" ||
+    token === "livraisonaconvenir" ||
+    token === "deliveryarranged" ||
+    token === "arrangeddelivery" ||
+    token === "remiseenmainpropre" ||
+    token === "mainpropre";
+};
+
 const pick = (selection: Selection | undefined, key: string) =>
   selection ? selection[key] : undefined;
 
@@ -110,6 +130,149 @@ const ecotrackBaseUrls = () => {
 
 const joinUrl = (base: string, path: string) =>
   `${base.replace(/\/+$/, "")}${path}`;
+
+type CourierParcelRules = {
+  minWeightKg: number;
+  maxWeightKg: number;
+  maxHeightCm: number;
+  maxWidthCm: number;
+  maxLengthCm: number;
+  maxVolumeCm3: number;
+  maxDeclaredValue: number;
+};
+
+type ParcelValidationError = {
+  message: string;
+  details?: Record<string, unknown>;
+};
+
+const genericParcelRules: CourierParcelRules = {
+  minWeightKg: 1,
+  maxWeightKg: 60,
+  maxHeightCm: 200,
+  maxWidthCm: 200,
+  maxLengthCm: 200,
+  maxVolumeCm3: 8000000,
+  maxDeclaredValue: 99999999,
+};
+
+const parcelRulesForCourier = (normalizedCourier: string): CourierParcelRules => {
+  if (normalizedCourier.includes("yalidine")) return genericParcelRules;
+  if (normalizedCourier.includes("ecotrack")) return genericParcelRules;
+  if (normalizedCourier.includes("zrexpress")) return genericParcelRules;
+  return genericParcelRules;
+};
+
+const canonicalCourierCode = (
+  courierId: string,
+  courierName: string,
+  normalizedCourier: string,
+) => {
+  const normalizeCourier = (value: string) =>
+    value.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const idKey = normalizeCourier(courierId);
+  const nameKey = normalizeCourier(courierName);
+  const merged = normalizedCourier || `${idKey}${nameKey}`;
+  if (merged.includes("yalidine")) return "yalidine";
+  if (merged.includes("ecotrack")) return "ecotrack";
+  if (merged.includes("zrexpress")) return "zrexpress";
+  return idKey || "";
+};
+
+const loadParcelRulesForCourier = async (
+  supabaseAdmin: ReturnType<typeof createClient>,
+  courierCode: string,
+  normalizedCourier: string,
+): Promise<CourierParcelRules> => {
+  const fallback = parcelRulesForCourier(normalizedCourier);
+  if (!courierCode) return fallback;
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("courier_parcel_rules")
+      .select(
+        "min_weight_kg,max_weight_kg,max_height_cm,max_width_cm," +
+          "max_length_cm,max_volume_cm3,max_declared_value",
+      )
+      .eq("courier_code", courierCode)
+      .maybeSingle();
+    if (error || !data) return fallback;
+    return {
+      minWeightKg: intValue((data as Record<string, unknown>).min_weight_kg, fallback.minWeightKg),
+      maxWeightKg: intValue((data as Record<string, unknown>).max_weight_kg, fallback.maxWeightKg),
+      maxHeightCm: intValue((data as Record<string, unknown>).max_height_cm, fallback.maxHeightCm),
+      maxWidthCm: intValue((data as Record<string, unknown>).max_width_cm, fallback.maxWidthCm),
+      maxLengthCm: intValue((data as Record<string, unknown>).max_length_cm, fallback.maxLengthCm),
+      maxVolumeCm3: intValue((data as Record<string, unknown>).max_volume_cm3, fallback.maxVolumeCm3),
+      maxDeclaredValue: numberValue(
+        (data as Record<string, unknown>).max_declared_value,
+        fallback.maxDeclaredValue,
+      ),
+    };
+  } catch {
+    return fallback;
+  }
+};
+
+const validateParcelAgainstRules = ({
+  rules,
+  weightKg,
+  heightCm,
+  widthCm,
+  lengthCm,
+  declaredValue,
+  insuranceActive,
+}: {
+  rules: CourierParcelRules;
+  weightKg: number;
+  heightCm: number;
+  widthCm: number;
+  lengthCm: number;
+  declaredValue: number;
+  insuranceActive: boolean;
+}): ParcelValidationError | null => {
+  if (weightKg < rules.minWeightKg || weightKg > rules.maxWeightKg) {
+    return {
+      message: "parcel_weight_out_of_range",
+      details: { min: rules.minWeightKg, max: rules.maxWeightKg, value: weightKg },
+    };
+  }
+  if (heightCm < 0 || heightCm > rules.maxHeightCm) {
+    return {
+      message: "parcel_height_out_of_range",
+      details: { max: rules.maxHeightCm, value: heightCm },
+    };
+  }
+  if (widthCm < 0 || widthCm > rules.maxWidthCm) {
+    return {
+      message: "parcel_width_out_of_range",
+      details: { max: rules.maxWidthCm, value: widthCm },
+    };
+  }
+  if (lengthCm < 0 || lengthCm > rules.maxLengthCm) {
+    return {
+      message: "parcel_length_out_of_range",
+      details: { max: rules.maxLengthCm, value: lengthCm },
+    };
+  }
+  const volume = heightCm * widthCm * lengthCm;
+  if (volume > rules.maxVolumeCm3) {
+    return {
+      message: "parcel_volume_out_of_range",
+      details: { max: rules.maxVolumeCm3, value: volume },
+    };
+  }
+  if (
+    insuranceActive &&
+    declaredValue > 0 &&
+    declaredValue > rules.maxDeclaredValue
+  ) {
+    return {
+      message: "parcel_declared_value_out_of_range",
+      details: { max: rules.maxDeclaredValue, value: declaredValue },
+    };
+  }
+  return null;
+};
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -210,6 +373,10 @@ serve(async (req) => {
   if (orderError || !order) {
     return jsonResponse({ ok: false, message: "Order not found" }, 404);
   }
+  const orderStatus = textValue(order.status).toLowerCase();
+  if (orderStatus === "cancelled") {
+    return jsonResponse({ ok: false, message: "Order cancelled" }, 409);
+  }
   const effectiveUserId = isServiceRole ? order.seller_id : userId;
   if (!effectiveUserId) {
     return jsonResponse({ ok: false, message: "Unauthorized" }, 401);
@@ -249,6 +416,10 @@ serve(async (req) => {
   const shippingCost =
     numberValue(payload.shipping_cost, numberValue(order.shipping_cost, 0));
 
+  if (isArrangedDelivery(deliveryMode) || isArrangedDelivery(shippingOption)) {
+    return jsonResponse({ ok: false, message: "arranged_delivery_no_label" }, 409);
+  }
+
   if (payload.async === true && !isServiceRole) {
     const { data: jobId } = await supabaseUser.rpc("enqueue_job", {
       p_type: "create_shipment",
@@ -271,6 +442,12 @@ serve(async (req) => {
   const normalizeCourier = (value: string) =>
     value.toLowerCase().replace(/[^a-z0-9]/g, "");
   const normalizedCourier = normalizeCourier(`${courierId} ${courierName}`);
+  const courierCode = canonicalCourierCode(courierId, courierName, normalizedCourier);
+  const parcelRules = await loadParcelRulesForCourier(
+    supabaseAdmin,
+    courierCode,
+    normalizedCourier,
+  );
   const isYalidine = normalizedCourier.includes("yalidine");
   const isEcotrack = normalizedCourier.includes("ecotrack");
   const isZrExpress = normalizedCourier.includes("zrexpress");
@@ -301,10 +478,10 @@ serve(async (req) => {
     const address = textValue(pick(selection, "address"));
     const productList = textValue(pick(selection, "productList"));
     const price = numberValue(pick(selection, "price"), 0);
-    const weight = numberValue(pick(selection, "weight"), 1);
-    const height = numberValue(pick(selection, "height"), 0);
-    const width = numberValue(pick(selection, "width"), 0);
-    const length = numberValue(pick(selection, "length"), 0);
+    const weight = intValue(pick(selection, "weight"), 1);
+    const height = intValue(pick(selection, "height"), 0);
+    const width = intValue(pick(selection, "width"), 0);
+    const length = intValue(pick(selection, "length"), 0);
     const declaredValue = numberValue(pick(selection, "declaredValue"), price);
     const freeShipping =
       pick(selection, "freeshipping") === true ||
@@ -318,6 +495,18 @@ serve(async (req) => {
     const hasExchange = pick(selection, "hasExchange") === true;
     const orderRef =
       textValue(pick(selection, "order_ref")) || `${orderId}`;
+    const validationError = validateParcelAgainstRules({
+      rules: parcelRules,
+      weightKg: weight,
+      heightCm: height,
+      widthCm: width,
+      lengthCm: length,
+      declaredValue,
+      insuranceActive,
+    });
+    if (validationError) {
+      return jsonResponse({ ok: false, ...validationError }, 400);
+    }
 
     if (!senderWilaya || !receiverWilaya || !receiverCommune || !phone || !address) {
       return jsonResponse({ ok: false, message: "Missing receiver data" }, 400);
@@ -398,9 +587,33 @@ serve(async (req) => {
       tracking: trackingNumber,
       label_url: labelUrl,
     };
-    } else if (isEcotrack) {
-      if (!selection) {
-        return jsonResponse({ ok: false, message: "Missing shipment selection" }, 400);
+  } else if (isEcotrack) {
+    if (!selection) {
+      return jsonResponse({ ok: false, message: "Missing shipment selection" }, 400);
+    }
+      const price = numberValue(pick(selection, "price"), 0);
+      const weight = intValue(pick(selection, "weight"), 1);
+      const height = intValue(pick(selection, "height"), 0);
+      const width = intValue(pick(selection, "width"), 0);
+      const length = intValue(pick(selection, "length"), 0);
+      const declaredValue = numberValue(
+        pick(selection, "declaredValue"),
+        price,
+      );
+      const insuranceActive =
+        pick(selection, "insuranceActive") === true ||
+        pick(selection, "insurance_active") === true;
+      const validationError = validateParcelAgainstRules({
+        rules: parcelRules,
+        weightKg: weight,
+        heightCm: height,
+        widthCm: width,
+        lengthCm: length,
+        declaredValue,
+        insuranceActive,
+      });
+      if (validationError) {
+        return jsonResponse({ ok: false, ...validationError }, 400);
       }
       const orderPayload: Record<string, string> = {
       reference: orderId,
@@ -418,7 +631,7 @@ serve(async (req) => {
       boutique: textValue(pick(selection, "shopName")),
       type: pick(selection, "hasExchange") === true ? "2" : "1",
         stop_desk: pick(selection, "deliveryType") === "stopdesk" ? "1" : "0",
-        weight: textValue(pick(selection, "weight")),
+        weight: `${weight}`,
       };
       const params = new URLSearchParams(orderPayload);
       const baseUrls = ecotrackBaseUrls();
@@ -643,10 +856,26 @@ serve(async (req) => {
     const address = textValue(pick(selection, "address"));
     const productList = textValue(pick(selection, "productList"));
     const price = numberValue(pick(selection, "price"), 0);
-    const weight = numberValue(pick(selection, "weight"), 0);
-    const height = numberValue(pick(selection, "height"), 0);
-    const width = numberValue(pick(selection, "width"), 0);
-    const length = numberValue(pick(selection, "length"), 0);
+    const weight = intValue(pick(selection, "weight"), 1);
+    const height = intValue(pick(selection, "height"), 0);
+    const width = intValue(pick(selection, "width"), 0);
+    const length = intValue(pick(selection, "length"), 0);
+    const declaredValue = numberValue(pick(selection, "declaredValue"), price);
+    const insuranceActive =
+      pick(selection, "insuranceActive") === true ||
+      pick(selection, "insurance_active") === true;
+    const validationError = validateParcelAgainstRules({
+      rules: parcelRules,
+      weightKg: weight,
+      heightCm: height,
+      widthCm: width,
+      lengthCm: length,
+      declaredValue,
+      insuranceActive,
+    });
+    if (validationError) {
+      return jsonResponse({ ok: false, ...validationError }, 400);
+    }
 
     if (
       !receiverWilayaId ||

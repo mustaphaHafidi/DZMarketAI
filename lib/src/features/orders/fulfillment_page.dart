@@ -5,6 +5,7 @@ import 'package:dzmarket/src/services/order_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/utils/delivery_mode_utils.dart';
 import 'package:flutter/material.dart';
 
 class FulfillmentPage extends StatefulWidget {
@@ -29,7 +30,62 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
   bool _courierLocked = false;
   bool _deliveryLocked = false;
   bool _optionLocked = false;
+  bool _orderCancelled = false;
+  bool _arrangedDelivery = false;
   bool _loading = true;
+
+  bool get _hasLockedClientSelection =>
+      _courierLocked || _deliveryLocked || _optionLocked;
+
+  String _deliveryModeLabel(BuildContext context, String? mode) {
+    switch (mode) {
+      case 'pickup_postal':
+      case 'stopdesk':
+        return L10n.tr(context, 'fulfillment.delivery_pickup');
+      case 'local_driver':
+        return L10n.tr(context, 'fulfillment.delivery_local');
+      case 'home':
+      default:
+        return L10n.tr(context, 'fulfillment.delivery_home');
+    }
+  }
+
+  String _clientOptionLabel(BuildContext context, String? option) {
+    final value = option?.trim();
+    if (value == null || value.isEmpty) {
+      return L10n.tr(context, 'fulfillment.not_specified');
+    }
+    final normalized = value.toLowerCase();
+    final courierId = _selectedCourierId?.toLowerCase();
+    final courierName = _selectedCourierName?.toLowerCase();
+    if (normalized == courierId || normalized == courierName) {
+      return _deliveryModeLabel(context, _deliveryMode);
+    }
+    return ShippingService.optionLabel(context, value);
+  }
+
+  Widget _summaryRow(BuildContext context, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -48,7 +104,7 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
   Future<void> _loadOrderDefaults() async {
     final orderRow = await supabase
         .from(SupabaseTables.orders)
-        .select('courier_id,courier_name,delivery_method,shipping_option')
+        .select('courier_id,courier_name,delivery_method,shipping_option,status')
         .eq('id', widget.orderId)
         .maybeSingle();
     if (orderRow is Map<String, dynamic>) {
@@ -56,6 +112,12 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
       final courierName = orderRow['courier_name']?.toString();
       final deliveryMode = orderRow['delivery_method']?.toString();
       final option = orderRow['shipping_option']?.toString();
+      final status = orderRow['status']?.toString().toLowerCase();
+      _orderCancelled = status == 'cancelled';
+      _arrangedDelivery = isArrangedDelivery(
+        deliveryMethod: deliveryMode,
+        shippingOption: option,
+      );
       if (courierId != null && courierId.isNotEmpty) {
         _selectedCourierId = courierId;
         _selectedCourierName = courierName;
@@ -101,6 +163,14 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
   }
 
   Future<void> _fulfill() async {
+    if (_arrangedDelivery) {
+      setState(() => _error = L10n.tr(context, 'fulfillment.arranged_no_label'));
+      return;
+    }
+    if (_orderCancelled) {
+      setState(() => _error = L10n.tr(context, 'fulfillment.order_cancelled_blocked'));
+      return;
+    }
     if (_selectedCourierId == null || _selectedCourierName == null) {
       setState(() => _error = L10n.tr(context, 'fulfillment.error_select_courier'));
       return;
@@ -145,92 +215,169 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
 
   @override
   Widget build(BuildContext context) {
+    final courierDisplay = _selectedCourierName ??
+        _couriers.firstWhere(
+          (c) => c['id']?.toString() == _selectedCourierId,
+          orElse: () => const <String, dynamic>{},
+        )['name']
+            ?.toString() ??
+        L10n.tr(context, 'fulfillment.not_specified');
+
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          L10n.tr(context, 'fulfillment.choose_courier'),
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        if (_courierLocked)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
+        if (_orderCancelled) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.error.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+            ),
             child: Text(
-              L10n.tr(context, 'fulfillment.courier_locked'),
-              style: TextStyle(color: Theme.of(context).colorScheme.secondary),
+              L10n.tr(context, 'fulfillment.order_cancelled_blocked'),
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ),
-        DropdownButtonFormField<String>(
-          value: _selectedCourierId,
-          items: _couriers
-              .map(
-                (c) => DropdownMenuItem(
-                  value: c['id'].toString(),
-                  child: Text(c['name']?.toString() ?? L10n.tr(context, 'fulfillment.courier_placeholder')),
+        ],
+        if (_arrangedDelivery) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              L10n.tr(context, 'fulfillment.arranged_no_label'),
+              style: TextStyle(color: Theme.of(context).colorScheme.primary),
+            ),
+          ),
+        ],
+        if (_hasLockedClientSelection) ...[
+          Text(
+            L10n.tr(context, 'fulfillment.customer_choice'),
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.35,
+                  ),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  L10n.tr(context, 'fulfillment.customer_choice_locked'),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.secondary,
+                    fontSize: 12,
+                  ),
                 ),
-              )
-              .toList(),
-          onChanged: _courierLocked
-              ? null
-              : (v) {
-            final courier = _couriers.firstWhere(
-              (c) => c['id'].toString() == v,
-              orElse: () => {},
-            );
-            setState(() {
-              _selectedCourierId = v;
-              _selectedCourierName = courier['name']?.toString();
-            });
-          },
-        ),
-        const SizedBox(height: 16),
-        Text(
-          L10n.tr(context, 'fulfillment.delivery_mode'),
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        Column(
-          children: [
-            RadioListTile<String>(
-              value: 'home',
-              groupValue: _deliveryMode,
-              onChanged:
-                  _deliveryLocked ? null : (v) => setState(() => _deliveryMode = v),
-              title: Text(L10n.tr(context, 'fulfillment.delivery_home')),
-            ),
-            RadioListTile<String>(
-              value: 'pickup_postal',
-              groupValue: _deliveryMode,
-              onChanged:
-                  _deliveryLocked ? null : (v) => setState(() => _deliveryMode = v),
-              title: Text(L10n.tr(context, 'fulfillment.delivery_pickup')),
-            ),
-            RadioListTile<String>(
-              value: 'local_driver',
-              groupValue: _deliveryMode,
-              onChanged:
-                  _deliveryLocked ? null : (v) => setState(() => _deliveryMode = v),
-              title: Text(L10n.tr(context, 'fulfillment.delivery_local')),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(
-          L10n.tr(context, 'fulfillment.option_client'),
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        DropdownButtonFormField<String>(
-          value: _option,
-          items: _optionChoices
-              .map(
-                (o) => DropdownMenuItem(
-                  value: o,
-                  child: Text(ShippingService.optionLabel(context, o)),
+                const SizedBox(height: 10),
+                _summaryRow(
+                  context,
+                  L10n.tr(context, 'fulfillment.choose_courier'),
+                  courierDisplay,
                 ),
-              )
-              .toList(),
-          onChanged: _optionLocked ? null : (v) => setState(() => _option = v),
-        ),
+                _summaryRow(
+                  context,
+                  L10n.tr(context, 'fulfillment.delivery_mode'),
+                  _deliveryModeLabel(context, _deliveryMode),
+                ),
+                _summaryRow(
+                  context,
+                  L10n.tr(context, 'fulfillment.option_client'),
+                  _clientOptionLabel(context, _option),
+                ),
+              ],
+            ),
+          ),
+        ] else ...[
+          Text(
+            L10n.tr(context, 'fulfillment.choose_courier'),
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            value: _selectedCourierId,
+            items: _couriers
+                .map(
+                  (c) => DropdownMenuItem(
+                    value: c['id'].toString(),
+                    child: Text(
+                      c['name']?.toString() ??
+                          L10n.tr(context, 'fulfillment.courier_placeholder'),
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: (v) {
+              final courier = _couriers.firstWhere(
+                (c) => c['id'].toString() == v,
+                orElse: () => {},
+              );
+              setState(() {
+                _selectedCourierId = v;
+                _selectedCourierName = courier['name']?.toString();
+              });
+            },
+          ),
+          const SizedBox(height: 16),
+          Text(
+            L10n.tr(context, 'fulfillment.delivery_mode'),
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          Column(
+            children: [
+              RadioListTile<String>(
+                value: 'home',
+                groupValue: _deliveryMode,
+                onChanged: (v) => setState(() => _deliveryMode = v),
+                title: Text(L10n.tr(context, 'fulfillment.delivery_home')),
+              ),
+              RadioListTile<String>(
+                value: 'pickup_postal',
+                groupValue: _deliveryMode,
+                onChanged: (v) => setState(() => _deliveryMode = v),
+                title: Text(L10n.tr(context, 'fulfillment.delivery_pickup')),
+              ),
+              RadioListTile<String>(
+                value: 'local_driver',
+                groupValue: _deliveryMode,
+                onChanged: (v) => setState(() => _deliveryMode = v),
+                title: Text(L10n.tr(context, 'fulfillment.delivery_local')),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            L10n.tr(context, 'fulfillment.option_client'),
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          DropdownButtonFormField<String>(
+            value: _option,
+            items: _optionChoices
+                .map(
+                  (o) => DropdownMenuItem(
+                    value: o,
+                    child: Text(ShippingService.optionLabel(context, o)),
+                  ),
+                )
+                .toList(),
+            onChanged: (v) => setState(() => _option = v),
+          ),
+        ],
         const SizedBox(height: 16),
         if (_error != null)
           Padding(
@@ -243,7 +390,9 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
         SizedBox(
           width: double.infinity,
           child: FilledButton(
-            onPressed: _saving ? null : _fulfill,
+            onPressed: (_saving || _orderCancelled || _arrangedDelivery)
+                ? null
+                : _fulfill,
             child: _saving
                 ? const SizedBox(
                     height: 18,

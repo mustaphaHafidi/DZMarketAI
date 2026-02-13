@@ -1,4 +1,6 @@
 // ignore_for_file: deprecated_member_use
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cached_network_image_platform_interface/cached_network_image_platform_interface.dart';
 import 'package:dzmarket/src/features/admin/app_errors_page.dart';
@@ -9,7 +11,9 @@ import 'package:dzmarket/src/features/profile/courier_settings_page.dart';
 import 'package:dzmarket/src/features/profile/my_listings_page.dart';
 import 'package:dzmarket/src/features/profile/seller_dashboard_page.dart';
 import 'package:dzmarket/src/models/profile.dart';
+import 'package:dzmarket/src/services/app_error_service.dart';
 import 'package:dzmarket/src/services/auth_service.dart';
+import 'package:dzmarket/src/services/connectivity_service.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/locale_service.dart';
@@ -52,6 +56,7 @@ class _ProfilePageState extends State<ProfilePage> {
   List<Map<String, String>> _communes = const [];
   String? _selectedWilayaCode;
   String? _selectedCommuneId;
+  String? _lastLoggedError;
 
   @override
   void initState() {
@@ -71,13 +76,13 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _loadProfile() async {
+    final localeCode =
+        LocaleService.instance.locale.value?.languageCode ?? 'fr';
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final localeCode =
-          LocaleService.instance.locale.value?.languageCode ?? 'fr';
       final user = supabase.auth.currentUser;
       if (user == null) {
         setState(() {
@@ -113,12 +118,13 @@ class _ProfilePageState extends State<ProfilePage> {
     } on FormatException catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.message;
+        _error = _friendlyProfileError(localeCode, e);
       });
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logProfileError(e, stackTrace, contextTag: 'profile.load');
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = _friendlyProfileError(localeCode, e);
       });
     } finally {
       if (mounted) {
@@ -176,11 +182,13 @@ class _ProfilePageState extends State<ProfilePage> {
         SnackBar(content: Text(L10n.tr(context, 'profile.updated'))),
       );
       await _loadProfile();
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logProfileError(e, stackTrace, contextTag: 'profile.save');
       if (!mounted) return;
-      setState(() {
-        _error = e.toString();
-      });
+      final localeCode = Localizations.localeOf(context).languageCode;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_friendlyProfileError(localeCode, e))),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -191,7 +199,12 @@ class _ProfilePageState extends State<ProfilePage> {
       _loadingLocations = true;
       _locationLoadError = null;
     });
-    final items = await LocationDataService.instance.fetchWilayas();
+    List<Map<String, String>> items = const [];
+    try {
+      items = await LocationDataService.instance.fetchWilayas();
+    } catch (error, stackTrace) {
+      _logProfileError(error, stackTrace, contextTag: 'profile.load_locations');
+    }
     if (!mounted) return;
     setState(() {
       _wilayas = items;
@@ -228,7 +241,12 @@ class _ProfilePageState extends State<ProfilePage> {
       _locationLoadError = null;
       _communes = const [];
     });
-    final items = await LocationDataService.instance.fetchCommunes(code);
+    List<Map<String, String>> items = const [];
+    try {
+      items = await LocationDataService.instance.fetchCommunes(code);
+    } catch (error, stackTrace) {
+      _logProfileError(error, stackTrace, contextTag: 'profile.load_communes');
+    }
     if (!mounted) return;
     setState(() {
       _communes = items;
@@ -249,6 +267,43 @@ class _ProfilePageState extends State<ProfilePage> {
       case null:
         return isSeller ? 'seller' : 'buyer';
     }
+  }
+
+  bool _looksOfflineError(Object? error) {
+    final msg = error?.toString().toLowerCase() ?? '';
+    if (msg.isEmpty) return !ConnectivityService.instance.isOnline.value;
+    return msg.contains('socketexception') ||
+        msg.contains('failed host lookup') ||
+        msg.contains('dns') ||
+        msg.contains('network') ||
+        msg.contains('connection closed') ||
+        msg.contains('timed out') ||
+        msg.contains('clientexception') ||
+        msg.contains('no address associated with hostname');
+  }
+
+  String _friendlyProfileError(String localeCode, Object error) {
+    if (_looksOfflineError(error)) {
+      return L10n.trLocale(localeCode, 'common.offline_action');
+    }
+    return L10n.trLocale(
+      localeCode,
+      'profile.load_error_friendly',
+      fallback: L10n.trLocale(localeCode, 'common.offline_action'),
+    );
+  }
+
+  void _logProfileError(
+    Object error,
+    StackTrace? stackTrace, {
+    required String contextTag,
+  }) {
+    final signature = '$contextTag|${error.toString()}';
+    if (_lastLoggedError == signature) return;
+    _lastLoggedError = signature;
+    unawaited(
+      AppErrorService.instance.logError(error, stackTrace, context: contextTag),
+    );
   }
 
   void _syncCommuneSelectionFromText() {
@@ -455,11 +510,13 @@ class _ProfilePageState extends State<ProfilePage> {
       setState(() {
         _avatarUrl = urls.isNotEmpty ? urls.first : null;
       });
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logProfileError(e, stackTrace, contextTag: 'profile.pick_avatar');
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.toString())));
+      final localeCode = Localizations.localeOf(context).languageCode;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_friendlyProfileError(localeCode, e))),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -497,16 +554,27 @@ class _ProfilePageState extends State<ProfilePage> {
       return Scaffold(
         appBar: AppBar(title: Text(L10n.tr(context, 'profile.title'))),
         body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(_error!),
-              const SizedBox(height: 8),
-              ElevatedButton(
-                onPressed: _loadProfile,
-                child: Text(L10n.tr(context, 'common.reload')),
-              ),
-            ],
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _looksOfflineError(_error)
+                      ? Icons.wifi_off_rounded
+                      : Icons.error_outline,
+                  size: 28,
+                ),
+                const SizedBox(height: 10),
+                Text(_error!, textAlign: TextAlign.center),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: _loadProfile,
+                  child: Text(L10n.tr(context, 'common.reload')),
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -632,93 +700,86 @@ class _ProfilePageState extends State<ProfilePage> {
                           ),
                         ),
                         const SizedBox(height: 12),
-                        Row(
+                        Column(
                           children: [
-                            Expanded(
-                              child: _buildPickerField(
-                                label: L10n.tr(context, 'profile.wilaya'),
-                                value: _wilayaLabel(context),
-                                icon: Icons.map_outlined,
-                                onTap: (_loadingLocations || _wilayas.isEmpty)
-                                    ? null
-                                    : () async {
-                                        final selected =
-                                            await _showLocationPicker(
-                                              context: context,
-                                              title: L10n.tr(
-                                                context,
-                                                'profile.wilaya',
-                                              ),
-                                              items: _wilayas,
-                                              itemLabel: (item) =>
-                                                  _wilayaItemLabel(
-                                                    context,
-                                                    item,
-                                                  ),
-                                            );
-                                        if (!mounted || selected == null) {
-                                          return;
-                                        }
-                                        final code = selected['code'] ?? '';
-                                        setState(() {
-                                          _selectedWilayaCode = code.isNotEmpty
-                                              ? code
-                                              : null;
-                                          _wilayaCtrl.text =
-                                              selected['name_fr'] ?? code;
-                                          _selectedCommuneId = null;
-                                          _dairaCtrl.text = '';
-                                          _communes = const [];
-                                        });
-                                        if (code.isNotEmpty) {
-                                          await _loadCommunes(code);
-                                        }
-                                      },
-                              ),
+                            _buildPickerField(
+                              label: L10n.tr(context, 'profile.wilaya'),
+                              value: _wilayaLabel(context),
+                              icon: Icons.map_outlined,
+                              onTap: (_loadingLocations || _wilayas.isEmpty)
+                                  ? null
+                                  : () async {
+                                      final selected =
+                                          await _showLocationPicker(
+                                            context: context,
+                                            title: L10n.tr(
+                                              context,
+                                              'profile.wilaya',
+                                            ),
+                                            items: _wilayas,
+                                            itemLabel: (item) =>
+                                                _wilayaItemLabel(context, item),
+                                          );
+                                      if (!mounted || selected == null) {
+                                        return;
+                                      }
+                                      final code = selected['code'] ?? '';
+                                      setState(() {
+                                        _selectedWilayaCode = code.isNotEmpty
+                                            ? code
+                                            : null;
+                                        _wilayaCtrl.text =
+                                            selected['name_fr'] ?? code;
+                                        _selectedCommuneId = null;
+                                        _dairaCtrl.text = '';
+                                        _communes = const [];
+                                      });
+                                      if (code.isNotEmpty) {
+                                        await _loadCommunes(code);
+                                      }
+                                    },
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _buildPickerField(
-                                label: L10n.tr(context, 'profile.daira'),
-                                value: _communeLabel(context),
-                                icon: Icons.place_outlined,
-                                onTap:
-                                    (_loadingLocations ||
-                                        _selectedWilayaCode == null ||
-                                        _communes.isEmpty)
-                                    ? null
-                                    : () async {
-                                        final selected =
-                                            await _showLocationPicker(
-                                              context: context,
-                                              title: L10n.tr(
-                                                context,
-                                                'profile.daira',
-                                              ),
-                                              items: _communes,
-                                              itemLabel: (item) =>
-                                                  _communeItemLabel(
-                                                    context,
-                                                    item,
-                                                  ),
-                                            );
-                                        if (!mounted || selected == null) {
-                                          return;
-                                        }
-                                        final communeId = selected['id'] ?? '';
-                                        setState(() {
-                                          _selectedCommuneId =
-                                              communeId.isNotEmpty
-                                              ? communeId
-                                              : null;
-                                          _dairaCtrl.text =
-                                              selected['name_fr'] ??
-                                              (communeId.isNotEmpty
-                                                  ? communeId
-                                                  : '');
-                                        });
-                                      },
-                              ),
+                            const SizedBox(height: 12),
+                            _buildPickerField(
+                              label: L10n.tr(context, 'profile.daira'),
+                              value: _communeLabel(context),
+                              icon: Icons.place_outlined,
+                              onTap:
+                                  (_loadingLocations ||
+                                      _selectedWilayaCode == null ||
+                                      _communes.isEmpty)
+                                  ? null
+                                  : () async {
+                                      final selected =
+                                          await _showLocationPicker(
+                                            context: context,
+                                            title: L10n.tr(
+                                              context,
+                                              'profile.daira',
+                                            ),
+                                            items: _communes,
+                                            itemLabel: (item) =>
+                                                _communeItemLabel(
+                                                  context,
+                                                  item,
+                                                ),
+                                          );
+                                      if (!mounted || selected == null) {
+                                        return;
+                                      }
+                                      final communeId = selected['id'] ?? '';
+                                      setState(() {
+                                        _selectedCommuneId =
+                                            communeId.isNotEmpty
+                                            ? communeId
+                                            : null;
+                                        _dairaCtrl.text =
+                                            selected['name_fr'] ??
+                                            (communeId.isNotEmpty
+                                                ? communeId
+                                                : '');
+                                      });
+                                    },
                             ),
                           ],
                         ),

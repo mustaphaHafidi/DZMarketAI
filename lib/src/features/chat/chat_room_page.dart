@@ -1,9 +1,12 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dzmarket/src/features/listings/product_detail_page.dart';
 import 'package:dzmarket/src/models/chat_message.dart';
+import 'package:dzmarket/src/services/app_error_service.dart';
 import 'package:dzmarket/src/services/chat_repository.dart';
+import 'package:dzmarket/src/services/connectivity_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
+import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/widgets/refresh_controller.dart';
 import 'package:flutter/material.dart';
@@ -119,8 +122,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       _controller.clear();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.toString())));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -134,16 +138,14 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     } catch (_) {}
   }
 
-  Widget _buildSystemMessageForRole(
-    ChatMessage msg, {
-    required bool isSeller,
-  }) {
+  Widget _buildSystemMessageForRole(ChatMessage msg, {required bool isSeller}) {
     final payload = msg.payload ?? const {};
     final i18nKey = payload['i18n_key']?.toString();
     final status = payload['status']?.toString();
     final tracking = payload['tracking_number']?.toString();
     final labelUrl = payload['label_url']?.toString();
-    final statusKey = payload['status_i18n']?.toString() ??
+    final statusKey =
+        payload['status_i18n']?.toString() ??
         (status == null ? null : 'order.status.$status');
     final hasLabel = labelUrl != null && labelUrl.isNotEmpty;
     final messageText = i18nKey != null && i18nKey.isNotEmpty
@@ -160,34 +162,33 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
           color: Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: Theme.of(context)
-                .colorScheme
-                .outlineVariant
-                .withValues(alpha: 0.4),
+            color: Theme.of(
+              context,
+            ).colorScheme.outlineVariant.withValues(alpha: 0.4),
           ),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-              Text(
-                messageText,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium,
+            Text(
+              messageText,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            if (statusText != null && statusText.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  '${L10n.tr(context, 'chat.room.system_status')}: $statusText',
+                ),
               ),
-              if (statusText != null && statusText.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    '${L10n.tr(context, 'chat.room.system_status')}: $statusText',
-                  ),
+            if (tracking != null && tracking.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  '${L10n.tr(context, 'chat.room.system_tracking')}: $tracking',
                 ),
-              if (tracking != null && tracking.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    '${L10n.tr(context, 'chat.room.system_tracking')}: $tracking',
-                  ),
-                ),
+              ),
             if (isSeller)
               if (hasLabel)
                 TextButton.icon(
@@ -220,10 +221,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     final currentUser = supabase.auth.currentUser?.id;
     final isSeller = currentUser != null && _sellerId == currentUser;
 
-      return Scaffold(
-        appBar: AppBar(
-          title: Text(L10n.tr(context, 'chat.room.title')),
-        ),
+    return Scaffold(
+      appBar: AppBar(title: Text(L10n.tr(context, 'chat.room.title'))),
       body: Column(
         children: [
           FutureBuilder<_ProductHeaderData?>(
@@ -234,14 +233,12 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
               }
               final data = snapshot.data;
               if (data == null) return const SizedBox.shrink();
-                final status =
-                    (data.status ?? 'active').toLowerCase() == 'sold'
-                        ? L10n.tr(context, 'chat.room.status_sold')
-                        : L10n.tr(context, 'chat.room.status_available');
-              final statusColor =
-                  (data.status ?? '').toLowerCase() == 'sold'
-                      ? Colors.red.shade300
-                      : Colors.green.shade400;
+              final status = (data.status ?? 'active').toLowerCase() == 'sold'
+                  ? L10n.tr(context, 'chat.room.status_sold')
+                  : L10n.tr(context, 'chat.room.status_available');
+              final statusColor = (data.status ?? '').toLowerCase() == 'sold'
+                  ? Colors.red.shade300
+                  : Colors.green.shade400;
               return InkWell(
                 onTap: () {
                   Navigator.of(context).push(
@@ -252,16 +249,19 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                   );
                 },
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
                     border: Border(
                       bottom: BorderSide(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .outlineVariant
-                            .withValues(alpha: 0.3),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.outlineVariant.withValues(alpha: 0.3),
                       ),
                     ),
                   ),
@@ -274,7 +274,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                           final lowerUrl = imageUrl?.toLowerCase() ?? '';
                           final isHeic = lowerUrl.contains('.heic');
                           final isHeif = lowerUrl.contains('.heif');
-                          if (imageUrl == null || imageUrl.isEmpty || isHeic || isHeif) {
+                          if (imageUrl == null ||
+                              imageUrl.isEmpty ||
+                              isHeic ||
+                              isHeif) {
                             return Container(
                               width: 56,
                               height: 56,
@@ -287,6 +290,18 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                             width: 56,
                             height: 56,
                             fit: BoxFit.cover,
+                            memCacheWidth: NetworkPreferencesService
+                                .instance
+                                .listImageMemCacheWidth,
+                            memCacheHeight: NetworkPreferencesService
+                                .instance
+                                .listImageMemCacheHeight,
+                            fadeInDuration: NetworkPreferencesService
+                                .instance
+                                .imageFadeInDuration,
+                            fadeOutDuration: NetworkPreferencesService
+                                .instance
+                                .imageFadeOutDuration,
                             placeholder: (context, _) => Container(
                               width: 56,
                               height: 56,
@@ -312,9 +327,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                               data.title,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
+                              style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(fontWeight: FontWeight.w600),
                             ),
                             const SizedBox(height: 4),
@@ -326,8 +339,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                                       symbol: 'DZD ',
                                       decimalDigits: 0,
                                     ).format(data.price),
-                                    style:
-                                        Theme.of(context).textTheme.labelLarge,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.labelLarge,
                                   ),
                                 const SizedBox(width: 8),
                                 Container(
@@ -374,10 +388,13 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                   );
                 }
                 return RefreshIndicator(
-                  onRefresh: () => _refreshController.run(context, _forceReload),
+                  onRefresh: () =>
+                      _refreshController.run(context, _forceReload),
                   child: ListView.builder(
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 8,
+                      horizontal: 12,
+                    ),
                     itemCount: messages.length,
                     itemBuilder: (context, index) {
                       final msg = messages[index];
@@ -389,46 +406,45 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                       }
                       final isMine = msg.senderId == currentUser;
                       return Align(
-                        alignment:
-                            isMine ? Alignment.centerRight : Alignment.centerLeft,
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(vertical: 4),
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 8,
-                          horizontal: 12,
+                        alignment: isMine
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 8,
+                            horizontal: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isMine
+                                ? Theme.of(context).colorScheme.primaryContainer
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                msg.text,
+                                style: const TextStyle(fontSize: 15),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                msg.createdAt != null
+                                    ? formatter.format(msg.createdAt!.toLocal())
+                                    : '',
+                                style: Theme.of(context).textTheme.labelSmall
+                                    ?.copyWith(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                    ),
+                              ),
+                            ],
+                          ),
                         ),
-                        decoration: BoxDecoration(
-                          color: isMine
-                              ? Theme.of(context).colorScheme.primaryContainer
-                              : Theme.of(context)
-                                  .colorScheme
-                                  .surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              msg.text,
-                              style: const TextStyle(fontSize: 15),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              msg.createdAt != null
-                                  ? formatter.format(msg.createdAt!.toLocal())
-                                  : '',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelSmall
-                                  ?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
                       );
                     },
                   ),
@@ -446,8 +462,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                       controller: _controller,
                       minLines: 1,
                       maxLines: 4,
-                        decoration: InputDecoration(
-                          hintText: L10n.tr(context, 'chat.room.message_hint'),
+                      decoration: InputDecoration(
+                        hintText: L10n.tr(context, 'chat.room.message_hint'),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -482,15 +498,22 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
           .eq('conversation_id', widget.conversationId)
           .limit(1);
     } catch (e) {
+      AppErrorService.instance.logError(
+        e,
+        StackTrace.current,
+        context: 'chat_room.force_reload',
+      );
       if (mounted) {
+        final looksOffline =
+            !ConnectivityService.instance.isOnline.value ||
+            e.toString().toLowerCase().contains('socketexception') ||
+            e.toString().toLowerCase().contains('failed host lookup');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              L10n.tr(
-                context,
-                'common.error_with',
-                params: {'error': e.toString()},
-              ),
+              looksOffline
+                  ? L10n.tr(context, 'chat.offline_reconnecting')
+                  : L10n.tr(context, 'common.load_error'),
             ),
           ),
         );

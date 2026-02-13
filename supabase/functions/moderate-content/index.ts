@@ -47,6 +47,8 @@ const DEFAULT_TEXT_CATEGORIES = [
   "content-trade",
   "money-transaction",
 ].join(",");
+const MODERATION_FAIL_OPEN =
+  (Deno.env.get("MODERATION_FAIL_OPEN") ?? "true").toLowerCase() !== "false";
 
 const NUDITY_RAW_THRESHOLD = 0.5;
 const NUDITY_PARTIAL_THRESHOLD = 0.85;
@@ -191,6 +193,15 @@ serve(async (req) => {
       labels: reasons,
     });
   } catch (error) {
+    if (MODERATION_FAIL_OPEN) {
+      return jsonResponse({
+        allowed: true,
+        action: "allow",
+        reason: "moderation_unavailable",
+        labels: ["moderation_unavailable"],
+        warning: String(error?.message ?? error),
+      });
+    }
     return jsonResponse(
       { allowed: false, error: String(error?.message ?? error) },
       503,

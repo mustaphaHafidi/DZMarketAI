@@ -8,6 +8,7 @@ Il couvre:
 - securite fonctionnelle (RLS visible via UI)
 - role buyer/seller/superadmin
 - workflows critiques commande/livraison/chat/moderation
+- Total IDs uniques: 281
 
 ## 2) Regles d execution
 - Executer sur `dev` en priorite, puis spot-check sur `staging/prod`.
@@ -199,7 +200,7 @@ Format:
 
 ---
 
-## F. Mes commandes (buyer) et ventes (seller) (24 cas)
+## F. Mes commandes (buyer) et ventes (seller) (26 cas)
 
 - [ ] `TC-ORD-001 | Buyer Orders page sans session | Prompt sign-in | P0`
 - [ ] `TC-ORD-002 | Buyer Orders liste | Affiche max 30 dernieres | P0`
@@ -397,3 +398,7 @@ Go release seulement si:
 - >= 95% des P1 en PASS
 - 0 bug bloqueur ouvert sur Auth/Order/Chat/Moderation
 - aucune fuite de permission role-based observee
+
+## Next Updates
+See NEXT_UPDATES.md for the current prioritized roadmap and release checklist.
+

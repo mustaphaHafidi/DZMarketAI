@@ -61,6 +61,7 @@ dev_dependencies:
     sdk: flutter
   integration_test:
     sdk: flutter
+  flutter_launcher_icons: ^0.14.4
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -84,6 +85,7 @@ flutter:
     - assets/i18n/fr.json
     - assets/i18n/ar.json
     - assets/branding/dzmarket_logo.svg
+    - assets/branding/dzmarket_logo_ui.svg
 
   # To add assets to your application, add an assets section, like this:
   # assets:
@@ -115,3 +117,21 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  web:
+    generate: true
+    image_path: "logos/Logo_DZM1_app.png"
+    background_color: "#ffffff"
+    theme_color: "#ffffff"
+  windows:
+    generate: true
+    image_path: "logos/Logo_DZM1_app.png"
+    icon_size: 256
+  macos:
+    generate: true
+    image_path: "logos/Logo_DZM1_app.png"
+  image_path: "logos/Logo_DZM1_app.png"
+  remove_alpha_ios: true

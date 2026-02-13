@@ -75,3 +75,7 @@
 - Rollback plan (DB + storage).
 - SLA simple + pages status.
 - Support client (retours colis, litiges).
+
+## Next Updates
+See NEXT_UPDATES.md for the current prioritized roadmap and release checklist.
+

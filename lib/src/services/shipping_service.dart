@@ -72,6 +72,75 @@ class CourierCapabilities {
   }
 }
 
+class CourierParcelRules {
+  final int minWeightKg;
+  final int maxWeightKg;
+  final int maxHeightCm;
+  final int maxWidthCm;
+  final int maxLengthCm;
+  final int maxVolumeCm3;
+  final double maxDeclaredValue;
+  final int overweightThresholdKg;
+
+  const CourierParcelRules({
+    required this.minWeightKg,
+    required this.maxWeightKg,
+    required this.maxHeightCm,
+    required this.maxWidthCm,
+    required this.maxLengthCm,
+    required this.maxVolumeCm3,
+    required this.maxDeclaredValue,
+    required this.overweightThresholdKg,
+  });
+
+  static const generic = CourierParcelRules(
+    minWeightKg: 1,
+    maxWeightKg: 60,
+    maxHeightCm: 200,
+    maxWidthCm: 200,
+    maxLengthCm: 200,
+    maxVolumeCm3: 8000000,
+    maxDeclaredValue: 99999999,
+    overweightThresholdKg: 5,
+  );
+
+  CourierParcelRules mergeStrict(CourierParcelRules other) {
+    return CourierParcelRules(
+      minWeightKg: minWeightKg > other.minWeightKg
+          ? minWeightKg
+          : other.minWeightKg,
+      maxWeightKg: maxWeightKg < other.maxWeightKg
+          ? maxWeightKg
+          : other.maxWeightKg,
+      maxHeightCm: maxHeightCm < other.maxHeightCm
+          ? maxHeightCm
+          : other.maxHeightCm,
+      maxWidthCm: maxWidthCm < other.maxWidthCm
+          ? maxWidthCm
+          : other.maxWidthCm,
+      maxLengthCm: maxLengthCm < other.maxLengthCm
+          ? maxLengthCm
+          : other.maxLengthCm,
+      maxVolumeCm3: maxVolumeCm3 < other.maxVolumeCm3
+          ? maxVolumeCm3
+          : other.maxVolumeCm3,
+      maxDeclaredValue: maxDeclaredValue < other.maxDeclaredValue
+          ? maxDeclaredValue
+          : other.maxDeclaredValue,
+      overweightThresholdKg: overweightThresholdKg < other.overweightThresholdKg
+          ? overweightThresholdKg
+          : other.overweightThresholdKg,
+    );
+  }
+}
+
+class CourierParcelValidation {
+  final String code;
+  final Map<String, String> params;
+
+  const CourierParcelValidation(this.code, {this.params = const {}});
+}
+
 class ShippingService {
   // Shared HTTP client to reuse connections across instances.
   static final http.Client _httpClient = http.Client();
@@ -81,6 +150,7 @@ class ShippingService {
   static final Map<String, _CacheItem<List<Map<String, String>>>> _courierWilayasCache = {};
   static final Map<String, _CacheItem<List<Map<String, String>>>> _courierCommunesCache = {};
   static final Map<String, _CacheItem<Map<String, dynamic>>> _ecotrackFeesCache = {};
+  static final Map<String, _CacheItem<CourierParcelRules>> _parcelRulesCache = {};
   static const options = <String>[
     'Livraison domicile (24-72h)',
     'Point relais / bureau poste',
@@ -154,6 +224,91 @@ class ShippingService {
     return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
   }
 
+  static String? _canonicalCourierCode({
+    String? courierId,
+    String? courierName,
+  }) {
+    final merged = _normalizeCourierKey('${courierId ?? ''} ${courierName ?? ''}');
+    if (merged.contains('yalidine')) return 'yalidine';
+    if (merged.contains('ecotrack')) return 'ecotrack';
+    if (merged.contains('zrexpress')) return 'zrexpress';
+    final idKey = _normalizeCourierKey(courierId);
+    if (idKey.isNotEmpty) return idKey;
+    return null;
+  }
+
+  static CourierParcelRules _parcelRulesFromDbRow(
+    Map<String, dynamic> row, {
+    required CourierParcelRules fallback,
+  }) {
+    int parseIntField(String key, int fallbackValue) {
+      final value = row[key];
+      if (value is int) return value;
+      if (value is num) return value.round();
+      return int.tryParse('$value') ?? fallbackValue;
+    }
+
+    double parseDoubleField(String key, double fallbackValue) {
+      final value = row[key];
+      if (value is double) return value;
+      if (value is num) return value.toDouble();
+      return double.tryParse('$value') ?? fallbackValue;
+    }
+
+    return CourierParcelRules(
+      minWeightKg: parseIntField('min_weight_kg', fallback.minWeightKg),
+      maxWeightKg: parseIntField('max_weight_kg', fallback.maxWeightKg),
+      maxHeightCm: parseIntField('max_height_cm', fallback.maxHeightCm),
+      maxWidthCm: parseIntField('max_width_cm', fallback.maxWidthCm),
+      maxLengthCm: parseIntField('max_length_cm', fallback.maxLengthCm),
+      maxVolumeCm3: parseIntField('max_volume_cm3', fallback.maxVolumeCm3),
+      maxDeclaredValue: parseDoubleField(
+        'max_declared_value',
+        fallback.maxDeclaredValue,
+      ),
+      overweightThresholdKg: parseIntField(
+        'overweight_threshold_kg',
+        fallback.overweightThresholdKg,
+      ),
+    );
+  }
+
+  static Future<CourierParcelRules?> _fetchParcelRulesFromDb({
+    required String courierCode,
+    required CourierParcelRules fallback,
+  }) async {
+    final cached = _parcelRulesCache[courierCode];
+    if (cached != null && !cached.isExpired) return cached.value;
+    try {
+      final row = await RateLimiter.instance.run(
+        'shipments.parcel_rules.$courierCode',
+        () => supabase
+            .from('courier_parcel_rules')
+            .select(
+              'courier_code,min_weight_kg,max_weight_kg,max_height_cm,'
+              'max_width_cm,max_length_cm,max_volume_cm3,max_declared_value,'
+              'overweight_threshold_kg',
+            )
+            .eq('courier_code', courierCode)
+            .maybeSingle(),
+      );
+      if (row is Map) {
+        final parsed = _parcelRulesFromDbRow(
+          Map<String, dynamic>.from(row as Map),
+          fallback: fallback,
+        );
+        _parcelRulesCache[courierCode] = _CacheItem(
+          parsed,
+          DateTime.now().add(_cacheTtl),
+        );
+        return parsed;
+      }
+    } catch (_) {
+      // Keep static fallback when table/RLS is not available.
+    }
+    return null;
+  }
+
   static bool isZrExpressCourier({String? courierId, String? courierName}) {
     final idKey = _normalizeCourierKey(courierId);
     final nameKey = _normalizeCourierKey(courierName);
@@ -212,6 +367,160 @@ class ShippingService {
       );
     }
     return caps;
+  }
+
+  static CourierParcelRules parcelRulesFor({
+    String? courierId,
+    String? courierName,
+  }) {
+    final key = _normalizeCourierKey('${courierId ?? ''} ${courierName ?? ''}');
+    if (key.contains('yalidine')) {
+      return const CourierParcelRules(
+        minWeightKg: 1,
+        maxWeightKg: 60,
+        maxHeightCm: 200,
+        maxWidthCm: 200,
+        maxLengthCm: 200,
+        maxVolumeCm3: 8000000,
+        maxDeclaredValue: 99999999,
+        overweightThresholdKg: 5,
+      );
+    }
+    if (key.contains('ecotrack')) {
+      return const CourierParcelRules(
+        minWeightKg: 1,
+        maxWeightKg: 60,
+        maxHeightCm: 200,
+        maxWidthCm: 200,
+        maxLengthCm: 200,
+        maxVolumeCm3: 8000000,
+        maxDeclaredValue: 99999999,
+        overweightThresholdKg: 5,
+      );
+    }
+    if (key.contains('zrexpress')) {
+      return const CourierParcelRules(
+        minWeightKg: 1,
+        maxWeightKg: 60,
+        maxHeightCm: 200,
+        maxWidthCm: 200,
+        maxLengthCm: 200,
+        maxVolumeCm3: 8000000,
+        maxDeclaredValue: 99999999,
+        overweightThresholdKg: 5,
+      );
+    }
+    return CourierParcelRules.generic;
+  }
+
+  static CourierParcelRules aggregateParcelRules(
+    List<Map<String, dynamic>> couriers,
+  ) {
+    if (couriers.isEmpty) return CourierParcelRules.generic;
+    var rules = CourierParcelRules.generic;
+    for (final courier in couriers) {
+      rules = rules.mergeStrict(
+        parcelRulesFor(
+          courierId: courier['courier_id']?.toString(),
+          courierName: courier['courier_name']?.toString(),
+        ),
+      );
+    }
+    return rules;
+  }
+
+  static Future<CourierParcelRules> parcelRulesForAsync({
+    String? courierId,
+    String? courierName,
+  }) async {
+    final fallback = parcelRulesFor(
+      courierId: courierId,
+      courierName: courierName,
+    );
+    final courierCode = _canonicalCourierCode(
+      courierId: courierId,
+      courierName: courierName,
+    );
+    if (courierCode == null || courierCode.isEmpty) return fallback;
+    final remote = await _fetchParcelRulesFromDb(
+      courierCode: courierCode,
+      fallback: fallback,
+    );
+    return remote ?? fallback;
+  }
+
+  static Future<CourierParcelRules> aggregateParcelRulesAsync(
+    List<Map<String, dynamic>> couriers,
+  ) async {
+    if (couriers.isEmpty) return CourierParcelRules.generic;
+    final futures = couriers.map((courier) {
+      return parcelRulesForAsync(
+        courierId: courier['courier_id']?.toString(),
+        courierName: courier['courier_name']?.toString(),
+      );
+    });
+    final resolved = await Future.wait(futures);
+    var rules = CourierParcelRules.generic;
+    for (final item in resolved) {
+      rules = rules.mergeStrict(item);
+    }
+    return rules;
+  }
+
+  static CourierParcelValidation? validateParcel({
+    required CourierParcelRules rules,
+    required int? weightKg,
+    required int? heightCm,
+    required int? widthCm,
+    required int? lengthCm,
+    required double? declaredValue,
+    required bool insuranceActive,
+  }) {
+    if (weightKg == null ||
+        weightKg < rules.minWeightKg ||
+        weightKg > rules.maxWeightKg) {
+      return CourierParcelValidation(
+        'weight_range',
+        params: {
+          'min': rules.minWeightKg.toString(),
+          'max': rules.maxWeightKg.toString(),
+        },
+      );
+    }
+    if (heightCm == null || heightCm < 0 || heightCm > rules.maxHeightCm) {
+      return CourierParcelValidation(
+        'height_max',
+        params: {'max': rules.maxHeightCm.toString()},
+      );
+    }
+    if (widthCm == null || widthCm < 0 || widthCm > rules.maxWidthCm) {
+      return CourierParcelValidation(
+        'width_max',
+        params: {'max': rules.maxWidthCm.toString()},
+      );
+    }
+    if (lengthCm == null || lengthCm < 0 || lengthCm > rules.maxLengthCm) {
+      return CourierParcelValidation(
+        'length_max',
+        params: {'max': rules.maxLengthCm.toString()},
+      );
+    }
+    final volumeCm3 = heightCm * widthCm * lengthCm;
+    if (volumeCm3 > rules.maxVolumeCm3) {
+      return CourierParcelValidation(
+        'volume_max',
+        params: {'max': rules.maxVolumeCm3.toString()},
+      );
+    }
+    if (insuranceActive &&
+        declaredValue != null &&
+        declaredValue > rules.maxDeclaredValue) {
+      return CourierParcelValidation(
+        'declared_value_max',
+        params: {'max': rules.maxDeclaredValue.toStringAsFixed(0)},
+      );
+    }
+    return null;
   }
 
   static String optionLabel(BuildContext context, String option) {
@@ -2008,7 +2317,7 @@ class ShippingService {
                 () => supabase
                     .from(SupabaseTables.orders)
                     .select(
-                      'id, seller_id, courier_name, courier_id, shipping_cost, created_at',
+                      'id, seller_id, courier_name, courier_id, shipping_cost, shipping_option, delivery_method, created_at',
                     )
                     .filter('id', 'in', orderIds),
               );
@@ -2038,6 +2347,8 @@ class ShippingService {
                 order['courier_name'] as String? ??
                 '-',
             'courier_id': order['courier_id'] as String?,
+            'shipping_option': order['shipping_option'] as String?,
+            'delivery_method': order['delivery_method'] as String?,
             'tracking_number': r['tracking_number'] as String?,
             'shipping_cost': r['shipping_cost'] ?? order['shipping_cost'],
             'label_url': r['label_url'] as String?,

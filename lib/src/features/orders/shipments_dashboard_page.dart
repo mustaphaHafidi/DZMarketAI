@@ -1,6 +1,7 @@
 ﻿import 'package:dzmarket/src/features/orders/fulfillment_page.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/utils/delivery_mode_utils.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -60,16 +61,25 @@ class ShipmentsDashboardPage extends StatelessWidget {
                   ? (r['shipping_cost'] as num).toStringAsFixed(0)
                   : null;
               final labelUrl = r['label_url'] as String?;
+              final deliveryMethod = r['delivery_method'] as String?;
+              final shippingOption = r['shipping_option'] as String?;
               final createdAt = r['created_at'] != null
                   ? DateTime.tryParse(r['created_at'] as String)
                   : null;
               final orderId = r['order_id']?.toString() ?? '?';
               final statusLabel = _statusLabel(context, status);
+              final isCancelled = status == 'cancelled';
               final carrierKey = (courierId.isNotEmpty ? courierId : carrier).toLowerCase();
               final isIntegratedCarrier = carrierKey.contains('yalidine') ||
                   carrierKey.contains('ecotrack') ||
                   carrierKey.contains('zrexpress');
-              final allowManualStatus = !isIntegratedCarrier;
+              final allowManualStatus = !isIntegratedCarrier && !isCancelled;
+              final isArrangedOrder = isArrangedDelivery(
+                deliveryMethod: deliveryMethod,
+                shippingOption: shippingOption,
+              );
+              final canGenerateLabel =
+                  labelUrl == null && !isCancelled && !isArrangedOrder;
               return ListTile(
                 title: Text(
                   L10n.tr(
@@ -121,6 +131,18 @@ class ShipmentsDashboardPage extends StatelessWidget {
                         L10n.tr(context, 'shipments.auto_status'),
                         style: TextStyle(color: Theme.of(context).colorScheme.secondary),
                       ),
+                    if (isCancelled)
+                      Text(
+                        L10n.tr(context, 'shipments.cancelled_no_label'),
+                        style: TextStyle(color: Theme.of(context).colorScheme.error),
+                      ),
+                    if (isArrangedOrder)
+                      Text(
+                        L10n.tr(context, 'shipments.arranged_no_label'),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
                     const SizedBox(height: 6),
                     Wrap(
                       spacing: 8,
@@ -131,7 +153,7 @@ class ShipmentsDashboardPage extends StatelessWidget {
                             icon: const Icon(Icons.sync_outlined, size: 18),
                             label: Text(L10n.tr(context, 'shipments.change_status')),
                           ),
-                        if (labelUrl == null)
+                        if (canGenerateLabel)
                           TextButton.icon(
                             onPressed: () async {
                               await Navigator.of(context).push(

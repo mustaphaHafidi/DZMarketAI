@@ -71,6 +71,36 @@ class Product {
   final String? moderationStatus;
   final DateTime? createdAt;
 
+  static bool isLikelyUnsupportedImageUrl(String? rawUrl) {
+    final raw = (rawUrl ?? '').trim().toLowerCase();
+    if (raw.isEmpty) return false;
+    final uri = Uri.tryParse(raw);
+    final path = (uri?.path ?? raw).toLowerCase();
+    return path.endsWith('.heic') ||
+        path.endsWith('.heif') ||
+        raw.contains('format=heic') ||
+        raw.contains('format=heif');
+  }
+
+  List<String> displayableImageUrls({String? fallback}) {
+    final merged = <String>[
+      ...imageUrls,
+      if ((imageUrl ?? '').trim().isNotEmpty) imageUrl!.trim(),
+    ].where((e) => e.trim().isNotEmpty).toList();
+    final supported = merged
+        .where((url) => !isLikelyUnsupportedImageUrl(url))
+        .toList();
+    if (supported.isNotEmpty) return supported;
+    if ((fallback ?? '').trim().isNotEmpty) return [fallback!.trim()];
+    if (merged.isNotEmpty) return merged;
+    return const [];
+  }
+
+  String? firstDisplayableImageUrl({String? fallback}) {
+    final items = displayableImageUrls(fallback: fallback);
+    return items.isEmpty ? null : items.first;
+  }
+
   factory Product.fromJson(Map<String, dynamic> json) => Product(
     id: json['id']?.toString() ?? '',
     title: json['title'] as String? ?? '',

@@ -83,3 +83,7 @@ If requests still fail after these fixes, check:
 3) API credentials validity
 
 No secrets should ever be stored in the repository.
+
+## Next Updates
+See NEXT_UPDATES.md for the current prioritized roadmap and release checklist.
+
