@@ -2,6 +2,12 @@
 
 This folder documents deployment on the App/Edge server when DB and object storage are external.
 
+Current migration references:
+- `infra/HETZNER_MIGRATION_RUNBOOK.md`
+- `infra/hetzner/MIGRATION_INVENTORY.md`
+- `infra/hetzner/ENV_MAPPING_DRAFT.md`
+- `infra/hetzner/SERVERS_CONFIG_AND_KEYS.md`
+
 ## Prerequisites
 - Docker + Docker Compose plugin.
 - External PostgreSQL server ready.
@@ -38,6 +44,8 @@ docker compose -f docker-compose.prod.yml up -d
 - Apply schema: `supabase.sql` + migrations.
 - Deploy functions: `create_shipment`, `job-runner`, `courier-locations`, `validate-courier`.
 - Verify cron workflow secrets (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`) in GitHub.
+- Verify `ANON_KEY` and `SERVICE_ROLE_KEY` are aligned with current `JWT_SECRET`.
+- Verify storage healthcheck reports healthy in `docker compose ps`.
 
 ## Next Updates
 See NEXT_UPDATES.md for the current prioritized roadmap and release checklist.

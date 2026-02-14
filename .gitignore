@@ -54,3 +54,7 @@ app.*.map.json
 # Local history logs
 /historique IA/
 rollout-*.jsonl
+
+# Local ops secrets (never commit)
+infra/hetzner/.secrets.local.md
+infra/hetzner/*.local.secrets.md

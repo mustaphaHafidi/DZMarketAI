@@ -69,6 +69,10 @@ supabase functions deploy moderate-content
 - `PROJECT_CONTEXT.md`
 - `NEXT_STEPS.md`
 - `NEXT_UPDATES.md`
+- `infra/HETZNER_MIGRATION_RUNBOOK.md`
+- `infra/hetzner/MIGRATION_INVENTORY.md`
+- `infra/hetzner/ENV_MAPPING_DRAFT.md`
+- `infra/hetzner/SERVERS_CONFIG_AND_KEYS.md`
 - `E2E_MANUAL_TEST_CASES.md`
 - `E2E_MANUAL_TEST_CASES_AR.md`
 - `GUEPEX_INTEGRATION_DOCUMENTATION.md`
