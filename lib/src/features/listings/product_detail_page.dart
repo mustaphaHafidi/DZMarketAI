@@ -497,6 +497,24 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     return value.contains('Ã') || value.contains('Â') || value.contains('�');
   }
 
+  Widget _topOverlayIconButton({
+    required IconData icon,
+    required VoidCallback? onPressed,
+    Color iconColor = Colors.white,
+  }) {
+    return Container(
+      margin: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.46),
+        shape: BoxShape.circle,
+      ),
+      child: IconButton(
+        icon: Icon(icon, color: iconColor),
+        onPressed: onPressed,
+      ),
+    );
+  }
+
   Future<String?> _chooseDeliveryMode({
     required List<Map<String, dynamic>> enabledCouriers,
   }) async {
@@ -537,54 +555,131 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (!allowCod) {
       method = 'pickup';
     }
+
+    Widget optionTile({
+      required String value,
+      required String title,
+      required String subtitle,
+      required bool enabled,
+      required void Function(void Function()) setSheetState,
+    }) {
+      final selected = method == value;
+      final scheme = Theme.of(context).colorScheme;
+      final borderColor = selected
+          ? scheme.primary
+          : scheme.outlineVariant.withValues(alpha: 0.7);
+      return AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: borderColor, width: selected ? 1.5 : 1),
+          color: selected
+              ? scheme.primary.withValues(alpha: 0.06)
+              : scheme.surface,
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: enabled ? () => setSheetState(() => method = value) : null,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Radio<String>(
+                  value: value,
+                  groupValue: method,
+                  onChanged: enabled
+                      ? (v) {
+                          setSheetState(() => method = v ?? method);
+                        }
+                      : null,
+                  visualDensity: VisualDensity.compact,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Opacity(
+                    opacity: enabled ? 1 : 0.55,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return showModalBottomSheet<String>(
       context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
       showDragHandle: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
       builder: (context) => StatefulBuilder(
-        builder: (context, setSheetState) => Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                L10n.tr(context, 'checkout.choose_delivery_mode'),
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 12),
-              RadioListTile<String>(
-                value: 'pickup',
-                groupValue: method,
-                onChanged: (v) {
-                  setSheetState(() => method = v ?? method);
-                },
-                title: Text(L10n.tr(context, 'checkout.delivery_pickup_title')),
-                subtitle: Text(
-                  L10n.tr(context, 'checkout.delivery_pickup_desc'),
+        builder: (context, setSheetState) => SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  L10n.tr(context, 'checkout.choose_delivery_mode'),
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
-                enabled: true,
-              ),
-              RadioListTile<String>(
-                value: 'cod',
-                groupValue: method,
-                onChanged: allowCod
-                    ? (v) {
-                        setSheetState(() => method = v ?? 'cod');
-                      }
-                    : null,
-                title: Text(L10n.tr(context, 'checkout.delivery_cod_title')),
-                subtitle: Text(codSubtitle),
-                enabled: allowCod,
-              ),
-              const SizedBox(height: 8),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, method),
-                child: Text(L10n.tr(context, 'common.continue')),
-              ),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  L10n.tr(
+                    context,
+                    'checkout.choose_delivery_mode_hint',
+                    fallback:
+                        'Choisissez une option simple. Vous pouvez finaliser les details ensuite.',
+                  ),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 12),
+                optionTile(
+                  value: 'pickup',
+                  title: L10n.tr(context, 'checkout.delivery_pickup_title'),
+                  subtitle: L10n.tr(context, 'checkout.delivery_pickup_desc'),
+                  enabled: true,
+                  setSheetState: setSheetState,
+                ),
+                const SizedBox(height: 10),
+                optionTile(
+                  value: 'cod',
+                  title: L10n.tr(context, 'checkout.delivery_cod_title'),
+                  subtitle: codSubtitle,
+                  enabled: allowCod,
+                  setSheetState: setSheetState,
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () => Navigator.pop(context, method),
+                    icon: const Icon(Icons.arrow_forward),
+                    label: Text(L10n.tr(context, 'common.continue')),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -618,13 +713,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           _acceptedOffer?.agreedAmount ??
           _acceptedOffer?.amount ??
           _product?.price;
-      final confirmed = await _confirmCheckoutSummary(
+      final confirmed = await _confirmArrangedCheckoutSummary(
         price: agreed ?? 0,
-        shippingOption: L10n.tr(context, 'checkout.delivery_pickup_title'),
-        paymentMethod: 'cod',
-        deliveryMode: L10n.tr(context, 'checkout.delivery_pickup_title'),
-        shippingCost: 0,
-        etaLabel: L10n.tr(context, 'checkout.eta_pickup'),
       );
       if (!confirmed) return;
       final orderId = await OrderService().createOrder(
@@ -840,6 +930,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     return showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       showDragHandle: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
@@ -865,30 +956,224 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   ) async {
     if (enabled.length == 1) return enabled.first;
     if (!mounted) return null;
+    var selectedIndex = 0;
     return showModalBottomSheet<Map<String, dynamic>>(
       context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
       showDragHandle: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
-      builder: (context) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            ListTile(title: Text(L10n.tr(context, 'checkout.choose_courier'))),
-            ...enabled.map(
-              (c) => ListTile(
-                title: Text(
-                  c['courier_name']?.toString() ??
-                      L10n.tr(context, 'checkout.courier_placeholder'),
-                ),
-                onTap: () => Navigator.pop(context, c),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final scheme = Theme.of(context).colorScheme;
+          return SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    L10n.tr(context, 'checkout.choose_courier'),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    L10n.tr(
+                      context,
+                      'checkout.choose_courier_hint',
+                      fallback:
+                          'Le prix final de livraison depend du transporteur choisi.',
+                    ),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height * 0.45,
+                    ),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: enabled.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final row = enabled[index];
+                        final selected = index == selectedIndex;
+                        final name =
+                            row['courier_name']?.toString() ??
+                            L10n.tr(context, 'checkout.courier_placeholder');
+                        final coverage = row['coverage']?.toString().trim();
+                        return InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: () =>
+                              setSheetState(() => selectedIndex = index),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: selected
+                                    ? scheme.primary
+                                    : scheme.outlineVariant.withValues(
+                                        alpha: 0.7,
+                                      ),
+                                width: selected ? 1.5 : 1,
+                              ),
+                              color: selected
+                                  ? scheme.primary.withValues(alpha: 0.06)
+                                  : scheme.surface,
+                            ),
+                            child: Row(
+                              children: [
+                                Radio<int>(
+                                  value: index,
+                                  groupValue: selectedIndex,
+                                  onChanged: (v) => setSheetState(
+                                    () => selectedIndex = v ?? 0,
+                                  ),
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        name,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.titleSmall,
+                                      ),
+                                      if (coverage != null &&
+                                          coverage.isNotEmpty)
+                                        Text(
+                                          coverage,
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.bodySmall,
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: () =>
+                          Navigator.pop(context, enabled[selectedIndex]),
+                      icon: const Icon(Icons.local_shipping_outlined),
+                      label: Text(L10n.tr(context, 'common.continue')),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
+  }
+
+  Future<bool> _confirmArrangedCheckoutSummary({required double price}) async {
+    return await showModalBottomSheet<bool>(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          showDragHandle: true,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+          ),
+          builder: (context) => SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    L10n.tr(context, 'checkout.arranged_summary_title'),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 10),
+                  _SummaryRow(
+                    label: L10n.tr(context, 'checkout.price'),
+                    value: '${price.toStringAsFixed(0)} DA',
+                  ),
+                  _SummaryRow(
+                    label: L10n.tr(context, 'checkout.shipping'),
+                    value: L10n.tr(context, 'checkout.delivery_pickup_title'),
+                  ),
+                  _SummaryRow(
+                    label: L10n.tr(context, 'checkout.payment'),
+                    value: PaymentLabels.methodLabel(
+                      context,
+                      'cod',
+                      includeCodSuffix: true,
+                    ),
+                  ),
+                  _SummaryRow(
+                    label: L10n.tr(context, 'checkout.eta'),
+                    value: L10n.tr(context, 'checkout.eta_pickup'),
+                  ),
+                  _SummaryRow(
+                    label: L10n.tr(context, 'checkout.total'),
+                    value: '${price.toStringAsFixed(0)} DA',
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    L10n.tr(
+                      context,
+                      'checkout.arranged_summary_note',
+                      fallback:
+                          'Le vendeur confirmera les details de remise via le chat. Aucun bordereau automatique.',
+                    ),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: Text(L10n.tr(context, 'common.cancel')),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: Text(
+                            L10n.tr(
+                              context,
+                              'checkout.arranged_primary_cta',
+                              fallback: 'Envoyer la demande',
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ) ??
+        false;
   }
 
   Future<bool> _confirmCheckoutSummary({
@@ -899,6 +1184,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     double? shippingCost,
     String? etaLabel,
   }) async {
+    final normalizedPayment = paymentMethod.trim().toLowerCase();
+    final isCod = normalizedPayment == 'cod';
     return await showModalBottomSheet<bool>(
           context: context,
           showDragHandle: true,
@@ -945,6 +1232,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         includeCodSuffix: true,
                       ),
                     ),
+                    if (isCod)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          L10n.tr(context, 'checkout.cod_pay_on_delivery_note'),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
                     if (etaLabel != null)
                       _SummaryRow(
                         label: L10n.tr(context, 'checkout.eta'),
@@ -960,16 +1255,24 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     Row(
                       children: [
                         Expanded(
-                          child: OutlinedButton(
+                          child: OutlinedButton.icon(
                             onPressed: () => Navigator.pop(context, false),
-                            child: Text(L10n.tr(context, 'common.cancel')),
+                            icon: const Icon(Icons.close),
+                            label: Text(L10n.tr(context, 'common.cancel')),
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: FilledButton(
+                          child: FilledButton.icon(
                             onPressed: () => Navigator.pop(context, true),
-                            child: Text(L10n.tr(context, 'checkout.confirm')),
+                            icon: Icon(
+                              isCod ? Icons.check_circle : Icons.payment,
+                            ),
+                            label: Text(
+                              isCod
+                                  ? L10n.tr(context, 'checkout.confirm_order')
+                                  : L10n.tr(context, 'checkout.pay_now'),
+                            ),
                           ),
                         ),
                       ],
@@ -984,6 +1287,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   Future<void> _makeOffer() async {
+    final minOffer = InputSanitizer.offerMinAmountFromBasePrice(
+      _product?.price,
+    );
     final amountController = TextEditingController();
     final sent = await showDialog<bool>(
       context: context,
@@ -997,6 +1303,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
                 labelText: L10n.tr(context, 'offers.amount_label'),
+                helperText: L10n.tr(
+                  context,
+                  'offers.min_50_percent',
+                  fallback:
+                      'Offre minimum: DA ${minOffer.toStringAsFixed(0)} (50%).',
+                  params: {'amount': minOffer.toStringAsFixed(0)},
+                ),
               ),
             ),
           ],
@@ -1011,7 +1324,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               try {
                 final amount = InputSanitizer.parseAmount(
                   amountController.text,
-                  min: 1,
+                  min: minOffer,
                 );
                 await _offerService.makeOffer(
                   productId: widget.productId,
@@ -1024,6 +1337,25 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 ScaffoldMessenger.of(
                   context,
                 ).showSnackBar(SnackBar(content: Text(e.message)));
+              } catch (e) {
+                if (!context.mounted) return;
+                final lower = e.toString().toLowerCase();
+                final isMinOfferError = lower.contains('offer_below_min_ratio');
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      isMinOfferError
+                          ? L10n.tr(
+                              context,
+                              'offers.min_50_percent',
+                              fallback:
+                                  'Offre minimum: DA ${minOffer.toStringAsFixed(0)} (50%).',
+                              params: {'amount': minOffer.toStringAsFixed(0)},
+                            )
+                          : e.toString(),
+                    ),
+                  ),
+                );
               }
             },
             child: Text(L10n.tr(context, 'common.send')),
@@ -1092,12 +1424,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           SliverAppBar(
             pinned: true,
             expandedHeight: 390,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back),
+            leading: _topOverlayIconButton(
+              icon: Icons.arrow_back,
               onPressed: () => Navigator.of(context).maybePop(),
             ),
             actions: [
-              IconButton(icon: const Icon(Icons.share), onPressed: () {}),
+              _topOverlayIconButton(icon: Icons.share, onPressed: () {}),
               if (supabase.auth.currentUser?.id != null)
                 StreamBuilder<Set<String>>(
                   stream: FavoriteService().streamFavorites(
@@ -1106,11 +1438,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   builder: (context, snapshot) {
                     final isFav =
                         snapshot.data?.contains(_product?.id ?? '') ?? false;
-                    return IconButton(
-                      icon: Icon(
-                        isFav ? Icons.favorite : Icons.favorite_border,
-                        color: isFav ? Colors.redAccent : null,
-                      ),
+                    return _topOverlayIconButton(
+                      icon: isFav ? Icons.favorite : Icons.favorite_border,
+                      iconColor: isFav ? Colors.redAccent : Colors.white,
                       onPressed: _product == null
                           ? null
                           : () => FavoriteService().toggleFavorite(
@@ -1121,20 +1451,28 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   },
                 )
               else
-                IconButton(
-                  icon: const Icon(Icons.favorite_border),
+                _topOverlayIconButton(
+                  icon: Icons.favorite_border,
                   onPressed: null,
                 ),
-              PopupMenuButton<String>(
-                onSelected: (v) {
-                  if (v == 'report') _reportListing(context, _product!);
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: 'report',
-                    child: Text(L10n.tr(context, 'report.menu')),
-                  ),
-                ],
+              Container(
+                margin: const EdgeInsets.only(right: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.46),
+                  shape: BoxShape.circle,
+                ),
+                child: PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert, color: Colors.white),
+                  onSelected: (v) {
+                    if (v == 'report') _reportListing(context, _product!);
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: 'report',
+                      child: Text(L10n.tr(context, 'report.menu')),
+                    ),
+                  ],
+                ),
               ),
             ],
             flexibleSpace: FlexibleSpaceBar(
@@ -2043,6 +2381,34 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
     );
   }
 
+  Widget _buildInfoCard({
+    required BuildContext context,
+    required String title,
+    required List<Widget> children,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: scheme.outlineVariant.withValues(alpha: 0.65),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          ...children,
+        ],
+      ),
+    );
+  }
+
   void _openParcelLimitsSheet() {
     showModalBottomSheet<void>(
       context: context,
@@ -2190,256 +2556,229 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-        top: 16,
-      ),
-      child: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          autovalidateMode: AutovalidateMode.onUserInteraction,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (_loadingWilayas || _loadingCommunes)
-                const LinearProgressIndicator(minHeight: 3),
-              Text(
-                L10n.tr(context, 'checkout.delivery_type'),
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-              RadioListTile<String>(
-                value: 'home',
-                groupValue: _deliveryType,
-                title: Text(L10n.tr(context, 'checkout.delivery_home')),
-                onChanged: (v) {
-                  setState(() => _deliveryType = v ?? 'home');
-                  _scheduleFeeRefresh(delay: Duration.zero);
-                },
-              ),
-              if (_allowStopdesk)
+    final media = MediaQuery.of(context);
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          bottom: media.viewInsets.bottom + media.padding.bottom + 16,
+          top: 16,
+        ),
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_loadingWilayas || _loadingCommunes)
+                  const LinearProgressIndicator(minHeight: 3),
+                Text(
+                  L10n.tr(context, 'checkout.delivery_type'),
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
                 RadioListTile<String>(
-                  value: 'stopdesk',
+                  value: 'home',
                   groupValue: _deliveryType,
-                  title: Text(L10n.tr(context, 'checkout.delivery_stopdesk')),
+                  title: Text(L10n.tr(context, 'checkout.delivery_home')),
                   onChanged: (v) {
-                    setState(() => _deliveryType = v ?? 'stopdesk');
+                    setState(() => _deliveryType = v ?? 'home');
                     _scheduleFeeRefresh(delay: Duration.zero);
                   },
                 ),
-              _buildParcelRulesCta(context),
-              const SizedBox(height: 8),
-              Text(
-                L10n.tr(context, 'checkout.sender'),
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-              DropdownButtonFormField<String>(
-                value: _senderWilayaId,
-                decoration: InputDecoration(
-                  labelText: L10n.tr(context, 'checkout.sender_wilaya_label'),
-                ),
-                items: _wilayas
-                    .map(
-                      (w) => DropdownMenuItem(
-                        value: _wilayaId(w),
-                        child: Text(_wilayaDisplayName(w)),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (v) {
-                  final match = _wilayas.firstWhere(
-                    (w) => _wilayaId(w) == v,
-                    orElse: () => {},
-                  );
-                  setState(() {
-                    _senderWilayaId = v;
-                    _senderWilayaName = _wilayaName(match);
-                  });
-                  _scheduleFeeRefresh();
-                },
-                validator: (_) => _senderWilayaId == null
-                    ? L10n.tr(context, 'checkout.error_wilaya_required')
-                    : null,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                L10n.tr(context, 'checkout.receiver'),
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-              TextFormField(
-                controller: _familyNameCtrl,
-                decoration: InputDecoration(
-                  labelText: L10n.tr(context, 'checkout.first_name'),
-                ),
-                onChanged: (_) => setState(() {}),
-                validator: (v) => v == null || v.trim().isEmpty
-                    ? L10n.tr(context, 'checkout.error_name_required')
-                    : null,
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _firstNameCtrl,
-                decoration: InputDecoration(
-                  labelText: L10n.tr(context, 'checkout.last_name'),
-                ),
-                onChanged: (_) => setState(() {}),
-                validator: (v) => v == null || v.trim().isEmpty
-                    ? L10n.tr(context, 'checkout.error_name_required')
-                    : null,
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _phoneCtrl,
-                decoration: InputDecoration(
-                  labelText: L10n.tr(context, 'checkout.phone1'),
-                  helperText: _isZrExpress
-                      ? L10n.tr(context, 'checkout.zr_phone_hint')
-                      : L10n.tr(context, 'checkout.phone_example'),
-                ),
-                keyboardType: TextInputType.phone,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(10),
-                ],
-                onChanged: (_) => setState(() {}),
-                validator: (v) {
-                  final value = v?.trim() ?? '';
-                  if (value.isEmpty) {
-                    return L10n.tr(context, 'checkout.error_phone_required');
-                  }
-                  final ok = RegExp(r'^(05|06|07)\d{8}$').hasMatch(value);
-                  if (!ok) {
-                    return L10n.tr(context, 'checkout.error_phone_invalid');
-                  }
-                  if (_isZrExpress &&
-                      PhoneFormatter.normalizeDzE164ForZr(value).isEmpty) {
-                    return L10n.tr(context, 'checkout.error_zr_phone');
-                  }
-                  return null;
-                },
-              ),
-              if (_isZrExpress)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    PhoneFormatter.normalizeDzE164(_phoneCtrl.text).isNotEmpty
-                        ? L10n.tr(
-                            context,
-                            'checkout.zr_phone_preview',
-                            params: {
-                              'value': PhoneFormatter.normalizeDzE164(
-                                _phoneCtrl.text,
-                              ),
-                            },
-                          )
-                        : L10n.tr(context, 'checkout.zrexpress_notice'),
-                    style: Theme.of(context).textTheme.bodySmall,
+                if (_allowStopdesk)
+                  RadioListTile<String>(
+                    value: 'stopdesk',
+                    groupValue: _deliveryType,
+                    title: Text(L10n.tr(context, 'checkout.delivery_stopdesk')),
+                    onChanged: (v) {
+                      setState(() => _deliveryType = v ?? 'stopdesk');
+                      _scheduleFeeRefresh(delay: Duration.zero);
+                    },
                   ),
+                _buildParcelRulesCta(context),
+                const SizedBox(height: 8),
+                Text(
+                  L10n.tr(context, 'checkout.sender'),
+                  style: Theme.of(context).textTheme.titleSmall,
                 ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _phone2Ctrl,
-                decoration: InputDecoration(
-                  labelText: L10n.tr(context, 'checkout.phone2_optional'),
+                DropdownButtonFormField<String>(
+                  value: _senderWilayaId,
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'checkout.sender_wilaya_label'),
+                  ),
+                  items: _wilayas
+                      .map(
+                        (w) => DropdownMenuItem(
+                          value: _wilayaId(w),
+                          child: Text(_wilayaDisplayName(w)),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) {
+                    final match = _wilayas.firstWhere(
+                      (w) => _wilayaId(w) == v,
+                      orElse: () => {},
+                    );
+                    setState(() {
+                      _senderWilayaId = v;
+                      _senderWilayaName = _wilayaName(match);
+                    });
+                    _scheduleFeeRefresh();
+                  },
+                  validator: (_) => _senderWilayaId == null
+                      ? L10n.tr(context, 'checkout.error_wilaya_required')
+                      : null,
                 ),
-                keyboardType: TextInputType.phone,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(10),
-                ],
-                validator: (v) {
-                  final value = v?.trim() ?? '';
-                  if (value.isEmpty || !_isZrExpress) return null;
-                  return PhoneFormatter.normalizeDzE164ForZr(value).isNotEmpty
-                      ? null
-                      : L10n.tr(context, 'checkout.error_zr_phone');
-                },
-              ),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: _receiverWilayaId,
-                decoration: InputDecoration(
-                  labelText: L10n.tr(context, 'checkout.receiver_wilaya'),
+                const SizedBox(height: 12),
+                Text(
+                  L10n.tr(context, 'checkout.receiver'),
+                  style: Theme.of(context).textTheme.titleSmall,
                 ),
-                items: _wilayas
-                    .map(
-                      (w) => DropdownMenuItem(
-                        value: _wilayaId(w),
-                        child: Text(_wilayaDisplayName(w)),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (v) async {
-                  final match = _wilayas.firstWhere(
-                    (w) => _wilayaId(w) == v,
-                    orElse: () => {},
-                  );
-                  setState(() {
-                    _receiverWilayaId = v;
-                    _receiverWilayaName = _wilayaName(match);
-                    _receiverCommuneName = null;
-                    _receiverCommuneId = null;
-                    _stopdeskCommuneName = null;
-                    _stopdeskId = null;
-                  });
-                  if (v != null) {
-                    await _loadCommunes(v);
-                  }
-                },
-                validator: (_) => _receiverWilayaId == null
-                    ? L10n.tr(context, 'checkout.error_wilaya_required')
-                    : null,
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _dairaCtrl,
-                decoration: InputDecoration(
-                  labelText: L10n.tr(context, 'checkout.receiver_daira'),
+                TextFormField(
+                  controller: _familyNameCtrl,
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'checkout.first_name'),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? L10n.tr(context, 'checkout.error_name_required')
+                      : null,
                 ),
-                onChanged: (_) => setState(() {}),
-                validator: (v) => v == null || v.trim().isEmpty
-                    ? L10n.tr(context, 'checkout.error_daira_required')
-                    : null,
-              ),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: _receiverCommuneName,
-                decoration: InputDecoration(
-                  labelText: L10n.tr(context, 'checkout.receiver_commune'),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _firstNameCtrl,
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'checkout.last_name'),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? L10n.tr(context, 'checkout.error_name_required')
+                      : null,
                 ),
-                items: _communes
-                    .map(
-                      (c) => DropdownMenuItem(
-                        value: _communeName(c),
-                        child: Text(_communeName(c)),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (v) {
-                  final match = _communes.firstWhere(
-                    (c) => _communeName(c) == v,
-                    orElse: () => {},
-                  );
-                  setState(() {
-                    _receiverCommuneName = v;
-                    _receiverCommuneId = match['id']?.toString();
-                  });
-                  _scheduleFeeRefresh();
-                },
-                validator: (_) => _receiverCommuneName == null
-                    ? L10n.tr(context, 'checkout.error_commune_required')
-                    : null,
-              ),
-              if (_allowStopdesk && _deliveryType == 'stopdesk') ...[
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _phoneCtrl,
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'checkout.phone1'),
+                    helperText: _isZrExpress
+                        ? L10n.tr(context, 'checkout.zr_phone_hint')
+                        : L10n.tr(context, 'checkout.phone_example'),
+                  ),
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(10),
+                  ],
+                  onChanged: (_) => setState(() {}),
+                  validator: (v) {
+                    final value = v?.trim() ?? '';
+                    if (value.isEmpty) {
+                      return L10n.tr(context, 'checkout.error_phone_required');
+                    }
+                    final ok = RegExp(r'^(05|06|07)\d{8}$').hasMatch(value);
+                    if (!ok) {
+                      return L10n.tr(context, 'checkout.error_phone_invalid');
+                    }
+                    if (_isZrExpress &&
+                        PhoneFormatter.normalizeDzE164ForZr(value).isEmpty) {
+                      return L10n.tr(context, 'checkout.error_zr_phone');
+                    }
+                    return null;
+                  },
+                ),
+                if (_isZrExpress)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      PhoneFormatter.normalizeDzE164(_phoneCtrl.text).isNotEmpty
+                          ? L10n.tr(
+                              context,
+                              'checkout.zr_phone_preview',
+                              params: {
+                                'value': PhoneFormatter.normalizeDzE164(
+                                  _phoneCtrl.text,
+                                ),
+                              },
+                            )
+                          : L10n.tr(context, 'checkout.zrexpress_notice'),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _phone2Ctrl,
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'checkout.phone2_optional'),
+                  ),
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(10),
+                  ],
+                  validator: (v) {
+                    final value = v?.trim() ?? '';
+                    if (value.isEmpty || !_isZrExpress) return null;
+                    return PhoneFormatter.normalizeDzE164ForZr(value).isNotEmpty
+                        ? null
+                        : L10n.tr(context, 'checkout.error_zr_phone');
+                  },
+                ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  value: _stopdeskCommuneName,
+                  value: _receiverWilayaId,
                   decoration: InputDecoration(
-                    labelText: L10n.tr(context, 'checkout.stopdesk_agency'),
+                    labelText: L10n.tr(context, 'checkout.receiver_wilaya'),
                   ),
-                  items: _stopdeskCommunes
+                  items: _wilayas
+                      .map(
+                        (w) => DropdownMenuItem(
+                          value: _wilayaId(w),
+                          child: Text(_wilayaDisplayName(w)),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) async {
+                    final match = _wilayas.firstWhere(
+                      (w) => _wilayaId(w) == v,
+                      orElse: () => {},
+                    );
+                    setState(() {
+                      _receiverWilayaId = v;
+                      _receiverWilayaName = _wilayaName(match);
+                      _receiverCommuneName = null;
+                      _receiverCommuneId = null;
+                      _stopdeskCommuneName = null;
+                      _stopdeskId = null;
+                    });
+                    if (v != null) {
+                      await _loadCommunes(v);
+                    }
+                  },
+                  validator: (_) => _receiverWilayaId == null
+                      ? L10n.tr(context, 'checkout.error_wilaya_required')
+                      : null,
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _dairaCtrl,
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'checkout.receiver_daira'),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? L10n.tr(context, 'checkout.error_daira_required')
+                      : null,
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: _receiverCommuneName,
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'checkout.receiver_commune'),
+                  ),
+                  items: _communes
                       .map(
                         (c) => DropdownMenuItem(
                           value: _communeName(c),
@@ -2448,257 +2787,306 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                       )
                       .toList(),
                   onChanged: (v) {
-                    final match = _stopdeskCommunes.firstWhere(
+                    final match = _communes.firstWhere(
                       (c) => _communeName(c) == v,
                       orElse: () => {},
                     );
                     setState(() {
-                      _stopdeskCommuneName = v;
-                      _stopdeskId = _supportsStopdeskList
-                          ? match['stopdesk_id']?.toString()
-                          : null;
-                      if (v != null && v.isNotEmpty) {
-                        _receiverCommuneName = v;
-                        _receiverCommuneId = match['id']?.toString();
-                      }
+                      _receiverCommuneName = v;
+                      _receiverCommuneId = match['id']?.toString();
                     });
                     _scheduleFeeRefresh();
                   },
-                  validator: (_) => _stopdeskCommuneName == null
-                      ? L10n.tr(context, 'checkout.error_agency_required')
+                  validator: (_) => _receiverCommuneName == null
+                      ? L10n.tr(context, 'checkout.error_commune_required')
                       : null,
                 ),
-              ],
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _addressCtrl,
-                decoration: InputDecoration(
-                  labelText: L10n.tr(context, 'checkout.address_full'),
-                ),
-                onChanged: (_) => setState(() {}),
-                validator: (v) => v == null || v.trim().isEmpty
-                    ? L10n.tr(context, 'checkout.error_address_required')
-                    : null,
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _zipCtrl,
-                decoration: InputDecoration(
-                  labelText: L10n.tr(context, 'checkout.zip_optional'),
-                ),
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(10),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                L10n.tr(context, 'checkout.package_details'),
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-              TextFormField(
-                controller: _productListCtrl,
-                decoration: InputDecoration(
-                  labelText: L10n.tr(context, 'checkout.product_list'),
-                ),
-                onChanged: (_) => setState(() {}),
-                validator: (v) => v == null || v.trim().isEmpty
-                    ? L10n.tr(context, 'checkout.error_product_list_required')
-                    : null,
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _orderNumberCtrl,
-                decoration: InputDecoration(
-                  labelText: L10n.tr(context, 'checkout.order_number'),
-                ),
-                enabled: false,
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _priceCtrl,
-                decoration: InputDecoration(
-                  labelText: L10n.tr(context, 'checkout.cod_price'),
-                ),
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(6),
-                ],
-                onChanged: (_) {
-                  setState(() {});
-                  _scheduleFeeRefresh();
-                },
-                validator: (v) => v == null || v.trim().isEmpty
-                    ? L10n.tr(context, 'checkout.error_price_required')
-                    : null,
-              ),
-              const SizedBox(height: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _SummaryRow(
-                    label: L10n.tr(context, 'checkout.free_shipping'),
-                    value: _freeShipping
-                        ? L10n.tr(context, 'common.yes')
-                        : L10n.tr(context, 'common.no'),
-                  ),
-                  _SummaryRow(
-                    label: L10n.tr(context, 'checkout.exchange_after_delivery'),
-                    value: _exchangeAfterDelivery
-                        ? L10n.tr(context, 'common.yes')
-                        : L10n.tr(context, 'common.no'),
-                  ),
-                  _SummaryRow(
-                    label: L10n.tr(context, 'listing.add.allow_stopdesk'),
-                    value: _allowStopdesk
-                        ? L10n.tr(context, 'common.yes')
-                        : L10n.tr(context, 'common.no'),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    L10n.tr(context, 'checkout.insurance'),
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  _SummaryRow(
-                    label: L10n.tr(context, 'checkout.insurance_active'),
-                    value: _insuranceActive
-                        ? L10n.tr(context, 'common.yes')
-                        : L10n.tr(context, 'common.no'),
-                  ),
-                  _SummaryRow(
-                    label: L10n.tr(context, 'checkout.declared_value'),
-                    value: _declaredValueCtrl.text.trim().isEmpty
-                        ? '-'
-                        : _declaredValueCtrl.text.trim(),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    L10n.tr(context, 'checkout.dimensions_weight'),
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  _SummaryRow(
-                    label: L10n.tr(context, 'checkout.weight_kg'),
-                    value: _weightCtrl.text.trim().isEmpty
-                        ? '-'
-                        : _weightCtrl.text.trim(),
-                  ),
-                  _SummaryRow(
-                    label: L10n.tr(context, 'checkout.height_cm'),
-                    value: _heightCtrl.text.trim().isEmpty
-                        ? '-'
-                        : _heightCtrl.text.trim(),
-                  ),
-                  _SummaryRow(
-                    label: L10n.tr(context, 'checkout.width_cm'),
-                    value: _widthCtrl.text.trim().isEmpty
-                        ? '-'
-                        : _widthCtrl.text.trim(),
-                  ),
-                  _SummaryRow(
-                    label: L10n.tr(context, 'checkout.length_cm'),
-                    value: _lengthCtrl.text.trim().isEmpty
-                        ? '-'
-                        : _lengthCtrl.text.trim(),
-                  ),
+                if (_allowStopdesk && _deliveryType == 'stopdesk') ...[
                   const SizedBox(height: 8),
-                  Text(
-                    L10n.tr(
-                      context,
-                      'checkout.overweight_label',
-                      params: {
-                        'value':
-                            (int.tryParse(_weightCtrl.text.trim()) != null &&
-                                int.parse(_weightCtrl.text.trim()) >
-                                    _parcelRules.overweightThresholdKg)
-                            ? L10n.tr(context, 'common.yes')
-                            : L10n.tr(context, 'common.no'),
-                      },
+                  DropdownButtonFormField<String>(
+                    value: _stopdeskCommuneName,
+                    decoration: InputDecoration(
+                      labelText: L10n.tr(context, 'checkout.stopdesk_agency'),
                     ),
+                    items: _stopdeskCommunes
+                        .map(
+                          (c) => DropdownMenuItem(
+                            value: _communeName(c),
+                            child: Text(_communeName(c)),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) {
+                      final match = _stopdeskCommunes.firstWhere(
+                        (c) => _communeName(c) == v,
+                        orElse: () => {},
+                      );
+                      setState(() {
+                        _stopdeskCommuneName = v;
+                        _stopdeskId = _supportsStopdeskList
+                            ? match['stopdesk_id']?.toString()
+                            : null;
+                        if (v != null && v.isNotEmpty) {
+                          _receiverCommuneName = v;
+                          _receiverCommuneId = match['id']?.toString();
+                        }
+                      });
+                      _scheduleFeeRefresh();
+                    },
+                    validator: (_) => _stopdeskCommuneName == null
+                        ? L10n.tr(context, 'checkout.error_agency_required')
+                        : null,
                   ),
                 ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                L10n.tr(context, 'checkout.price_summary'),
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-              if (_freeShipping)
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _addressCtrl,
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'checkout.address_full'),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? L10n.tr(context, 'checkout.error_address_required')
+                      : null,
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _zipCtrl,
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'checkout.zip_optional'),
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(10),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 Text(
-                  L10n.tr(
+                  L10n.tr(context, 'checkout.package_details'),
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                TextFormField(
+                  controller: _productListCtrl,
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'checkout.product_list'),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? L10n.tr(context, 'checkout.error_product_list_required')
+                      : null,
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _orderNumberCtrl,
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'checkout.order_number'),
+                  ),
+                  enabled: false,
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _priceCtrl,
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(context, 'checkout.cod_price'),
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(6),
+                  ],
+                  onChanged: (_) {
+                    setState(() {});
+                    _scheduleFeeRefresh();
+                  },
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? L10n.tr(context, 'checkout.error_price_required')
+                      : null,
+                ),
+                const SizedBox(height: 8),
+                _buildInfoCard(
+                  context: context,
+                  title: L10n.tr(
                     context,
-                    'checkout.fees_estimated',
-                    params: {'amount': '0'},
+                    'checkout.delivery_options_title',
+                    fallback: 'Options de livraison',
                   ),
-                )
-              else if (_estimatingFee)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 4),
-                  child: SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              else if (_estimatedFee != null)
-                Text(
-                  L10n.tr(
-                    context,
-                    'checkout.fees_estimated',
-                    params: {'amount': _estimatedFee!.toStringAsFixed(0)},
-                  ),
-                )
-              else
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      _estimateError ??
-                          L10n.tr(context, 'checkout.fees_unavailable'),
+                    _SummaryRow(
+                      label: L10n.tr(context, 'checkout.free_shipping'),
+                      value: _freeShipping
+                          ? L10n.tr(context, 'common.yes')
+                          : L10n.tr(context, 'common.no'),
                     ),
-                    TextButton.icon(
-                      onPressed: () =>
-                          _scheduleFeeRefresh(delay: Duration.zero),
-                      icon: const Icon(Icons.refresh),
-                      label: Text(L10n.tr(context, 'common.retry')),
+                    _SummaryRow(
+                      label: L10n.tr(
+                        context,
+                        'checkout.exchange_after_delivery',
+                      ),
+                      value: _exchangeAfterDelivery
+                          ? L10n.tr(context, 'common.yes')
+                          : L10n.tr(context, 'common.no'),
+                    ),
+                    _SummaryRow(
+                      label: L10n.tr(context, 'listing.add.allow_stopdesk'),
+                      value: _allowStopdesk
+                          ? L10n.tr(context, 'common.yes')
+                          : L10n.tr(context, 'common.no'),
                     ),
                   ],
                 ),
-              if (!_freeShipping && _feeSource != null)
-                Text(
-                  L10n.tr(
-                    context,
-                    'checkout.fees_by_carrier',
-                    params: {'carrier': widget.courierName},
-                    fallback: L10n.tr(context, 'checkout.fees_by_yalidine'),
-                  ),
-                  style: Theme.of(context).textTheme.bodySmall,
+                _buildInfoCard(
+                  context: context,
+                  title: L10n.tr(context, 'checkout.insurance'),
+                  children: [
+                    _SummaryRow(
+                      label: L10n.tr(context, 'checkout.insurance_active'),
+                      value: _insuranceActive
+                          ? L10n.tr(context, 'common.yes')
+                          : L10n.tr(context, 'common.no'),
+                    ),
+                    _SummaryRow(
+                      label: L10n.tr(context, 'checkout.declared_value'),
+                      value: _declaredValueCtrl.text.trim().isEmpty
+                          ? '-'
+                          : _declaredValueCtrl.text.trim(),
+                    ),
+                  ],
                 ),
-              CheckboxListTile(
-                value: _acceptTerms,
-                onChanged: (v) => setState(() => _acceptTerms = v ?? false),
-                title: Text(L10n.tr(context, 'checkout.accept_terms')),
-              ),
-              if (_loadError != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    _loadError!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
+                _buildInfoCard(
+                  context: context,
+                  title: L10n.tr(context, 'checkout.dimensions_weight'),
+                  children: [
+                    _SummaryRow(
+                      label: L10n.tr(context, 'checkout.weight_kg'),
+                      value: _weightCtrl.text.trim().isEmpty
+                          ? '-'
+                          : _weightCtrl.text.trim(),
+                    ),
+                    _SummaryRow(
+                      label: L10n.tr(context, 'checkout.height_cm'),
+                      value: _heightCtrl.text.trim().isEmpty
+                          ? '-'
+                          : _heightCtrl.text.trim(),
+                    ),
+                    _SummaryRow(
+                      label: L10n.tr(context, 'checkout.width_cm'),
+                      value: _widthCtrl.text.trim().isEmpty
+                          ? '-'
+                          : _widthCtrl.text.trim(),
+                    ),
+                    _SummaryRow(
+                      label: L10n.tr(context, 'checkout.length_cm'),
+                      value: _lengthCtrl.text.trim().isEmpty
+                          ? '-'
+                          : _lengthCtrl.text.trim(),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      L10n.tr(
+                        context,
+                        'checkout.overweight_label',
+                        params: {
+                          'value':
+                              (int.tryParse(_weightCtrl.text.trim()) != null &&
+                                  int.parse(_weightCtrl.text.trim()) >
+                                      _parcelRules.overweightThresholdKg)
+                              ? L10n.tr(context, 'common.yes')
+                              : L10n.tr(context, 'common.no'),
+                        },
+                      ),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  L10n.tr(context, 'checkout.price_summary'),
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                if (_freeShipping)
+                  Text(
+                    L10n.tr(
+                      context,
+                      'checkout.fees_estimated',
+                      params: {'amount': '0'},
+                    ),
+                  )
+                else if (_estimatingFee)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 4),
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                else if (_estimatedFee != null)
+                  Text(
+                    L10n.tr(
+                      context,
+                      'checkout.fees_estimated',
+                      params: {'amount': _estimatedFee!.toStringAsFixed(0)},
+                    ),
+                  )
+                else
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _estimateError ??
+                            L10n.tr(context, 'checkout.fees_unavailable'),
+                      ),
+                      TextButton.icon(
+                        onPressed: () =>
+                            _scheduleFeeRefresh(delay: Duration.zero),
+                        icon: const Icon(Icons.refresh),
+                        label: Text(L10n.tr(context, 'common.retry')),
+                      ),
+                    ],
+                  ),
+                if (!_freeShipping && _feeSource != null)
+                  Text(
+                    L10n.tr(
+                      context,
+                      'checkout.fees_by_carrier',
+                      params: {'carrier': widget.courierName},
+                      fallback: L10n.tr(context, 'checkout.fees_by_yalidine'),
+                    ),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                CheckboxListTile(
+                  value: _acceptTerms,
+                  onChanged: (v) => setState(() => _acceptTerms = v ?? false),
+                  title: Text(L10n.tr(context, 'checkout.accept_terms')),
+                ),
+                if (_loadError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      _loadError!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _canSubmit ? _submit : null,
+                    icon: const Icon(Icons.check_circle_outline),
+                    label: Text(
+                      L10n.tr(
+                        context,
+                        'checkout.confirm_order',
+                        fallback: L10n.tr(context, 'common.confirm'),
+                      ),
                     ),
                   ),
                 ),
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerRight,
-                child: ElevatedButton(
-                  onPressed: _canSubmit ? _submit : null,
-                  child: Text(L10n.tr(context, 'common.confirm')),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -2719,6 +3107,17 @@ class _ImageCarousel extends StatefulWidget {
 class _ImageCarouselState extends State<_ImageCarousel> {
   int _index = 0;
 
+  Future<void> _openFullscreen(int initialIndex) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _FullscreenGallery(
+          images: widget.images,
+          initialIndex: initialIndex,
+        ),
+      ),
+    );
+  }
+
   Future<void> _goTo(int page) async {
     if (!widget.controller.hasClients) return;
     await widget.controller.animateToPage(
@@ -2737,17 +3136,19 @@ class _ImageCarouselState extends State<_ImageCarousel> {
           controller: widget.controller,
           onPageChanged: (i) => setState(() => _index = i),
           itemCount: widget.images.length,
-          itemBuilder: (context, i) => CachedNetworkImage(
-            imageUrl: widget.images[i],
-            fit: BoxFit.cover,
-            memCacheWidth: imagePrefs.detailImageMemCacheWidth,
-            memCacheHeight: imagePrefs.detailImageMemCacheHeight,
-            fadeInDuration: imagePrefs.imageFadeInDuration,
-            fadeOutDuration: imagePrefs.imageFadeOutDuration,
-            imageRenderMethodForWeb: ImageRenderMethodForWeb.HtmlImage,
-            errorWidget: (_, __, ___) => const ColoredBox(
-              color: Colors.black12,
-              child: Center(child: Icon(Icons.image_not_supported)),
+          itemBuilder: (context, i) => GestureDetector(
+            onTap: () => _openFullscreen(i),
+            child: CachedNetworkImage(
+              imageUrl: widget.images[i],
+              fit: BoxFit.cover,
+              memCacheWidth: imagePrefs.detailImageMemCacheWidth,
+              fadeInDuration: imagePrefs.imageFadeInDuration,
+              fadeOutDuration: imagePrefs.imageFadeOutDuration,
+              imageRenderMethodForWeb: ImageRenderMethodForWeb.HtmlImage,
+              errorWidget: (_, __, ___) => const ColoredBox(
+                color: Colors.black12,
+                child: Center(child: Icon(Icons.image_not_supported)),
+              ),
             ),
           ),
         ),
@@ -2806,7 +3207,6 @@ class _ImageCarouselState extends State<_ImageCarousel> {
                           imageUrl: widget.images[i],
                           fit: BoxFit.cover,
                           memCacheWidth: 140,
-                          memCacheHeight: 140,
                           fadeInDuration: imagePrefs.imageFadeInDuration,
                           fadeOutDuration: imagePrefs.imageFadeOutDuration,
                           imageRenderMethodForWeb:
@@ -2847,6 +3247,160 @@ class _ImageCarouselState extends State<_ImageCarousel> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _FullscreenGallery extends StatefulWidget {
+  const _FullscreenGallery({required this.images, required this.initialIndex});
+
+  final List<String> images;
+  final int initialIndex;
+
+  @override
+  State<_FullscreenGallery> createState() => _FullscreenGalleryState();
+}
+
+class _FullscreenGalleryState extends State<_FullscreenGallery> {
+  late final PageController _controller;
+  late int _index;
+
+  @override
+  void initState() {
+    super.initState();
+    _index = widget.initialIndex.clamp(0, widget.images.length - 1);
+    _controller = PageController(initialPage: _index);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          PageView.builder(
+            controller: _controller,
+            itemCount: widget.images.length,
+            onPageChanged: (value) => setState(() => _index = value),
+            itemBuilder: (context, i) => SafeArea(
+              child: _ZoomableNetworkImage(imageUrl: widget.images[i]),
+            ),
+          ),
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 8,
+            left: 8,
+            child: IconButton(
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.close),
+              color: Colors.white,
+            ),
+          ),
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 16,
+            right: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                '${_index + 1}/${widget.images.length}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ZoomableNetworkImage extends StatefulWidget {
+  const _ZoomableNetworkImage({required this.imageUrl});
+
+  final String imageUrl;
+
+  @override
+  State<_ZoomableNetworkImage> createState() => _ZoomableNetworkImageState();
+}
+
+class _ZoomableNetworkImageState extends State<_ZoomableNetworkImage> {
+  final TransformationController _controller = TransformationController();
+  TapDownDetails? _doubleTapDetails;
+  bool _panEnabled = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onDoubleTap() {
+    final currentScale = _controller.value.getMaxScaleOnAxis();
+    if (currentScale > 1.01) {
+      _controller.value = Matrix4.identity();
+      setState(() => _panEnabled = false);
+      return;
+    }
+
+    final targetScale = 2.5;
+    final tap = _doubleTapDetails?.localPosition;
+    if (tap == null) {
+      _controller.value = Matrix4.identity()..scale(targetScale);
+    } else {
+      final dx = -tap.dx * (targetScale - 1);
+      final dy = -tap.dy * (targetScale - 1);
+      _controller.value = Matrix4.identity()
+        ..translate(dx, dy)
+        ..scale(targetScale);
+    }
+    setState(() => _panEnabled = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final imagePrefs = NetworkPreferencesService.instance;
+    return GestureDetector(
+      onDoubleTapDown: (details) => _doubleTapDetails = details,
+      onDoubleTap: _onDoubleTap,
+      child: InteractiveViewer(
+        transformationController: _controller,
+        minScale: 1,
+        maxScale: 4,
+        panEnabled: _panEnabled,
+        boundaryMargin: const EdgeInsets.all(64),
+        onInteractionEnd: (_) {
+          final isZoomed = _controller.value.getMaxScaleOnAxis() > 1.01;
+          if (_panEnabled != isZoomed) {
+            setState(() => _panEnabled = isZoomed);
+          }
+        },
+        child: Center(
+          child: CachedNetworkImage(
+            imageUrl: widget.imageUrl,
+            fit: BoxFit.contain,
+            memCacheWidth: imagePrefs.detailImageMemCacheWidth,
+            fadeInDuration: imagePrefs.imageFadeInDuration,
+            fadeOutDuration: imagePrefs.imageFadeOutDuration,
+            imageRenderMethodForWeb: ImageRenderMethodForWeb.HtmlImage,
+            errorWidget: (_, __, ___) => const Icon(
+              Icons.image_not_supported,
+              color: Colors.white70,
+              size: 36,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

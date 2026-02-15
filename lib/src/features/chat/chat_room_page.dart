@@ -10,6 +10,7 @@ import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:dzmarket/src/services/offer_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/utils/label_url_resolver.dart';
 import 'package:dzmarket/src/widgets/refresh_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -172,7 +173,28 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       await action();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      final lower = e.toString().toLowerCase();
+      if (lower.contains('offer_below_min_ratio')) {
+        final minOffer = await _minOfferAmountForCurrentProduct();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              L10n.tr(
+                context,
+                'offers.min_50_percent',
+                fallback:
+                    'Offre minimum: DA ${minOffer.toStringAsFixed(0)} (50%).',
+                params: {'amount': minOffer.toStringAsFixed(0)},
+              ),
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$e')));
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -183,9 +205,16 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     }
   }
 
+  Future<double> _minOfferAmountForCurrentProduct() async {
+    final header = await _headerFuture;
+    return InputSanitizer.offerMinAmountFromBasePrice(header?.price);
+  }
+
   Future<void> _sendOfferFromChat() async {
     final currentUser = supabase.auth.currentUser?.id;
     if (currentUser == null || _productId == null || _sellerId == null) return;
+    final minOffer = await _minOfferAmountForCurrentProduct();
+    if (!mounted) return;
     final amountController = TextEditingController();
     final sent = await showDialog<bool>(
       context: context,
@@ -199,6 +228,13 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
                 labelText: L10n.tr(context, 'offers.amount_label'),
+                helperText: L10n.tr(
+                  context,
+                  'offers.min_50_percent',
+                  fallback:
+                      'Offre minimum: DA ${minOffer.toStringAsFixed(0)} (50%).',
+                  params: {'amount': minOffer.toStringAsFixed(0)},
+                ),
               ),
             ),
           ],
@@ -213,7 +249,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
               try {
                 final amount = InputSanitizer.parseAmount(
                   amountController.text,
-                  min: 1,
+                  min: minOffer,
                 );
                 await _offerService.makeOffer(
                   productId: _productId!,
@@ -226,6 +262,25 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                 ScaffoldMessenger.of(
                   context,
                 ).showSnackBar(SnackBar(content: Text(e.message)));
+              } catch (e) {
+                if (!context.mounted) return;
+                final lower = e.toString().toLowerCase();
+                final isMinOfferError = lower.contains('offer_below_min_ratio');
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      isMinOfferError
+                          ? L10n.tr(
+                              context,
+                              'offers.min_50_percent',
+                              fallback:
+                                  'Offre minimum: DA ${minOffer.toStringAsFixed(0)} (50%).',
+                              params: {'amount': minOffer.toStringAsFixed(0)},
+                            )
+                          : e.toString(),
+                    ),
+                  ),
+                );
               }
             },
             child: Text(L10n.tr(context, 'common.send')),
@@ -266,7 +321,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     final i18nKey = payload['i18n_key']?.toString();
     final status = payload['status']?.toString();
     final tracking = payload['tracking_number']?.toString();
-    final labelUrl = payload['label_url']?.toString();
+    final labelUrl = normalizeLabelUrl(payload['label_url']?.toString());
     final hasOfferPayload = offerId != null && offerId.isNotEmpty;
     final isOfferEvent =
         hasOfferPayload || (i18nKey?.startsWith('offer.system.') ?? false);
@@ -293,7 +348,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     final statusKey =
         payload['status_i18n']?.toString() ??
         (status == null ? null : 'order.status.$status');
-    final hasLabel = labelUrl != null && labelUrl.isNotEmpty;
+    final hasLabel = labelUrl.isNotEmpty;
     final isShipmentLikeEvent =
         !isOfferEvent &&
         (hasLabel ||
@@ -372,7 +427,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
               if (hasLabel)
                 TextButton.icon(
                   onPressed: () async {
-                    final uri = Uri.tryParse(labelUrl);
+                    final uri = resolveLabelUri(labelUrl);
                     if (uri != null) {
                       await launchUrl(
                         uri,
@@ -458,6 +513,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                       onPressed: isBusyThisMessage
                           ? null
                           : () async {
+                              final minOffer =
+                                  await _minOfferAmountForCurrentProduct();
+                              if (!mounted) return;
                               final ctrl = TextEditingController(
                                 text: effectiveAmount.toStringAsFixed(0),
                               );
@@ -475,6 +533,15 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                                         context,
                                         'offers.amount_label',
                                       ),
+                                      helperText: L10n.tr(
+                                        context,
+                                        'offers.min_50_percent',
+                                        fallback:
+                                            'Offre minimum: DA ${minOffer.toStringAsFixed(0)} (50%).',
+                                        params: {
+                                          'amount': minOffer.toStringAsFixed(0),
+                                        },
+                                      ),
                                     ),
                                   ),
                                   actions: [
@@ -489,7 +556,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                                         try {
                                           final v = InputSanitizer.parseAmount(
                                             ctrl.text,
-                                            min: 1,
+                                            min: minOffer,
                                           );
                                           Navigator.pop(context, v);
                                         } on FormatException catch (e) {

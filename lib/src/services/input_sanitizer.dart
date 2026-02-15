@@ -98,10 +98,7 @@ class InputSanitizer {
     return uri.toString();
   }
 
-  static List<String> sanitizeUrlList(
-    List<String> urls, {
-    int maxItems = 6,
-  }) {
+  static List<String> sanitizeUrlList(List<String> urls, {int maxItems = 6}) {
     final cleaned = <String>[];
     for (final url in urls) {
       final sanitized = sanitizeUrl(url);
@@ -124,5 +121,16 @@ class InputSanitizer {
       throw FormatException('Invalid amount.');
     }
     return parsed;
+  }
+
+  static double offerMinAmountFromBasePrice(
+    double? basePrice, {
+    double ratio = 0.5,
+    double minimum = 1,
+  }) {
+    final base = (basePrice ?? 0).isFinite ? (basePrice ?? 0) : 0;
+    final computed = (base * ratio).ceilToDouble();
+    if (computed < minimum) return minimum;
+    return computed;
   }
 }
