@@ -9,8 +9,8 @@ class LocationDataService {
   LocationDataService._();
   static final instance = LocationDataService._();
 
-  static const _wilayasCacheKey = 'cache.wilayas.v2';
-  static const _communesCachePrefix = 'cache.communes.v2.';
+  static const _wilayasCacheKey = 'cache.wilayas.v3';
+  static const _communesCachePrefix = 'cache.communes.v3.';
   static const Duration _cacheTtl = Duration(hours: 12);
 
   List<Map<String, String>>? _wilayasCache;
@@ -35,8 +35,8 @@ class LocationDataService {
           .map(
             (r) => {
               'code': r['code']?.toString() ?? '',
-              'name_fr': r['name_fr']?.toString() ?? '',
-              'name_ar': r['name_ar']?.toString() ?? '',
+              'name_fr': _normalizeName(r['name_fr']?.toString()),
+              'name_ar': _normalizeName(r['name_ar']?.toString()),
             },
           )
           .where((r) => r['code']!.isNotEmpty && r['name_fr']!.isNotEmpty)
@@ -71,8 +71,8 @@ class LocationDataService {
           .map(
             (r) => {
               'id': r['id']?.toString() ?? '',
-              'name_fr': r['name_fr']?.toString() ?? '',
-              'name_ar': r['name_ar']?.toString() ?? '',
+              'name_fr': _normalizeName(r['name_fr']?.toString()),
+              'name_ar': _normalizeName(r['name_ar']?.toString()),
             },
           )
           .where((r) => r['id']!.isNotEmpty && r['name_fr']!.isNotEmpty)
@@ -101,7 +101,12 @@ class LocationDataService {
           .whereType<Map>()
           .map(
             (e) => e.map(
-              (k, v) => MapEntry(k.toString(), v?.toString() ?? ''),
+              (k, v) => MapEntry(
+                k.toString(),
+                k.toString().startsWith('name_')
+                    ? _normalizeName(v?.toString())
+                    : (v?.toString() ?? ''),
+              ),
             ),
           )
           .toList();
@@ -120,5 +125,22 @@ class LocationDataService {
       });
       await prefs.setString(key, payload);
     } catch (_) {}
+  }
+
+  bool _looksMojibake(String value) {
+    return value.contains('Ã') || value.contains('Â') || value.contains('ï¿½');
+  }
+
+  String _normalizeName(String? value) {
+    final input = value?.trim() ?? '';
+    if (input.isEmpty || !_looksMojibake(input)) return input;
+    try {
+      final decoded = utf8.decode(latin1.encode(input));
+      final normalized = decoded.trim();
+      if (normalized.isNotEmpty && !_looksMojibake(normalized)) {
+        return normalized;
+      }
+    } catch (_) {}
+    return input;
   }
 }

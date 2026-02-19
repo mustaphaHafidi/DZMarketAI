@@ -3,6 +3,7 @@ import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/utils/delivery_mode_utils.dart';
 import 'package:dzmarket/src/services/i18n.dart';
+import 'package:dzmarket/src/utils/label_url_resolver.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -248,7 +249,8 @@ class ShipmentsDashboardPage extends StatelessWidget {
   }
 
   Future<void> _openLabel(String url) async {
-    final uri = Uri.parse(url);
+    final uri = resolveLabelUri(url);
+    if (uri == null) return;
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }

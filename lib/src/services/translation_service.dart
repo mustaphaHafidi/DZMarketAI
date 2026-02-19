@@ -26,7 +26,7 @@ class TranslationService {
         final locale = row['locale'] as String? ?? '';
         final text = row['text'] as String? ?? '';
         if (key.isEmpty || locale.isEmpty || text.isEmpty) continue;
-        if (locale == 'ar' && _looksCorruptArabic(text)) {
+        if (_looksCorrupt(locale, text) || _looksPlaceholderText(key, text)) {
           continue;
         }
         _cache.putIfAbsent(locale, () => {})[key] = text;
@@ -57,7 +57,28 @@ class TranslationService {
   }
 
   String? translate(String locale, String key) {
-    return _cache[locale]?[key];
+    final normalized = locale.toLowerCase();
+    if (normalized == 'fr' || normalized.startsWith('fr_')) {
+      return _cache['fr']?[key];
+    }
+    if (normalized == 'ar' || normalized.startsWith('ar_')) {
+      return _cache['ar']?[key];
+    }
+    return _cache['fr']?[key] ?? _cache[normalized]?[key];
+  }
+
+  bool _looksCorrupt(String locale, String text) {
+    if (locale == 'ar' && _looksCorruptArabic(text)) return true;
+    if (text.contains('\uFFFD') ||
+        text.contains('\u00C3') ||
+        text.contains('\u00D8') ||
+        text.contains('\u00D9')) {
+      return true;
+    }
+    if (RegExp(r'[A-Za-z]\?[A-Za-z]').hasMatch(text)) {
+      return true;
+    }
+    return false;
   }
 
   bool _looksCorruptArabic(String text) {
@@ -65,5 +86,13 @@ class TranslationService {
     final hasArabic = RegExp(r'[\u0600-\u06FF]').hasMatch(text);
     if (hasArabic) return false;
     return true;
+  }
+
+  bool _looksPlaceholderText(String key, String text) {
+    final normalizedKey = key.trim().toLowerCase();
+    final normalizedText = text.trim().toLowerCase();
+    if (normalizedText == normalizedKey) return true;
+    final looksLikeKey = RegExp(r'^[a-z0-9_.-]+$').hasMatch(normalizedText);
+    return looksLikeKey && normalizedText.contains('.');
   }
 }

@@ -5,6 +5,7 @@ import 'package:dzmarket/src/models/chat_message.dart';
 import 'package:dzmarket/src/models/conversation.dart';
 import 'package:dzmarket/src/services/chat_repository.dart';
 import 'package:dzmarket/src/services/i18n.dart';
+import 'package:dzmarket/src/services/notification_inbox_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -22,6 +23,8 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   static const _tabs = ['listings', 'chat', 'profile'];
   static final ChatRepository _chatRepository = ChatRepository();
+  static final NotificationInboxService _notificationInboxService =
+      NotificationInboxService();
   late int _currentIndex = _tabIndexFor(widget.initialTab);
 
   @override
@@ -59,14 +62,14 @@ class _HomeShellState extends State<HomeShell> {
             label: L10n.tr(context, 'nav.browse'),
           ),
           NavigationDestination(
-            icon: _ChatBadge(
-              userId: userId,
-              chatRepository: _chatRepository,
-            ),
+            icon: _ChatBadge(userId: userId, chatRepository: _chatRepository),
             label: L10n.tr(context, 'nav.chat'),
           ),
           NavigationDestination(
-            icon: const Icon(Icons.person_outline),
+            icon: _ProfileBadge(
+              userId: userId,
+              inboxService: _notificationInboxService,
+            ),
             label: L10n.tr(context, 'nav.profile'),
           ),
         ],
@@ -100,12 +103,17 @@ class _ChatBadge extends StatelessWidget {
           stream: chatRepository.watchReadStates(),
           builder: (context, readSnap) {
             final readMap = readSnap.data ?? const {};
-            final unread = conversations.where((c) {
+            final unread = conversations.fold<int>(0, (sum, c) {
+              if (c.hasUnreadCounters) {
+                return sum + c.unreadCountForUser(userId!);
+              }
               final read = readMap[c.id];
-              return c.lastMessageAt != null &&
+              final fallback =
+                  c.lastMessageAt != null &&
                   (read?.lastReadAt == null ||
                       c.lastMessageAt!.isAfter(read!.lastReadAt!));
-            }).length;
+              return sum + (fallback ? 1 : 0);
+            });
             if (unread <= 0) {
               return const Icon(Icons.chat_bubble_outline);
             }
@@ -117,8 +125,10 @@ class _ChatBadge extends StatelessWidget {
                   right: -6,
                   top: -4,
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: Theme.of(context).colorScheme.primary,
                       borderRadius: BorderRadius.circular(10),
@@ -136,6 +146,51 @@ class _ChatBadge extends StatelessWidget {
               ],
             );
           },
+        );
+      },
+    );
+  }
+}
+
+class _ProfileBadge extends StatelessWidget {
+  const _ProfileBadge({required this.userId, required this.inboxService});
+
+  final String? userId;
+  final NotificationInboxService inboxService;
+
+  @override
+  Widget build(BuildContext context) {
+    if (userId == null) return const Icon(Icons.person_outline);
+    return StreamBuilder<int>(
+      stream: inboxService.watchUnreadCount(),
+      builder: (context, snapshot) {
+        final unread = snapshot.data ?? 0;
+        if (unread <= 0) return const Icon(Icons.person_outline);
+        final label = unread > 99 ? '99+' : unread.toString();
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            const Icon(Icons.person_outline),
+            Positioned(
+              right: -8,
+              top: -5,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onPrimary,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
         );
       },
     );

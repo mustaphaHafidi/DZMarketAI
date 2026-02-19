@@ -13,10 +13,15 @@ import 'package:dzmarket/src/services/app_logger.dart';
 import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+// ignore: depend_on_referenced_packages
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (kIsWeb) {
+    usePathUrlStrategy();
+  }
   await LocaleService.instance.init();
   await NetworkPreferencesService.instance.init();
 

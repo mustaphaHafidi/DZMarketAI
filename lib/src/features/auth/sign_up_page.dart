@@ -3,7 +3,6 @@ import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -20,7 +19,10 @@ class _SignUpPageState extends State<SignUpPage> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   bool _loading = false;
+  bool _existingAccountError = false;
   String? _error;
+  String? _status;
+  String? _signupEmail;
 
   @override
   void dispose() {
@@ -29,6 +31,14 @@ class _SignUpPageState extends State<SignUpPage> {
     _nameController.dispose();
     _phoneController.dispose();
     super.dispose();
+  }
+
+  String _t(
+    String key, {
+    required String fallback,
+    Map<String, String>? params,
+  }) {
+    return L10n.tr(context, key, fallback: fallback, params: params);
   }
 
   Future<void> _setLocale(String code) async {
@@ -40,10 +50,14 @@ class _SignUpPageState extends State<SignUpPage> {
     setState(() {
       _loading = true;
       _error = null;
+      _status = null;
+      _existingAccountError = false;
     });
     try {
       final email = InputSanitizer.sanitizeEmail(_emailController.text);
-      final password = InputSanitizer.sanitizePassword(_passwordController.text);
+      final password = InputSanitizer.sanitizePassword(
+        _passwordController.text,
+      );
       final fullName = InputSanitizer.sanitizeOptionalText(
         _nameController.text,
         maxLength: 80,
@@ -54,32 +68,115 @@ class _SignUpPageState extends State<SignUpPage> {
         try {
           phone = InputSanitizer.sanitizePhone(rawPhone);
         } on FormatException {
-          throw FormatException(L10n.tr(context, 'auth.phone_invalid'));
+          throw FormatException(
+            _t('auth.phone_invalid', fallback: 'Numero de telephone invalide.'),
+          );
         }
       }
-      await AuthService.instance.signUp(
+      final response = await AuthService.instance.signUp(
         email,
         password,
         fullName: fullName,
         phone: phone,
+        locale: LocaleService.instance.locale.value?.languageCode,
       );
       if (!mounted) return;
-      final from = GoRouterState.of(context).uri.queryParameters['from'];
-      if (from != null && from.isNotEmpty) {
-        final target = Uri.tryParse(from);
-        context.go(target?.toString() ?? '/');
-      } else {
-        context.go('/');
+      if (response.session != null) {
+        final from = GoRouterState.of(context).uri.queryParameters['from'];
+        if (from != null && from.isNotEmpty) {
+          final target = Uri.tryParse(from);
+          context.go(target?.toString() ?? '/');
+        } else {
+          context.go('/');
+        }
+        return;
       }
+      setState(() {
+        _signupEmail = email;
+        _passwordController.clear();
+        _status = _t(
+          'auth.sign_up.email_sent',
+          fallback:
+              'Compte cree. Un email de confirmation a ete envoye a {email}.',
+          params: {'email': email},
+        );
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _t(
+              'auth.sign_up.toast_thanks',
+              fallback:
+                  'Merci pour votre inscription sur DZMarket. Verifiez votre email pour confirmer votre compte.',
+            ),
+          ),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.green.shade700,
+          duration: const Duration(seconds: 4),
+        ),
+      );
     } on FormatException catch (e) {
-      setState(() => _error = e.message);
+      final message = e.message;
+      setState(() {
+        _error = message;
+        _existingAccountError = _isExistingAccountError(message);
+      });
     } on AuthException catch (e) {
-      setState(() => _error = e.message);
+      final message = e.message;
+      setState(() {
+        _error = message;
+        _existingAccountError = _isExistingAccountError(message);
+      });
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = _mapUiError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  bool _isExistingAccountError(String message) {
+    final localized = _t(
+      'auth.sign_up.error_email_exists',
+      fallback:
+          'Cet email est deja utilise. Connectez-vous ou reinitialisez votre mot de passe.',
+    );
+    return message == localized ||
+        message.toLowerCase().contains('already registered') ||
+        message.toLowerCase().contains('already exists');
+  }
+
+  String _mapUiError(Object error) {
+    final message = error.toString().toLowerCase();
+    final networkHints = <String>[
+      'socketexception',
+      'failed host lookup',
+      'connection refused',
+      'connection reset',
+      'network is unreachable',
+      'network unreachable',
+      'clientexception',
+      'timed out',
+      'timeout',
+      '502',
+      '503',
+      '504',
+    ];
+    if (networkHints.any(message.contains)) {
+      return _t(
+        'auth.error_server_unreachable',
+        fallback:
+            'Connexion au serveur impossible pour le moment. Verifiez internet puis reessayez.',
+      );
+    }
+    return _t(
+      'auth.sign_up.error_failed',
+      fallback: 'Impossible de creer le compte pour le moment. Reessayez.',
+    );
+  }
+
+  void _goToSignInWithEmail(String email) {
+    final query = Uri(path: '/sign-in', queryParameters: {'email': email});
+    context.go(query.toString());
   }
 
   @override
@@ -95,23 +192,27 @@ class _SignUpPageState extends State<SignUpPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SvgPicture.asset(
-                    'assets/branding/dzmarket_logo_ui.svg',
-                    height: 72,
-                    width: 72,
-                    fit: BoxFit.contain,
+                  Center(
+                    child: Image.asset(
+                      'logos/logo_mark_ui.png',
+                      height: 124,
+                      fit: BoxFit.contain,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Text(
                     'DZMarket',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    L10n.tr(context, 'auth.brand.tagline'),
+                    _t(
+                      'auth.brand.tagline',
+                      fallback: 'Vendez, expediez, suivez - simplement.',
+                    ),
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
@@ -122,21 +223,23 @@ class _SignUpPageState extends State<SignUpPage> {
                       TextButton(
                         onPressed: () => _setLocale('fr'),
                         child: Text(
-                          L10n.tr(context, 'profile.lang_fr'),
+                          _t('profile.lang_fr', fallback: 'Francais'),
                           style: TextStyle(
-                            fontWeight:
-                                lang == 'fr' ? FontWeight.bold : FontWeight.normal,
+                            fontWeight: lang == 'fr'
+                                ? FontWeight.bold
+                                : FontWeight.normal,
                           ),
                         ),
                       ),
-                      const Text('•'),
+                      const Text('|'),
                       TextButton(
                         onPressed: () => _setLocale('ar'),
                         child: Text(
-                          L10n.tr(context, 'profile.lang_ar'),
+                          _t('profile.lang_ar', fallback: 'Arabe (Algerie)'),
                           style: TextStyle(
-                            fontWeight:
-                                lang == 'ar' ? FontWeight.bold : FontWeight.normal,
+                            fontWeight: lang == 'ar'
+                                ? FontWeight.bold
+                                : FontWeight.normal,
                           ),
                         ),
                       ),
@@ -144,12 +247,18 @@ class _SignUpPageState extends State<SignUpPage> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    L10n.tr(context, 'auth.sign_up.subtitle'),
+                    _t(
+                      'auth.sign_up.subtitle',
+                      fallback: 'Cree ton compte pour acheter et vendre',
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    L10n.tr(context, 'auth.email_only_note'),
+                    _t(
+                      'auth.email_only_note',
+                      fallback: 'Connexion par email uniquement (SMS bientot)',
+                    ),
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
@@ -167,9 +276,15 @@ class _SignUpPageState extends State<SignUpPage> {
                           TextField(
                             controller: _nameController,
                             decoration: InputDecoration(
-                              labelText: L10n.tr(context, 'auth.full_name'),
+                              labelText: _t(
+                                'auth.full_name',
+                                fallback: 'Nom complet',
+                              ),
                               prefixIcon: const Icon(Icons.person_outline),
-                              helperText: L10n.tr(context, 'common.optional'),
+                              helperText: _t(
+                                'common.optional',
+                                fallback: 'Optionnel',
+                              ),
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -177,7 +292,7 @@ class _SignUpPageState extends State<SignUpPage> {
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
                             decoration: InputDecoration(
-                              labelText: L10n.tr(context, 'auth.email'),
+                              labelText: _t('auth.email', fallback: 'Email'),
                               prefixIcon: const Icon(Icons.email_outlined),
                             ),
                           ),
@@ -186,8 +301,15 @@ class _SignUpPageState extends State<SignUpPage> {
                             controller: _phoneController,
                             keyboardType: TextInputType.phone,
                             decoration: InputDecoration(
-                              labelText: L10n.tr(context, 'auth.phone_optional'),
-                              helperText: L10n.tr(context, 'auth.phone_helper'),
+                              labelText: _t(
+                                'auth.phone_optional',
+                                fallback: 'Telephone (optionnel)',
+                              ),
+                              helperText: _t(
+                                'auth.phone_helper',
+                                fallback:
+                                    'Utilise pour les notifications plus tard',
+                              ),
                               prefixIcon: const Icon(Icons.phone_outlined),
                             ),
                           ),
@@ -196,7 +318,10 @@ class _SignUpPageState extends State<SignUpPage> {
                             controller: _passwordController,
                             obscureText: true,
                             decoration: InputDecoration(
-                              labelText: L10n.tr(context, 'auth.password'),
+                              labelText: _t(
+                                'auth.password',
+                                fallback: 'Mot de passe',
+                              ),
                               prefixIcon: const Icon(Icons.lock_outline),
                             ),
                           ),
@@ -207,6 +332,41 @@ class _SignUpPageState extends State<SignUpPage> {
                               style: TextStyle(
                                 color: Theme.of(context).colorScheme.error,
                               ),
+                            ),
+                          if (_existingAccountError)
+                            Wrap(
+                              spacing: 8,
+                              children: [
+                                TextButton(
+                                  onPressed: _loading
+                                      ? null
+                                      : () => _goToSignInWithEmail(
+                                          _emailController.text.trim(),
+                                        ),
+                                  child: Text(
+                                    _t(
+                                      'auth.sign_in.cta',
+                                      fallback: 'Se connecter',
+                                    ),
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: _loading
+                                      ? null
+                                      : () => context.go('/reset-password'),
+                                  child: Text(
+                                    _t(
+                                      'auth.forgot_password',
+                                      fallback: 'Mot de passe oublie ?',
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          if (_status != null)
+                            Text(
+                              _status!,
+                              style: TextStyle(color: Colors.green.shade700),
                             ),
                           const SizedBox(height: 12),
                           ElevatedButton(
@@ -221,15 +381,41 @@ class _SignUpPageState extends State<SignUpPage> {
                                 ? const SizedBox(
                                     height: 18,
                                     width: 18,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
                                   )
-                                : Text(L10n.tr(context, 'auth.sign_up.cta')),
+                                : Text(
+                                    _t(
+                                      'auth.sign_up.cta',
+                                      fallback: 'Creer un compte',
+                                    ),
+                                  ),
                           ),
                           TextButton(
-                            onPressed:
-                                _loading ? null : () => context.go('/sign-in'),
-                            child:
-                                Text(L10n.tr(context, 'auth.sign_up.have_account')),
+                            onPressed: _loading
+                                ? null
+                                : () {
+                                    final email = _signupEmail;
+                                    if (email == null || email.isEmpty) {
+                                      context.go('/sign-in');
+                                      return;
+                                    }
+                                    final query = Uri(
+                                      path: '/sign-in',
+                                      queryParameters: {
+                                        'email': email,
+                                        'check_email': '1',
+                                      },
+                                    );
+                                    context.go(query.toString());
+                                  },
+                            child: Text(
+                              _t(
+                                'auth.sign_up.have_account',
+                                fallback: 'Deja inscrit ? Se connecter',
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -243,17 +429,32 @@ class _SignUpPageState extends State<SignUpPage> {
                     children: [
                       TextButton(
                         onPressed: () => context.push('/legal/privacy'),
-                        child: Text(L10n.tr(context, 'legal.privacy.title')),
+                        child: Text(
+                          _t(
+                            'legal.privacy.title',
+                            fallback: 'Politique de confidentialite',
+                          ),
+                        ),
                       ),
-                      const Text('·'),
+                      const Text('|'),
                       TextButton(
                         onPressed: () => context.push('/legal/terms'),
-                        child: Text(L10n.tr(context, 'legal.terms.title')),
+                        child: Text(
+                          _t(
+                            'legal.terms.title',
+                            fallback: "Conditions d'utilisation",
+                          ),
+                        ),
                       ),
-                      const Text('·'),
+                      const Text('|'),
                       TextButton(
                         onPressed: () => context.push('/legal/imprint'),
-                        child: Text(L10n.tr(context, 'legal.imprint.title')),
+                        child: Text(
+                          _t(
+                            'legal.imprint.title',
+                            fallback: 'Mentions legales',
+                          ),
+                        ),
                       ),
                     ],
                   ),

@@ -9,6 +9,9 @@ class Conversation {
     required this.lastMessageText,
     this.buyerHiddenAt,
     this.sellerHiddenAt,
+    this.unreadByBuyer = 0,
+    this.unreadBySeller = 0,
+    this.hasUnreadCounters = false,
   });
 
   final String id;
@@ -20,8 +23,13 @@ class Conversation {
   final String? lastMessageText;
   final DateTime? buyerHiddenAt;
   final DateTime? sellerHiddenAt;
+  final int unreadByBuyer;
+  final int unreadBySeller;
+  final bool hasUnreadCounters;
 
   factory Conversation.fromJson(Map<String, dynamic> json) {
+    final hasUnreadByBuyer = json.containsKey('unread_by_buyer');
+    final hasUnreadBySeller = json.containsKey('unread_by_seller');
     return Conversation(
       id: json['id']?.toString() ?? '',
       buyerId: json['buyer_id']?.toString(),
@@ -38,6 +46,9 @@ class Conversation {
       sellerHiddenAt: json['seller_hidden_at'] != null
           ? DateTime.tryParse(json['seller_hidden_at'] as String)
           : null,
+      unreadByBuyer: (json['unread_by_buyer'] as num?)?.toInt() ?? 0,
+      unreadBySeller: (json['unread_by_seller'] as num?)?.toInt() ?? 0,
+      hasUnreadCounters: hasUnreadByBuyer || hasUnreadBySeller,
     );
   }
 
@@ -49,6 +60,16 @@ class Conversation {
       return sellerHiddenAt != null;
     }
     return false;
+  }
+
+  int unreadCountForUser(String userId) {
+    if (buyerId == userId) {
+      return unreadByBuyer < 0 ? 0 : unreadByBuyer;
+    }
+    if (sellerId == userId) {
+      return unreadBySeller < 0 ? 0 : unreadBySeller;
+    }
+    return 0;
   }
 }
 

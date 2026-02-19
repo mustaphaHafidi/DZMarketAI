@@ -1287,6 +1287,21 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   Future<void> _makeOffer() async {
+    if (_product == null || !_product!.isNegotiable) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            L10n.tr(
+              context,
+              'offers.not_negotiable',
+              fallback: 'Ce produit n\'accepte pas les offres.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
     final minOffer = InputSanitizer.offerMinAmountFromBasePrice(
       _product?.price,
     );
@@ -1310,6 +1325,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       'Offre minimum: DA ${minOffer.toStringAsFixed(0)} (50%).',
                   params: {'amount': minOffer.toStringAsFixed(0)},
                 ),
+                helperMaxLines: 2,
               ),
             ),
           ],
@@ -1322,8 +1338,33 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           TextButton(
             onPressed: () async {
               try {
+                final normalized = amountController.text.trim().replaceAll(
+                  ',',
+                  '.',
+                );
+                final parsed = double.tryParse(normalized);
+                if (parsed == null) {
+                  throw FormatException(
+                    L10n.tr(
+                      context,
+                      'payment.invalid_amount',
+                      fallback: 'Montant invalide',
+                    ),
+                  );
+                }
+                if (parsed < minOffer) {
+                  throw FormatException(
+                    L10n.tr(
+                      context,
+                      'offers.min_50_percent',
+                      fallback:
+                          'Offre minimum: DA ${minOffer.toStringAsFixed(0)} (50%).',
+                      params: {'amount': minOffer.toStringAsFixed(0)},
+                    ),
+                  );
+                }
                 final amount = InputSanitizer.parseAmount(
-                  amountController.text,
+                  normalized,
                   min: minOffer,
                 );
                 await _offerService.makeOffer(
@@ -1341,6 +1382,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 if (!context.mounted) return;
                 final lower = e.toString().toLowerCase();
                 final isMinOfferError = lower.contains('offer_below_min_ratio');
+                final isNotNegotiableError = lower.contains(
+                  'offer_not_negotiable',
+                );
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
@@ -1351,6 +1395,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                               fallback:
                                   'Offre minimum: DA ${minOffer.toStringAsFixed(0)} (50%).',
                               params: {'amount': minOffer.toStringAsFixed(0)},
+                            )
+                          : isNotNegotiableError
+                          ? L10n.tr(
+                              context,
+                              'offers.not_negotiable',
+                              fallback: 'Ce produit n\'accepte pas les offres.',
                             )
                           : e.toString(),
                     ),
@@ -1415,6 +1465,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     final statusColor = outOfStock
         ? Colors.red.shade600
         : Theme.of(context).colorScheme.primary;
+    final isNegotiable = _product!.isNegotiable;
     final primaryTags = _buildPrimaryTags(context);
     final allTags = _buildDetailTags(context);
 
@@ -1495,13 +1546,15 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Text(
                         formatter.format(agreedPrice),
                         style: Theme.of(context).textTheme.headlineMedium,
                       ),
-                      const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 10,
@@ -1521,12 +1574,20 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         ),
                       ),
                       if (_acceptedOffer != null)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 8),
-                          child: Chip(
-                            label: Text(L10n.tr(context, 'offer.agreed')),
-                            visualDensity: VisualDensity.compact,
+                        Chip(
+                          label: Text(L10n.tr(context, 'offer.agreed')),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      if (isNegotiable)
+                        Chip(
+                          label: Text(
+                            L10n.tr(
+                              context,
+                              'listing.negotiable',
+                              fallback: 'Prix négociable',
+                            ),
                           ),
+                          visualDensity: VisualDensity.compact,
                         ),
                     ],
                   ),
@@ -1666,12 +1727,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         label: Text(buyLabel),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    OutlinedButton.icon(
-                      onPressed: _isOwner || outOfStock ? null : _makeOffer,
-                      icon: const Icon(Icons.handshake_outlined),
-                      label: Text(L10n.tr(context, 'offers.make_offer')),
-                    ),
+                    if (isNegotiable) ...[
+                      const SizedBox(width: 12),
+                      OutlinedButton.icon(
+                        onPressed: _isOwner || outOfStock ? null : _makeOffer,
+                        icon: const Icon(Icons.handshake_outlined),
+                        label: Text(L10n.tr(context, 'offers.make_offer')),
+                      ),
+                    ],
                   ],
                 ),
               ],

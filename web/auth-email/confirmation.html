@@ -1,0 +1,49 @@
+﻿<!doctype html>
+<html lang='{{if eq .Data.lang "ar"}}ar{{else}}fr{{end}}' dir='{{if eq .Data.lang "ar"}}rtl{{else}}ltr{{end}}'>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DZMarket</title>
+  <style>
+    body { margin: 0; background: #edf5ee; font-family: Arial, sans-serif; color: #16322a; }
+    .wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px; }
+    .card { background: #fff; border-radius: 16px; border: 1px solid #e0ece2; padding: 28px 24px; box-shadow: 0 8px 24px rgba(9,49,33,.08); }
+    .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+    .brand img { width: 40px; height: 40px; border-radius: 10px; display: block; }
+    .brand span { font-size: 24px; font-weight: 700; color: #08372a; }
+    h1 { margin: 0 0 12px; font-size: 24px; line-height: 1.25; color: #0a3d2f; }
+    p { margin: 0 0 12px; font-size: 15px; line-height: 1.6; color: #2e4a3f; }
+    .btn { display: inline-block; margin: 12px 0 16px; padding: 12px 18px; border-radius: 10px; background: #34a853; color: #fff !important; font-weight: 700; text-decoration: none; font-size: 15px; }
+    .muted { color: #5f746b; font-size: 13px; word-break: break-word; }
+    .code { display: inline-block; padding: 8px 10px; background: #f4f8f5; border: 1px solid #dfe9e1; border-radius: 8px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="brand">
+        <img src="https://app.dzmarket.pro/assets/logos/logo4_icon_square.png" alt="DZMarket" />
+        <span>DZMarket</span>
+      </div>
+
+      {{if eq .Data.lang "ar"}}
+      <h1>تأكيد البريد الإلكتروني</h1>
+      <p>مرحبًا، شكرًا لتسجيلك في DZMarket.</p>
+      <p>لإكمال إنشاء الحساب، اضغط على الزر التالي:</p>
+      <p><a class="btn" href="https://app.dzmarket.pro/auth/callback?type=signup&token_hash={{ .TokenHash }}&lang=ar&next=%2Fsign-in%3Fconfirmed%3D1">تأكيد البريد الإلكتروني</a></p>
+      <p class="muted">إذا لم يعمل الزر، انسخ هذا الرابط والصقه في المتصفح:</p>
+      <p class="muted">https://app.dzmarket.pro/auth/callback?type=signup&token_hash={{ .TokenHash }}&lang=ar&next=%2Fsign-in%3Fconfirmed%3D1</p>
+      <p class="muted">رمز التأكيد: <span class="code">{{ .Token }}</span></p>
+      {{else}}
+      <h1>Confirmez votre email</h1>
+      <p>Bonjour, merci pour votre inscription sur DZMarket.</p>
+      <p>Pour finaliser la création de votre compte, cliquez sur le bouton suivant :</p>
+      <p><a class="btn" href="https://app.dzmarket.pro/auth/callback?type=signup&token_hash={{ .TokenHash }}&lang=fr&next=%2Fsign-in%3Fconfirmed%3D1">Confirmer mon email</a></p>
+      <p class="muted">Si le bouton ne fonctionne pas, copiez/collez ce lien dans votre navigateur :</p>
+      <p class="muted">https://app.dzmarket.pro/auth/callback?type=signup&token_hash={{ .TokenHash }}&lang=fr&next=%2Fsign-in%3Fconfirmed%3D1</p>
+      <p class="muted">Code de confirmation : <span class="code">{{ .Token }}</span></p>
+      {{end}}
+    </div>
+  </div>
+</body>
+</html>

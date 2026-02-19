@@ -5,6 +5,7 @@ import 'package:dzmarket/src/models/profile.dart';
 import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:dzmarket/src/services/rate_limiter.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthService {
@@ -49,8 +50,10 @@ class AuthService {
       );
     } on AuthException catch (e) {
       throw FormatException(_mapSignInAuthError(e, locale));
-    } catch (_) {
-      throw FormatException(L10n.trLocale(locale, 'auth.error_login_failed'));
+    } catch (e) {
+      throw FormatException(
+        _mapGenericAuthError(e, locale, fallbackKey: 'auth.error_login_failed'),
+      );
     }
 
     final user = response.user;
@@ -92,7 +95,9 @@ class AuthService {
     String password, {
     String? fullName,
     String? phone,
+    String? locale,
   }) async {
+    final resolvedLocale = _normalizeLocale(locale);
     final safeEmail = InputSanitizer.sanitizeEmail(email);
     final safePassword = InputSanitizer.sanitizePassword(password);
     final safeFullName = InputSanitizer.sanitizeOptionalText(
@@ -103,14 +108,33 @@ class AuthService {
     final metadata = <String, dynamic>{};
     if (safeFullName != null) metadata['full_name'] = safeFullName;
     if (safePhone != null) metadata['phone'] = safePhone;
-    final response = await RateLimiter.instance.run(
-      'auth.signUp',
-      () => supabase.auth.signUp(
-        email: safeEmail,
-        password: safePassword,
-        data: metadata.isEmpty ? null : metadata,
-      ),
-    );
+    metadata['lang'] = resolvedLocale;
+    late final AuthResponse response;
+    try {
+      response = await RateLimiter.instance.run(
+        'auth.signUp',
+        () => supabase.auth.signUp(
+          email: safeEmail,
+          password: safePassword,
+          emailRedirectTo: buildEmailRedirectUrl(
+            flow: 'signup',
+            locale: resolvedLocale,
+            next: '/sign-in?confirmed=1',
+          ),
+          data: metadata.isEmpty ? null : metadata,
+        ),
+      );
+    } on AuthException catch (e) {
+      throw FormatException(_mapSignUpAuthError(e, resolvedLocale));
+    } catch (e) {
+      throw FormatException(
+        _mapGenericAuthError(
+          e,
+          resolvedLocale,
+          fallbackKey: 'auth.sign_up.error_failed',
+        ),
+      );
+    }
     final user = response.user;
     if (user != null) {
       await _ensureProfile(user);
@@ -127,6 +151,119 @@ class AuthService {
       }
     }
     return response;
+  }
+
+  String _mapSignUpAuthError(AuthException e, String locale) {
+    final message = e.message.toLowerCase();
+    if (message.contains('user already registered') ||
+        message.contains('already registered') ||
+        message.contains('already exists') ||
+        message.contains('user_already_exists')) {
+      return L10n.trLocale(locale, 'auth.sign_up.error_email_exists');
+    }
+    if (message.contains('password') && message.contains('at least')) {
+      return L10n.trLocale(locale, 'auth.error_password_too_short');
+    }
+    if (message.contains('too many requests') ||
+        message.contains('rate limit')) {
+      return L10n.trLocale(locale, 'auth.error_too_many_requests');
+    }
+    return L10n.trLocale(locale, 'auth.sign_up.error_failed');
+  }
+
+  String _mapGenericAuthError(
+    Object error,
+    String locale, {
+    required String fallbackKey,
+  }) {
+    final message = error.toString().toLowerCase();
+    final networkHints = <String>[
+      'socketexception',
+      'clientexception',
+      'failed host lookup',
+      'connection refused',
+      'connection reset',
+      'network is unreachable',
+      'network unreachable',
+      'timed out',
+      'timeout',
+      '503',
+      '502',
+      '504',
+    ];
+    final isNetworkIssue = networkHints.any(message.contains);
+    if (isNetworkIssue) {
+      return L10n.trLocale(locale, 'auth.error_server_unreachable');
+    }
+    return L10n.trLocale(locale, fallbackKey);
+  }
+
+  Future<void> resendEmailConfirmation(String email, {String? locale}) async {
+    final safeEmail = InputSanitizer.sanitizeEmail(email);
+    final resolvedLocale = _normalizeLocale(locale);
+    await RateLimiter.instance.run(
+      'auth.resendConfirmation',
+      () => supabase.auth.resend(
+        type: OtpType.signup,
+        email: safeEmail,
+        emailRedirectTo: buildEmailRedirectUrl(
+          flow: 'signup',
+          locale: resolvedLocale,
+          next: '/sign-in?confirmed=1',
+        ),
+      ),
+    );
+  }
+
+  Future<void> sendPasswordResetEmail(String email, {String? locale}) async {
+    final safeEmail = InputSanitizer.sanitizeEmail(email);
+    final resolvedLocale = _normalizeLocale(locale);
+    await RateLimiter.instance.run(
+      'auth.resetPassword',
+      () => supabase.auth.resetPasswordForEmail(
+        safeEmail,
+        redirectTo: buildEmailRedirectUrl(
+          flow: 'recovery',
+          locale: resolvedLocale,
+          next: '/reset-password',
+        ),
+      ),
+    );
+  }
+
+  String buildEmailRedirectUrl({
+    required String flow,
+    String? locale,
+    String? next,
+  }) {
+    const fallbackBase = 'https://app.dzmarket.pro/auth/callback';
+    const configuredBase = String.fromEnvironment(
+      'AUTH_REDIRECT_URL',
+      defaultValue: fallbackBase,
+    );
+
+    Uri? baseUri;
+    final fromConfigured = Uri.tryParse(configuredBase);
+    if (fromConfigured != null &&
+        fromConfigured.hasScheme &&
+        fromConfigured.hasAuthority) {
+      baseUri = fromConfigured;
+    } else if (kIsWeb) {
+      final webBase = Uri.base.resolve('/auth/callback');
+      if (webBase.hasScheme && webBase.hasAuthority) {
+        baseUri = webBase;
+      }
+    }
+    baseUri ??= Uri.parse(fallbackBase);
+
+    final query = <String, String>{...baseUri.queryParameters};
+    query['type'] = flow;
+    final normalizedLocale = _normalizeLocale(locale);
+    query['lang'] = normalizedLocale;
+    if (next != null && next.isNotEmpty) {
+      query['next'] = next;
+    }
+    return baseUri.replace(queryParameters: query).toString();
   }
 
   Future<void> signOut() =>
@@ -361,5 +498,13 @@ class AuthService {
       profile.preferences,
     );
     return profile;
+  }
+
+  String _normalizeLocale(String? raw) {
+    final candidate =
+        (raw ?? LocaleService.instance.locale.value?.languageCode ?? 'fr')
+            .toLowerCase();
+    if (candidate == 'ar' || candidate.startsWith('ar_')) return 'ar';
+    return 'fr';
   }
 }

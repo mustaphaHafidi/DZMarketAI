@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cached_network_image_platform_interface/cached_network_image_platform_interface.dart';
+import 'package:dzmarket/src/features/orders/fulfillment_page.dart';
 import 'package:dzmarket/src/features/orders/seller_orders_page.dart';
 import 'package:dzmarket/src/features/profile/my_listings_page.dart';
 import 'package:dzmarket/src/models/order.dart';
@@ -10,8 +11,11 @@ import 'package:dzmarket/src/services/order_service.dart';
 import 'package:dzmarket/src/services/product_service.dart';
 import 'package:dzmarket/src/services/seller_analytics_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/utils/delivery_mode_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
+enum _RecentOrdersFilter { all, pending, shipped, delivered }
 
 class SellerDashboardPage extends StatefulWidget {
   const SellerDashboardPage({super.key});
@@ -27,6 +31,7 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
   final _orderService = OrderService();
   final _productService = ProductService();
   Future<SellerTotals>? _totalsFuture;
+  _RecentOrdersFilter _recentFilter = _RecentOrdersFilter.all;
 
   @override
   void initState() {
@@ -38,11 +43,37 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return;
     final now = DateTime.now();
-    final from = DateTime(now.year, now.month, now.day)
-        .subtract(const Duration(days: 30));
+    final from = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(const Duration(days: 30));
     setState(() {
       _totalsFuture = _analytics.fetchTotals(userId, from: from, to: now);
     });
+  }
+
+  List<Order> _applyRecentFilter(List<Order> orders) {
+    switch (_recentFilter) {
+      case _RecentOrdersFilter.pending:
+        return orders
+            .where(
+              (order) =>
+                  order.status == OrderStatus.pending ||
+                  order.status == OrderStatus.paid,
+            )
+            .toList();
+      case _RecentOrdersFilter.shipped:
+        return orders
+            .where((order) => order.status == OrderStatus.shipped)
+            .toList();
+      case _RecentOrdersFilter.delivered:
+        return orders
+            .where((order) => order.status == OrderStatus.delivered)
+            .toList();
+      case _RecentOrdersFilter.all:
+        return orders;
+    }
   }
 
   @override
@@ -76,7 +107,9 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            _SectionTitle(title: L10n.tr(context, 'seller_dashboard.section_overview')),
+            _SectionTitle(
+              title: L10n.tr(context, 'seller_dashboard.section_overview'),
+            ),
             const SizedBox(height: 4),
             Text(
               L10n.tr(context, 'seller_dashboard.subtitle_30d'),
@@ -89,8 +122,14 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                final totals = snapshot.data ??
-                    const SellerTotals(orders: 0, revenue: 0, expenses: 0, profit: 0);
+                final totals =
+                    snapshot.data ??
+                    const SellerTotals(
+                      orders: 0,
+                      revenue: 0,
+                      expenses: 0,
+                      profit: 0,
+                    );
                 return _KpiRow(
                   revenue: currency.format(totals.revenue),
                   orders: totals.orders.toString(),
@@ -99,22 +138,64 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
               },
             ),
             const SizedBox(height: 20),
-            _SectionTitle(title: L10n.tr(context, 'seller_dashboard.urgent_title')),
-            const SizedBox(height: 8),
             StreamBuilder<List<Order>>(
               stream: _orderService.streamOrdersForUser(userId),
               builder: (context, snapshot) {
+                final now = DateTime.now();
+                final startOfToday = DateTime(now.year, now.month, now.day);
                 final orders = snapshot.data ?? const [];
-                final sellerOrders = orders
-                    .where((o) =>
-                        o.sellerId == userId && o.status != OrderStatus.cancelled)
-                    .toList()
-                  ..sort((a, b) => (b.createdAt ?? DateTime(0))
-                      .compareTo(a.createdAt ?? DateTime(0)));
-                final pendingLabels = sellerOrders.where((o) {
-                  final hasLabel = (o.labelUrl ?? '').isNotEmpty;
-                  return o.status == OrderStatus.pending && !hasLabel;
+                final sellerOrders =
+                    orders
+                        .where(
+                          (o) =>
+                              o.sellerId == userId &&
+                              o.status != OrderStatus.cancelled,
+                        )
+                        .toList()
+                      ..sort(
+                        (a, b) => (b.createdAt ?? DateTime(0)).compareTo(
+                          a.createdAt ?? DateTime(0),
+                        ),
+                      );
+                bool isPendingState(Order order) =>
+                    order.status == OrderStatus.pending ||
+                    order.status == OrderStatus.paid;
+                bool hasLabel(Order order) =>
+                    (order.labelUrl ?? '').trim().isNotEmpty;
+
+                final pendingToShipOrders =
+                    sellerOrders.where((order) {
+                      return isPendingState(order) &&
+                          !hasLabel(order) &&
+                          !isArrangedDelivery(
+                            deliveryMethod: order.deliveryMethod,
+                            shippingOption: order.shippingOption,
+                          );
+                    }).toList()..sort((a, b) {
+                      final aCreated = a.createdAt ?? DateTime(2100);
+                      final bCreated = b.createdAt ?? DateTime(2100);
+                      return aCreated.compareTo(bCreated);
+                    });
+
+                final pendingLabels = pendingToShipOrders.length;
+                final overduePending = pendingToShipOrders.where((order) {
+                  final created = order.createdAt;
+                  if (created == null) return false;
+                  return now.difference(created).inHours >= 24;
                 }).length;
+                final arrangedPending = sellerOrders.where((order) {
+                  return isPendingState(order) &&
+                      isArrangedDelivery(
+                        deliveryMethod: order.deliveryMethod,
+                        shippingOption: order.shippingOption,
+                      );
+                }).length;
+                final todayOrders = sellerOrders.where((order) {
+                  final created = order.createdAt;
+                  if (created == null) return false;
+                  return !created.isBefore(startOfToday);
+                }).length;
+                final filteredRecent = _applyRecentFilter(sellerOrders);
 
                 return StreamBuilder<List<Product>>(
                   stream: _productService.streamProductsForOwner(userId),
@@ -124,39 +205,269 @@ class _SellerDashboardPageState extends State<SellerDashboardPage> {
                       for (final product in products) product.id: product,
                     };
                     final lowStock = products.where((p) {
-                      return !p.isArchived && p.stockQuantity <= _lowStockThreshold;
+                      return !p.isArchived &&
+                          p.stockQuantity <= _lowStockThreshold;
                     }).length;
 
                     return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        _SectionTitle(
+                          title: L10n.tr(
+                            context,
+                            'seller_dashboard.today_title',
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        _OpsMetricsGrid(
+                          cards: [
+                            _OpsMetricData(
+                              icon: Icons.shopping_bag_outlined,
+                              label: L10n.tr(
+                                context,
+                                'seller_dashboard.today_new_orders',
+                              ),
+                              value: todayOrders.toString(),
+                            ),
+                            _OpsMetricData(
+                              icon: Icons.local_shipping_outlined,
+                              label: L10n.tr(
+                                context,
+                                'seller_dashboard.today_to_ship',
+                              ),
+                              value: pendingLabels.toString(),
+                            ),
+                            _OpsMetricData(
+                              icon: Icons.alarm_on_outlined,
+                              label: L10n.tr(
+                                context,
+                                'seller_dashboard.today_overdue',
+                              ),
+                              value: overduePending.toString(),
+                              highlighted: overduePending > 0,
+                            ),
+                            _OpsMetricData(
+                              icon: Icons.handshake_outlined,
+                              label: L10n.tr(
+                                context,
+                                'seller_dashboard.today_arranged',
+                              ),
+                              value: arrangedPending.toString(),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        _SectionTitle(
+                          title: L10n.tr(
+                            context,
+                            'seller_dashboard.urgent_title',
+                          ),
+                        ),
+                        const SizedBox(height: 8),
                         _ActionTile(
                           icon: Icons.picture_as_pdf_outlined,
-                          title: L10n.tr(context, 'seller_dashboard.urgent_pending'),
-                          subtitle:
-                              L10n.tr(context, 'seller_dashboard.urgent_pending_hint'),
+                          title: L10n.tr(
+                            context,
+                            'seller_dashboard.urgent_pending',
+                          ),
+                          subtitle: L10n.tr(
+                            context,
+                            'seller_dashboard.urgent_pending_hint',
+                          ),
                           count: pendingLabels,
                           onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const SellerOrdersPage()),
+                            MaterialPageRoute(
+                              builder: (_) => const SellerOrdersPage(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        _ActionTile(
+                          icon: Icons.alarm_on_outlined,
+                          title: L10n.tr(
+                            context,
+                            'seller_dashboard.urgent_overdue',
+                          ),
+                          subtitle: L10n.tr(
+                            context,
+                            'seller_dashboard.urgent_overdue_hint',
+                          ),
+                          count: overduePending,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const SellerOrdersPage(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        _ActionTile(
+                          icon: Icons.handshake_outlined,
+                          title: L10n.tr(
+                            context,
+                            'seller_dashboard.urgent_arranged',
+                          ),
+                          subtitle: L10n.tr(
+                            context,
+                            'seller_dashboard.urgent_arranged_hint',
+                          ),
+                          count: arrangedPending,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const SellerOrdersPage(),
+                            ),
                           ),
                         ),
                         const SizedBox(height: 8),
                         _ActionTile(
                           icon: Icons.inventory_2_outlined,
-                          title: L10n.tr(context, 'seller_dashboard.urgent_low_stock'),
-                          subtitle:
-                              L10n.tr(context, 'seller_dashboard.urgent_low_stock_hint'),
+                          title: L10n.tr(
+                            context,
+                            'seller_dashboard.urgent_low_stock',
+                          ),
+                          subtitle: L10n.tr(
+                            context,
+                            'seller_dashboard.urgent_low_stock_hint',
+                          ),
                           count: lowStock,
                           onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const MyListingsPage()),
+                            MaterialPageRoute(
+                              builder: (_) => const MyListingsPage(),
+                            ),
                           ),
                         ),
                         const SizedBox(height: 20),
                         _SectionTitle(
-                          title: L10n.tr(context, 'seller_dashboard.section_recent_orders'),
+                          title: L10n.tr(
+                            context,
+                            'seller_dashboard.work_queue_title',
+                          ),
                         ),
                         const SizedBox(height: 8),
+                        if (pendingToShipOrders.isEmpty)
+                          Text(
+                            L10n.tr(
+                              context,
+                              'seller_dashboard.work_queue_empty',
+                            ),
+                          )
+                        else
+                          Column(
+                            children: [
+                              for (final order in pendingToShipOrders.take(5))
+                                _WorkQueueOrderCard(
+                                  order: order,
+                                  product: productMap[order.productId],
+                                  isOverdue:
+                                      order.createdAt != null &&
+                                      now
+                                              .difference(order.createdAt!)
+                                              .inHours >=
+                                          24,
+                                  onProcess: () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          FulfillmentPage(orderId: order.id),
+                                    ),
+                                  ),
+                                ),
+                              if (pendingToShipOrders.length > 5)
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton(
+                                    onPressed: () => Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const SellerOrdersPage(),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      L10n.tr(
+                                        context,
+                                        'seller_dashboard.work_queue_view_all',
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        const SizedBox(height: 20),
+                        _SectionTitle(
+                          title: L10n.tr(
+                            context,
+                            'seller_dashboard.section_recent_orders',
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            ChoiceChip(
+                              selected:
+                                  _recentFilter == _RecentOrdersFilter.all,
+                              label: Text(
+                                L10n.tr(context, 'seller_dashboard.filter_all'),
+                              ),
+                              onSelected: (_) {
+                                setState(
+                                  () => _recentFilter = _RecentOrdersFilter.all,
+                                );
+                              },
+                            ),
+                            ChoiceChip(
+                              selected:
+                                  _recentFilter == _RecentOrdersFilter.pending,
+                              label: Text(
+                                L10n.tr(
+                                  context,
+                                  'seller_dashboard.filter_pending',
+                                ),
+                              ),
+                              onSelected: (_) {
+                                setState(
+                                  () => _recentFilter =
+                                      _RecentOrdersFilter.pending,
+                                );
+                              },
+                            ),
+                            ChoiceChip(
+                              selected:
+                                  _recentFilter == _RecentOrdersFilter.shipped,
+                              label: Text(
+                                L10n.tr(
+                                  context,
+                                  'seller_dashboard.filter_shipped',
+                                ),
+                              ),
+                              onSelected: (_) {
+                                setState(
+                                  () => _recentFilter =
+                                      _RecentOrdersFilter.shipped,
+                                );
+                              },
+                            ),
+                            ChoiceChip(
+                              selected:
+                                  _recentFilter ==
+                                  _RecentOrdersFilter.delivered,
+                              label: Text(
+                                L10n.tr(
+                                  context,
+                                  'seller_dashboard.filter_delivered',
+                                ),
+                              ),
+                              onSelected: (_) {
+                                setState(
+                                  () => _recentFilter =
+                                      _RecentOrdersFilter.delivered,
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
                         _RecentOrdersList(
-                          orders: sellerOrders,
+                          orders: filteredRecent,
                           currency: currency,
                           productMap: productMap,
                         ),
@@ -182,9 +493,9 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       title,
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+      style: Theme.of(
+        context,
+      ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
     );
   }
 }
@@ -259,13 +570,106 @@ class _KpiCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               value,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _OpsMetricData {
+  const _OpsMetricData({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.highlighted = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final bool highlighted;
+}
+
+class _OpsMetricsGrid extends StatelessWidget {
+  const _OpsMetricsGrid({required this.cards});
+
+  final List<_OpsMetricData> cards;
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      itemCount: cards.length,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+        childAspectRatio: 2.7,
+      ),
+      itemBuilder: (context, index) {
+        final item = cards[index];
+        return _OpsMetricCard(data: item);
+      },
+    );
+  }
+}
+
+class _OpsMetricCard extends StatelessWidget {
+  const _OpsMetricCard({required this.data});
+
+  final _OpsMetricData data;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final borderColor = data.highlighted
+        ? Colors.orange.withValues(alpha: 0.55)
+        : scheme.outlineVariant.withValues(alpha: 0.5);
+    final background = data.highlighted
+        ? Colors.orange.withValues(alpha: 0.08)
+        : scheme.surface;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            data.icon,
+            size: 18,
+            color: data.highlighted ? Colors.orange.shade700 : null,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  data.value,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  data.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -298,6 +702,98 @@ class _ActionTile extends StatelessWidget {
         subtitle: Text(subtitle),
         trailing: Chip(label: Text(badge)),
         onTap: onTap,
+      ),
+    );
+  }
+}
+
+class _WorkQueueOrderCard extends StatelessWidget {
+  const _WorkQueueOrderCard({
+    required this.order,
+    required this.product,
+    required this.isOverdue,
+    required this.onProcess,
+  });
+
+  final Order order;
+  final Product? product;
+  final bool isOverdue;
+  final VoidCallback onProcess;
+
+  @override
+  Widget build(BuildContext context) {
+    final title =
+        order.productTitle ??
+        product?.title ??
+        L10n.tr(
+          context,
+          'seller_orders.product_label',
+          params: {'id': order.productId},
+        );
+    final createdAtText = order.createdAt == null
+        ? '-'
+        : DateFormat('dd/MM HH:mm').format(order.createdAt!);
+    final courierText = (order.courierName ?? '').trim();
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(
+          color: isOverdue
+              ? Colors.orange.withValues(alpha: 0.55)
+              : Theme.of(
+                  context,
+                ).colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                _ProductThumb(url: order.productImage ?? product?.imageUrl),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                if (isOverdue)
+                  Chip(
+                    visualDensity: VisualDensity.compact,
+                    label: Text(
+                      L10n.tr(context, 'seller_dashboard.overdue_badge'),
+                    ),
+                    backgroundColor: Colors.orange.withValues(alpha: 0.15),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              [
+                order.statusLabel(context),
+                if (courierText.isNotEmpty) courierText,
+                createdAtText,
+              ].join(' · '),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.tonalIcon(
+                onPressed: onProcess,
+                icon: const Icon(Icons.local_shipping_outlined),
+                label: Text(L10n.tr(context, 'seller_orders.generate_label')),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -346,7 +842,8 @@ class _OrderTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = order.productTitle ??
+    final title =
+        order.productTitle ??
         product?.title ??
         L10n.tr(
           context,
@@ -356,7 +853,8 @@ class _OrderTile extends StatelessWidget {
     final date = order.createdAt == null
         ? ''
         : DateFormat('dd/MM').format(order.createdAt!);
-    final priceValue = order.productPrice ?? order.salePrice ?? order.agreedPrice ?? 0;
+    final priceValue =
+        order.productPrice ?? order.salePrice ?? order.agreedPrice ?? 0;
     return ListTile(
       leading: _ProductThumb(url: order.productImage ?? product?.imageUrl),
       title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),

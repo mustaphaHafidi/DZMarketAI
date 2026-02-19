@@ -1,4 +1,5 @@
-﻿import 'package:dzmarket/src/services/i18n.dart';
+import 'package:dzmarket/src/services/i18n.dart';
+import 'package:dzmarket/src/utils/label_url_resolver.dart';
 import 'package:flutter/widgets.dart';
 
 enum OrderStatus { pending, paid, shipped, delivered, cancelled }
@@ -70,7 +71,7 @@ class Order {
       driverId: json['driver_id'] as String?,
       status: _statusFromString(statusString),
       trackingNumber: json['tracking_number'] as String?,
-      labelUrl: json['label_url'] as String?,
+      labelUrl: normalizeLabelUrl(json['label_url'] as String?),
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'] as String)
           : null,
@@ -86,7 +87,8 @@ class Order {
       shippingAddressId: json['shipping_address_id']?.toString(),
       shippingOption: json['shipping_option'] as String?,
       paymentMethod: json['payment_method'] as String?,
-      paymentStatus: json['payment_status'] as String? ?? json['intent_status'] as String?,
+      paymentStatus:
+          json['payment_status'] as String? ?? json['intent_status'] as String?,
       agreedPrice: (json['agreed_price'] as num?)?.toDouble(),
       salePrice: (json['sale_price'] as num?)?.toDouble(),
       costPrice: (json['cost_price'] as num?)?.toDouble(),
@@ -137,4 +139,3 @@ class Order {
     }
   }
 }
-

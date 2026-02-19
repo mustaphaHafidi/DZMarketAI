@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dzmarket/src/features/auth/auth_callback_page.dart';
 import 'package:dzmarket/src/features/auth/sign_in_page.dart';
 import 'package:dzmarket/src/features/auth/sign_up_page.dart';
 import 'package:dzmarket/src/features/auth/reset_password_page.dart';
@@ -30,6 +31,51 @@ class GoRouterRefreshStream extends ChangeNotifier {
 GoRouter createRouter({List<NavigatorObserver> observers = const []}) {
   final auth = Supabase.instance.client.auth;
 
+  Map<String, String> authParamsFromUri(Uri uri) {
+    final merged = <String, String>{...uri.queryParameters};
+    final fragment = uri.fragment;
+    if (fragment.isEmpty) return merged;
+    Map<String, String> parsedFragment = const {};
+    try {
+      parsedFragment = Uri.splitQueryString(fragment);
+    } catch (_) {
+      final queryIndex = fragment.indexOf('?');
+      if (queryIndex >= 0 && queryIndex + 1 < fragment.length) {
+        final afterQuestionMark = fragment.substring(queryIndex + 1);
+        try {
+          parsedFragment = Uri.splitQueryString(afterQuestionMark);
+        } catch (_) {
+          parsedFragment = const {};
+        }
+      }
+    }
+    merged.addAll(parsedFragment);
+    return merged;
+  }
+
+  bool hasAuthCallbackParams(Uri uri) {
+    final qp = authParamsFromUri(uri);
+    if (qp.containsKey('code') || qp.containsKey('token_hash')) return true;
+    if (qp.containsKey('access_token') || qp.containsKey('refresh_token')) {
+      return true;
+    }
+    final hasAuthError =
+        qp.containsKey('error_description') ||
+        (qp.containsKey('error') && qp.containsKey('type'));
+    return hasAuthError;
+  }
+
+  Uri? callbackFromFromParam(GoRouterState state) {
+    final from = state.uri.queryParameters['from'];
+    if (from == null || from.isEmpty) return null;
+    final decoded = Uri.decodeComponent(from);
+    final parsed = Uri.tryParse(decoded);
+    if (parsed == null) return null;
+    if (!hasAuthCallbackParams(parsed)) return null;
+    final merged = authParamsFromUri(parsed);
+    return parsed.replace(queryParameters: merged, fragment: '');
+  }
+
   return GoRouter(
     initialLocation: '/',
     debugLogDiagnostics: false,
@@ -40,10 +86,30 @@ GoRouter createRouter({List<NavigatorObserver> observers = const []}) {
       final loggingIn = state.matchedLocation == '/sign-in';
       final signingUp = state.matchedLocation == '/sign-up';
       final resetting = state.matchedLocation == '/reset-password';
+      final callback =
+          state.matchedLocation == '/auth/callback' ||
+          state.matchedLocation == '/auth/call';
       final inLegal = state.matchedLocation.startsWith('/legal');
 
+      if (!callback && hasAuthCallbackParams(state.uri)) {
+        final merged = authParamsFromUri(state.uri);
+        return Uri(path: '/auth/callback', queryParameters: merged).toString();
+      }
+
+      if (loggingIn) {
+        final callbackUri = callbackFromFromParam(state);
+        if (callbackUri != null) {
+          return Uri(
+            path: '/auth/callback',
+            queryParameters: callbackUri.queryParameters,
+          ).toString();
+        }
+      }
+
       if (session == null) {
-        if (loggingIn || signingUp || resetting || inLegal) return null;
+        if (loggingIn || signingUp || resetting || inLegal || callback) {
+          return null;
+        }
         final from = Uri.encodeComponent(state.uri.toString());
         return '/sign-in?from=$from';
       }
@@ -69,6 +135,16 @@ GoRouter createRouter({List<NavigatorObserver> observers = const []}) {
         path: '/reset-password',
         pageBuilder: (context, state) =>
             const NoTransitionPage(child: ResetPasswordPage()),
+      ),
+      GoRoute(
+        path: '/auth/callback',
+        pageBuilder: (context, state) =>
+            NoTransitionPage(child: AuthCallbackPage(uri: state.uri)),
+      ),
+      GoRoute(
+        path: '/auth/call',
+        pageBuilder: (context, state) =>
+            NoTransitionPage(child: AuthCallbackPage(uri: state.uri)),
       ),
       GoRoute(
         path: '/legal/privacy',
@@ -119,11 +195,11 @@ GoRouter createRouter({List<NavigatorObserver> observers = const []}) {
           GoRoute(
             path: 'order/:id/chat',
             name: 'order-chat',
-              builder: (context, state) {
-                final orderId = state.pathParameters['id'] ?? '';
+            builder: (context, state) {
+              final orderId = state.pathParameters['id'] ?? '';
               return OrderChatGatePage(orderId: orderId);
-              },
-            ),
+            },
+          ),
           GoRoute(
             path: 'order/:id/track',
             name: 'order-track',

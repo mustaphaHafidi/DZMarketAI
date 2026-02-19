@@ -34,6 +34,61 @@ class _ChatHubPageState extends State<ChatHubPage> {
   String _metaKey = '';
   String? _lastLoggedLoadError;
 
+  int _fallbackUnreadCount(
+    Conversation conversation,
+    Map<String, ReadState> readMap,
+  ) {
+    if (conversation.lastMessageAt == null) return 0;
+    final read = readMap[conversation.id];
+    final unread =
+        read?.lastReadAt == null ||
+        conversation.lastMessageAt!.isAfter(read!.lastReadAt!);
+    return unread ? 1 : 0;
+  }
+
+  int _conversationUnreadCount({
+    required Conversation conversation,
+    required Map<String, ReadState> readMap,
+    required String userId,
+    required bool archivedList,
+  }) {
+    if (archivedList) return 0;
+    if (conversation.hasUnreadCounters) {
+      return conversation.unreadCountForUser(userId);
+    }
+    return _fallbackUnreadCount(conversation, readMap);
+  }
+
+  Future<void> _forceConversationRefresh() async {
+    try {
+      await supabase
+          .from('conversations')
+          .select('id,last_message_at')
+          .limit(50);
+    } catch (_) {
+      // Best effort only.
+    }
+    if (!mounted) return;
+    setState(() {
+      _metaFuture = null;
+      _metaKey = '';
+    });
+  }
+
+  Future<void> _openConversation(Conversation conversation) async {
+    await _forceConversationRefresh();
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatRoomPage(
+          conversationId: conversation.id,
+          productId: conversation.productId,
+        ),
+      ),
+    );
+    await _forceConversationRefresh();
+  }
+
   @override
   void dispose() {
     _searchCtrl.dispose();
@@ -229,20 +284,6 @@ class _ChatHubPageState extends State<ChatHubPage> {
                               .where((c) => c.isHiddenForUser(userId))
                               .toList();
 
-                          Future<void> manualRefresh() async {
-                            await _refreshController.run(context, () async {
-                              // force fetch conversations snapshot to resync stream/metas
-                              await supabase
-                                  .from('conversations')
-                                  .select('id,last_message_at')
-                                  .limit(50);
-                              _metaService.fetchManyForConversations(
-                                conversations,
-                              );
-                              setState(() {});
-                            });
-                          }
-
                           Widget buildList(
                             List<Conversation> list, {
                             required bool archivedList,
@@ -261,6 +302,15 @@ class _ChatHubPageState extends State<ChatHubPage> {
                                   participant.toLowerCase().contains(_query) ||
                                   preview.toLowerCase().contains(_query);
                             }).toList();
+                            filtered.sort((a, b) {
+                              final at =
+                                  a.lastMessageAt ??
+                                  DateTime.fromMillisecondsSinceEpoch(0);
+                              final bt =
+                                  b.lastMessageAt ??
+                                  DateTime.fromMillisecondsSinceEpoch(0);
+                              return bt.compareTo(at);
+                            });
                             final limited = filtered
                                 .take(_maxConversations)
                                 .toList();
@@ -288,18 +338,22 @@ class _ChatHubPageState extends State<ChatHubPage> {
                                 ),
                               );
                             }
-                            final unreadCount = limited.where((conv) {
-                              if (archivedList || conv.lastMessageAt == null) {
-                                return false;
-                              }
-                              final read = readMap[conv.id];
-                              return read?.lastReadAt == null ||
-                                  conv.lastMessageAt!.isAfter(
-                                    read!.lastReadAt!,
-                                  );
-                            }).length;
+                            final unreadCount = limited.fold<int>(
+                              0,
+                              (sum, conv) =>
+                                  sum +
+                                  _conversationUnreadCount(
+                                    conversation: conv,
+                                    readMap: readMap,
+                                    userId: userId,
+                                    archivedList: archivedList,
+                                  ),
+                            );
                             return RefreshIndicator(
-                              onRefresh: manualRefresh,
+                              onRefresh: () => _refreshController.run(
+                                context,
+                                _forceConversationRefresh,
+                              ),
                               child: Column(
                                 children: [
                                   if (!archivedList)
@@ -357,14 +411,13 @@ class _ChatHubPageState extends State<ChatHubPage> {
                                       itemBuilder: (context, index) {
                                         final conv = limited[index];
                                         final meta = metaMap[conv.id];
-                                        final read = readMap[conv.id];
-                                        final unread =
-                                            !archivedList &&
-                                            conv.lastMessageAt != null &&
-                                            (read?.lastReadAt == null ||
-                                                conv.lastMessageAt!.isAfter(
-                                                  read!.lastReadAt!,
-                                                ));
+                                        final unreadCountForRow =
+                                            _conversationUnreadCount(
+                                              conversation: conv,
+                                              readMap: readMap,
+                                              userId: userId,
+                                              archivedList: archivedList,
+                                            );
                                         final rawSubtitle =
                                             conv.lastMessageText ??
                                             meta?.productTitle ??
@@ -425,22 +478,15 @@ class _ChatHubPageState extends State<ChatHubPage> {
                                             productImage: meta?.productImage,
                                             participantAvatar: meta
                                                 ?.otherAvatar(userId),
-                                            unread: unread,
+                                            unreadCount: unreadCountForRow,
                                             archived: archivedList,
                                             timeLabel: _formatConversationTime(
                                               context,
                                               conv.lastMessageAt,
                                             ),
-                                            onTap: () {
-                                              Navigator.of(context).push(
-                                                MaterialPageRoute(
-                                                  builder: (_) => ChatRoomPage(
-                                                    conversationId: conv.id,
-                                                    productId: conv.productId,
-                                                  ),
-                                                ),
-                                              );
-                                            },
+                                            onTap: () => unawaited(
+                                              _openConversation(conv),
+                                            ),
                                           ),
                                         );
                                       },
@@ -515,7 +561,7 @@ class _ConversationListItem extends StatelessWidget {
     required this.participantName,
     required this.productImage,
     required this.participantAvatar,
-    required this.unread,
+    required this.unreadCount,
     required this.archived,
     required this.timeLabel,
     required this.onTap,
@@ -526,7 +572,7 @@ class _ConversationListItem extends StatelessWidget {
   final String participantName;
   final String? productImage;
   final String? participantAvatar;
-  final bool unread;
+  final int unreadCount;
   final bool archived;
   final String timeLabel;
   final VoidCallback onTap;
@@ -545,7 +591,7 @@ class _ConversationListItem extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                   child: _ConversationThumb(productImage: productImage),
                 ),
-                if (unread)
+                if (unreadCount > 0)
                   Positioned(
                     top: -1,
                     right: -1,
@@ -637,12 +683,35 @@ class _ConversationListItem extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(
-                                fontWeight: unread
+                                fontWeight: unreadCount > 0
                                     ? FontWeight.w600
                                     : FontWeight.w400,
                               ),
                         ),
                       ),
+                      if (unreadCount > 0) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          constraints: const BoxConstraints(minWidth: 20),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primary,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            unreadCount > 99 ? '99+' : '$unreadCount',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onPrimary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
                       if (archived) ...[
                         const SizedBox(width: 8),
                         Icon(

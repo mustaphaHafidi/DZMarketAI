@@ -1,6 +1,7 @@
 import 'package:dzmarket/src/models/shipment.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
+import 'package:dzmarket/src/utils/label_url_resolver.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -58,7 +59,11 @@ class ShipmentInfo extends StatelessWidget {
               ),
             if ((s.labelUrl ?? '').isNotEmpty)
               TextButton.icon(
-                onPressed: () => launchUrl(Uri.parse(s.labelUrl!)),
+                onPressed: () async {
+                  final uri = resolveLabelUri(s.labelUrl);
+                  if (uri == null) return;
+                  await launchUrl(uri);
+                },
                 icon: const Icon(Icons.link),
                 label: Text(L10n.tr(context, 'shipments.open_label')),
               ),

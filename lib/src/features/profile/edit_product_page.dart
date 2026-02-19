@@ -1,4 +1,4 @@
-﻿import 'dart:typed_data';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -36,6 +36,7 @@ class _EditProductPageState extends State<EditProductPage> {
   String _condition = 'new';
   bool _deliveryCod = true;
   bool _deliveryPickup = false;
+  bool _isNegotiable = true;
   bool _freeShipping = false;
   bool _exchangeAfterDelivery = false;
   bool _insuranceActive = false;
@@ -66,9 +67,12 @@ class _EditProductPageState extends State<EditProductPage> {
   void initState() {
     super.initState();
     _titleCtrl = TextEditingController(text: widget.product.title);
-    _priceCtrl = TextEditingController(text: widget.product.price.toStringAsFixed(0));
-    _stockCtrl =
-        TextEditingController(text: widget.product.stockQuantity.toString());
+    _priceCtrl = TextEditingController(
+      text: widget.product.price.toStringAsFixed(0),
+    );
+    _stockCtrl = TextEditingController(
+      text: widget.product.stockQuantity.toString(),
+    );
     _costCtrl = TextEditingController(
       text: widget.product.costPrice?.toStringAsFixed(0) ?? '',
     );
@@ -76,19 +80,24 @@ class _EditProductPageState extends State<EditProductPage> {
     _categoryCtrl = TextEditingController(text: widget.product.category ?? '');
     _brandCtrl = TextEditingController(text: widget.product.brand ?? '');
     _sizeCtrl = TextEditingController(text: widget.product.size ?? '');
-    _wilayaCtrl = TextEditingController(text: widget.product.locationWilaya ?? '');
-    _dairaCtrl = TextEditingController(text: widget.product.locationDaira ?? '');
+    _wilayaCtrl = TextEditingController(
+      text: widget.product.locationWilaya ?? '',
+    );
+    _dairaCtrl = TextEditingController(
+      text: widget.product.locationDaira ?? '',
+    );
     _condition = widget.product.condition ?? 'new';
     _deliveryCod = widget.product.deliveryOptions.contains('cod');
     _deliveryPickup = widget.product.deliveryOptions.contains('pickup');
+    _isNegotiable = widget.product.isNegotiable;
     _freeShipping = widget.product.shippingFree;
     _exchangeAfterDelivery = widget.product.exchangeAfterDelivery;
     _insuranceActive = widget.product.insuranceActive;
     _allowStopdesk = widget.product.allowStopdesk;
-    final declaredValue =
-        widget.product.declaredValue ?? widget.product.price;
-    _declaredValueCtrl =
-        TextEditingController(text: declaredValue.toStringAsFixed(0));
+    final declaredValue = widget.product.declaredValue ?? widget.product.price;
+    _declaredValueCtrl = TextEditingController(
+      text: declaredValue.toStringAsFixed(0),
+    );
     _weightCtrl = TextEditingController(
       text: (widget.product.weightKg ?? 1).toString(),
     );
@@ -148,28 +157,44 @@ class _EditProductPageState extends State<EditProductPage> {
       final price = InputSanitizer.parseAmount(_priceCtrl.text, min: 0);
       final stock = int.tryParse(_stockCtrl.text.trim()) ?? 0;
       if (stock < 0) {
-        throw FormatException(L10n.tr(context, 'listing.edit.error_invalid_stock'));
+        throw FormatException(
+          L10n.tr(context, 'listing.edit.error_invalid_stock'),
+        );
       }
       final costPrice = _costCtrl.text.trim().isEmpty
           ? null
           : InputSanitizer.parseAmount(_costCtrl.text, min: 0);
       final title = InputSanitizer.sanitizeText(_titleCtrl.text, maxLength: 80);
       if (title.isEmpty) {
-        throw FormatException(L10n.tr(context, 'listing.edit.error_title_required'));
+        throw FormatException(
+          L10n.tr(context, 'listing.edit.error_title_required'),
+        );
       }
       final description = InputSanitizer.sanitizeOptionalText(
         _descCtrl.text,
         maxLength: 1200,
         allowNewlines: true,
       );
-      final brand = InputSanitizer.sanitizeOptionalText(_brandCtrl.text, maxLength: 40);
-      final size = InputSanitizer.sanitizeOptionalText(_sizeCtrl.text, maxLength: 40);
-      final wilaya =
-          InputSanitizer.sanitizeOptionalText(_wilayaCtrl.text, maxLength: 60);
-      final daira =
-          InputSanitizer.sanitizeOptionalText(_dairaCtrl.text, maxLength: 60);
-      final categoryName =
-          InputSanitizer.sanitizeOptionalText(_categoryCtrl.text, maxLength: 80);
+      final brand = InputSanitizer.sanitizeOptionalText(
+        _brandCtrl.text,
+        maxLength: 40,
+      );
+      final size = InputSanitizer.sanitizeOptionalText(
+        _sizeCtrl.text,
+        maxLength: 40,
+      );
+      final wilaya = InputSanitizer.sanitizeOptionalText(
+        _wilayaCtrl.text,
+        maxLength: 60,
+      );
+      final daira = InputSanitizer.sanitizeOptionalText(
+        _dairaCtrl.text,
+        maxLength: 60,
+      );
+      final categoryName = InputSanitizer.sanitizeOptionalText(
+        _categoryCtrl.text,
+        maxLength: 80,
+      );
       final weight = int.tryParse(_weightCtrl.text.trim()) ?? 0;
       final height = int.tryParse(_heightCtrl.text.trim()) ?? 0;
       final width = int.tryParse(_widthCtrl.text.trim()) ?? 0;
@@ -187,26 +212,35 @@ class _EditProductPageState extends State<EditProductPage> {
         );
       }
       if (height < 0 || height > 200) {
-        throw FormatException(L10n.tr(context, 'checkout.error_height_invalid'));
+        throw FormatException(
+          L10n.tr(context, 'checkout.error_height_invalid'),
+        );
       }
       if (width < 0 || width > 200) {
         throw FormatException(L10n.tr(context, 'checkout.error_width_invalid'));
       }
       if (length < 0 || length > 200) {
-        throw FormatException(L10n.tr(context, 'checkout.error_length_invalid'));
+        throw FormatException(
+          L10n.tr(context, 'checkout.error_length_invalid'),
+        );
       }
       final declaredValue = _declaredValueCtrl.text.trim().isEmpty
           ? null
           : InputSanitizer.parseAmount(_declaredValueCtrl.text, min: 0);
       if (_insuranceActive && declaredValue == null) {
-        throw FormatException(L10n.tr(context, 'checkout.error_price_required'));
+        throw FormatException(
+          L10n.tr(context, 'checkout.error_price_required'),
+        );
       }
       final deliveryOptions = <String>[
         if (_deliveryCod) 'cod',
         if (_deliveryPickup) 'pickup',
       ];
 
-      final bytes = _newImages.map((f) => f.bytes).whereType<Uint8List>().toList();
+      final bytes = _newImages
+          .map((f) => f.bytes)
+          .whereType<Uint8List>()
+          .toList();
       final names = _newImages.map((f) => f.name).toList();
       if (bytes.length != _newImages.length) {
         throw StateError(L10n.tr(context, 'listing.edit.error_file_read'));
@@ -232,6 +266,7 @@ class _EditProductPageState extends State<EditProductPage> {
         locationWilaya: wilaya,
         locationDaira: daira,
         deliveryOptions: deliveryOptions,
+        isNegotiable: _isNegotiable,
         shippingFree: _freeShipping,
         exchangeAfterDelivery: _exchangeAfterDelivery,
         insuranceActive: _insuranceActive,
@@ -249,9 +284,9 @@ class _EditProductPageState extends State<EditProductPage> {
       Navigator.pop(context);
     } on FormatException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -303,7 +338,11 @@ class _EditProductPageState extends State<EditProductPage> {
                           child: const CircleAvatar(
                             radius: 12,
                             backgroundColor: Colors.black54,
-                            child: Icon(Icons.close, size: 14, color: Colors.white),
+                            child: Icon(
+                              Icons.close,
+                              size: 14,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),
@@ -318,9 +357,9 @@ class _EditProductPageState extends State<EditProductPage> {
                             ? Container(
                                 width: 96,
                                 height: 96,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHighest,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainerHighest,
                                 child: const Icon(Icons.image_outlined),
                               )
                             : Image.memory(
@@ -338,7 +377,11 @@ class _EditProductPageState extends State<EditProductPage> {
                           child: const CircleAvatar(
                             radius: 12,
                             backgroundColor: Colors.black54,
-                            child: Icon(Icons.close, size: 14, color: Colors.white),
+                            child: Icon(
+                              Icons.close,
+                              size: 14,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),
@@ -361,46 +404,62 @@ class _EditProductPageState extends State<EditProductPage> {
             const SizedBox(height: 16),
             TextField(
               controller: _titleCtrl,
-              decoration: InputDecoration(labelText: L10n.tr(context, 'listing.add.title_label')),
+              decoration: InputDecoration(
+                labelText: L10n.tr(context, 'listing.add.title_label'),
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _priceCtrl,
               keyboardType: TextInputType.number,
-              decoration: InputDecoration(labelText: L10n.tr(context, 'listing.add.price_label')),
+              decoration: InputDecoration(
+                labelText: L10n.tr(context, 'listing.add.price_label'),
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _stockCtrl,
               keyboardType: TextInputType.number,
-              decoration: InputDecoration(labelText: L10n.tr(context, 'listing.add.stock_label')),
+              decoration: InputDecoration(
+                labelText: L10n.tr(context, 'listing.add.stock_label'),
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _costCtrl,
               keyboardType: TextInputType.number,
-              decoration: InputDecoration(labelText: L10n.tr(context, 'listing.add.cost_label')),
+              decoration: InputDecoration(
+                labelText: L10n.tr(context, 'listing.add.cost_label'),
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _descCtrl,
-              decoration: InputDecoration(labelText: L10n.tr(context, 'listing.add.description_label')),
+              decoration: InputDecoration(
+                labelText: L10n.tr(context, 'listing.add.description_label'),
+              ),
               maxLines: 3,
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _categoryCtrl,
-              decoration: InputDecoration(labelText: L10n.tr(context, 'listing.add.category_label')),
+              decoration: InputDecoration(
+                labelText: L10n.tr(context, 'listing.add.category_label'),
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _brandCtrl,
-              decoration: InputDecoration(labelText: L10n.tr(context, 'listing.add.brand_label')),
+              decoration: InputDecoration(
+                labelText: L10n.tr(context, 'listing.add.brand_label'),
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _sizeCtrl,
-              decoration: InputDecoration(labelText: L10n.tr(context, 'listing.add.size_label')),
+              decoration: InputDecoration(
+                labelText: L10n.tr(context, 'listing.add.size_label'),
+              ),
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
@@ -421,12 +480,16 @@ class _EditProductPageState extends State<EditProductPage> {
             const SizedBox(height: 12),
             TextField(
               controller: _wilayaCtrl,
-              decoration: InputDecoration(labelText: L10n.tr(context, 'listing.add.wilaya_label')),
+              decoration: InputDecoration(
+                labelText: L10n.tr(context, 'listing.add.wilaya_label'),
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _dairaCtrl,
-              decoration: InputDecoration(labelText: L10n.tr(context, 'listing.add.commune_label')),
+              decoration: InputDecoration(
+                labelText: L10n.tr(context, 'listing.add.commune_label'),
+              ),
             ),
             const SizedBox(height: 12),
             SwitchListTile(
@@ -438,6 +501,24 @@ class _EditProductPageState extends State<EditProductPage> {
               value: _deliveryPickup,
               onChanged: (value) => setState(() => _deliveryPickup = value),
               title: Text(L10n.tr(context, 'listing.add.delivery_pickup')),
+            ),
+            SwitchListTile(
+              value: _isNegotiable,
+              onChanged: (value) => setState(() => _isNegotiable = value),
+              title: Text(
+                L10n.tr(
+                  context,
+                  'listing.add.negotiable_label',
+                  fallback: 'Prix négociable',
+                ),
+              ),
+              subtitle: Text(
+                L10n.tr(
+                  context,
+                  'listing.add.negotiable_hint',
+                  fallback: 'Autoriser les acheteurs à envoyer des offres.',
+                ),
+              ),
             ),
             const SizedBox(height: 16),
             Text(
@@ -525,8 +606,3 @@ class _EditProductPageState extends State<EditProductPage> {
     );
   }
 }
-
-
-
-
-

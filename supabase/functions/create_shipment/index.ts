@@ -239,7 +239,60 @@ const uploadLabel = async (
     .from("labels")
     .createSignedUrl(path, 60 * 60 * 24);
   if (error) throw new Error(error.message);
-  return data?.signedUrl ?? "";
+  return rewriteSignedLabelUrl(data?.signedUrl ?? "");
+};
+
+const internalSupabaseHosts = new Set([
+  "kong",
+  "supabase-kong",
+  "localhost",
+  "127.0.0.1",
+  "0.0.0.0",
+  "::1",
+]);
+
+const parseHttpUrl = (value: string) => {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed;
+    }
+  } catch {
+    // Ignore invalid URL.
+  }
+  return null;
+};
+
+const isInternalSupabaseHost = (host: string) =>
+  internalSupabaseHosts.has(host.trim().toLowerCase());
+
+const publicSignedUrlOrigin = () => {
+  const candidates = [
+    Deno.env.get("SIGNED_URL_PUBLIC_BASE_URL") ?? "",
+    Deno.env.get("API_EXTERNAL_URL") ?? "",
+    Deno.env.get("SUPABASE_PUBLIC_URL") ?? "",
+  ];
+  for (const candidate of candidates) {
+    const parsed = parseHttpUrl(textValue(candidate));
+    if (!parsed) continue;
+    if (isInternalSupabaseHost(parsed.hostname)) continue;
+    return parsed;
+  }
+  return null;
+};
+
+const rewriteSignedLabelUrl = (rawUrl: string) => {
+  const parsed = parseHttpUrl(textValue(rawUrl));
+  if (!parsed) return textValue(rawUrl);
+  if (!isInternalSupabaseHost(parsed.hostname)) return parsed.toString();
+
+  const externalOrigin = publicSignedUrlOrigin();
+  if (!externalOrigin) return parsed.toString();
+
+  parsed.protocol = externalOrigin.protocol;
+  parsed.hostname = externalOrigin.hostname;
+  parsed.port = externalOrigin.port;
+  return parsed.toString();
 };
 
 const isPdfBytes = (bytes: Uint8Array) =>

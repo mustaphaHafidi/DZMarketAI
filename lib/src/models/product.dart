@@ -17,9 +17,12 @@ class Product {
     this.brand,
     this.size,
     this.color,
+    this.searchTags = const [],
+    this.searchKeywords,
     this.locationWilaya,
     this.locationDaira,
     this.deliveryOptions = const [],
+    this.isNegotiable = true,
     this.shippingFree = false,
     this.exchangeAfterDelivery = false,
     this.insuranceActive = false,
@@ -53,9 +56,12 @@ class Product {
   final String? brand;
   final String? size;
   final String? color;
+  final List<String> searchTags;
+  final String? searchKeywords;
   final String? locationWilaya;
   final String? locationDaira;
   final List<String> deliveryOptions;
+  final bool isNegotiable;
   final bool shippingFree;
   final bool exchangeAfterDelivery;
   final bool insuranceActive;
@@ -83,15 +89,30 @@ class Product {
   }
 
   List<String> displayableImageUrls({String? fallback}) {
-    final merged = <String>[
-      ...imageUrls,
-      if ((imageUrl ?? '').trim().isNotEmpty) imageUrl!.trim(),
-    ].where((e) => e.trim().isNotEmpty).toList();
+    final merged = <String>[];
+    final seen = <String>{};
+
+    void addIfNew(String? raw) {
+      final value = (raw ?? '').trim();
+      if (value.isEmpty) return;
+      if (seen.add(value)) {
+        merged.add(value);
+      }
+    }
+
+    for (final url in imageUrls) {
+      addIfNew(url);
+    }
+    addIfNew(imageUrl);
+
     final supported = merged
         .where((url) => !isLikelyUnsupportedImageUrl(url))
         .toList();
     if (supported.isNotEmpty) return supported;
-    if ((fallback ?? '').trim().isNotEmpty) return [fallback!.trim()];
+    if ((fallback ?? '').trim().isNotEmpty) {
+      final fallbackValue = fallback!.trim();
+      if (!merged.contains(fallbackValue)) return [fallbackValue];
+    }
     if (merged.isNotEmpty) return merged;
     return const [];
   }
@@ -125,12 +146,18 @@ class Product {
     brand: json['brand'] as String?,
     size: json['size'] as String?,
     color: json['color'] as String?,
+    searchTags: ((json['search_tags'] as List?) ?? const [])
+        .map((e) => e?.toString() ?? '')
+        .where((e) => e.isNotEmpty)
+        .toList(),
+    searchKeywords: json['search_keywords'] as String?,
     locationWilaya: json['location_wilaya'] as String?,
     locationDaira: json['location_daira'] as String?,
     deliveryOptions: ((json['delivery_options'] as List?) ?? const [])
         .map((e) => e?.toString() ?? '')
         .where((e) => e.isNotEmpty)
         .toList(),
+    isNegotiable: json['is_negotiable'] as bool? ?? true,
     shippingFree: json['shipping_free'] as bool? ?? false,
     exchangeAfterDelivery: json['exchange_after_delivery'] as bool? ?? false,
     insuranceActive: json['insurance_active'] as bool? ?? false,

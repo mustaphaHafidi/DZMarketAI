@@ -25,6 +25,7 @@ class ChatRepository {
         .from(SupabaseTables.conversations)
         .stream(primaryKey: ['id'])
         .order('last_message_at', ascending: false)
+        .order('id', ascending: false)
         .limit(fetchLimit);
 
     // Sort + dedupe client-side to avoid heavy ORDER BY on the server
@@ -91,14 +92,10 @@ class ChatRepository {
         return !candidateHidden;
       }
     }
-    final candidateNullOrder = candidate.orderId == null || candidate.orderId!.isEmpty;
-    final currentNullOrder = current.orderId == null || current.orderId!.isEmpty;
-    if (candidateNullOrder != currentNullOrder) {
-      return candidateNullOrder;
-    }
     final candidateAt =
         candidate.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-    final currentAt = current.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+    final currentAt =
+        current.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
     return candidateAt.isAfter(currentAt);
   }
 

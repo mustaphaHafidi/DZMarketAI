@@ -11,6 +11,7 @@ class ProductService {
   static final Map<String, _ProductCacheEntry> _cache = {};
   static const Duration _cacheTtl = Duration(seconds: 20);
   static const int _maxOwnerProducts = 30;
+  static bool _supportsSearchKeywords = true;
 
   Stream<List<Product>> streamProducts() {
     final userId = supabase.auth.currentUser?.id;
@@ -124,7 +125,11 @@ class ProductService {
       filtered = filtered.neq('owner_id', userId);
     }
     if (q.isNotEmpty) {
-      filtered = filtered.or('title.ilike.%$q%,description.ilike.%$q%');
+      final orParts = <String>['title.ilike.%$q%', 'description.ilike.%$q%'];
+      if (_supportsSearchKeywords) {
+        orParts.add('search_keywords.ilike.%$q%');
+      }
+      filtered = filtered.or(orParts.join(','));
     }
     final cat = (safeCategoryId ?? '').trim();
     if (cat.isNotEmpty && cat != 'any') {
@@ -160,11 +165,36 @@ class ProductService {
       _ => filtered.order('created_at', ascending: false),
     };
 
-    final data = await RateLimiter.instance.run(
-      'products.fetch',
-      () => ordered.range(offset, offset + limit - 1),
-    );
-    final items = (data as List<dynamic>)
+    List<dynamic> data;
+    try {
+      data = await RateLimiter.instance.run(
+        'products.fetch',
+        () => ordered.range(offset, offset + limit - 1),
+      );
+    } on PostgrestException catch (e) {
+      final missingSearchKeywords =
+          e.code == '42703' && e.message.contains('search_keywords');
+      if (missingSearchKeywords && _supportsSearchKeywords) {
+        _supportsSearchKeywords = false;
+        return fetchProducts(
+          search: search,
+          categoryId: categoryId,
+          condition: condition,
+          minPrice: minPrice,
+          maxPrice: maxPrice,
+          brand: brand,
+          size: size,
+          color: color,
+          nearbyWilaya: nearbyWilaya,
+          sort: sort,
+          limit: limit,
+          offset: offset,
+          excludeOwner: excludeOwner,
+        );
+      }
+      rethrow;
+    }
+    final items = data
         .map((row) => Product.fromJson(row as Map<String, dynamic>))
         .toList();
 
@@ -187,6 +217,7 @@ class ProductService {
     String? locationWilaya,
     String? locationDaira,
     List<String> deliveryOptions = const [],
+    bool isNegotiable = true,
     bool shippingFree = false,
     bool exchangeAfterDelivery = false,
     bool insuranceActive = false,
@@ -202,6 +233,7 @@ class ProductService {
     String? moderationReason,
     List<String>? moderationLabels,
     double? moderationScore,
+    List<String> searchTags = const [],
   }) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) {
@@ -281,6 +313,17 @@ class ProductService {
         .map((e) => InputSanitizer.sanitizeText(e, maxLength: 60))
         .where((e) => e.isNotEmpty)
         .toList();
+    final safeSearchTags = searchTags
+        .map((e) => InputSanitizer.sanitizeText(e, maxLength: 24))
+        .map((e) => e.toLowerCase())
+        .map((e) => e.replaceAll(RegExp(r'[^a-z0-9\u0600-\u06FF_-]'), ''))
+        .where((e) => e.length >= 2)
+        .toSet()
+        .take(8)
+        .toList();
+    final safeSearchKeywords = safeSearchTags.isEmpty
+        ? null
+        : safeSearchTags.join(' ');
 
     final payload = <String, dynamic>{
       'title': safeTitle,
@@ -298,6 +341,7 @@ class ProductService {
       'location_wilaya': safeWilaya,
       'location_daira': safeDaira,
       'delivery_options': safeDelivery,
+      'is_negotiable': isNegotiable,
       'shipping_free': shippingFree,
       'exchange_after_delivery': exchangeAfterDelivery,
       'insurance_active': insuranceActive,
@@ -316,6 +360,8 @@ class ProductService {
       if (safeModerationLabels.isNotEmpty)
         'moderation_labels': safeModerationLabels,
       if (moderationScore != null) 'moderation_score': moderationScore,
+      if (safeSearchTags.isNotEmpty) 'search_tags': safeSearchTags,
+      if (safeSearchKeywords != null) 'search_keywords': safeSearchKeywords,
       'moderation_updated_at': DateTime.now().toIso8601String(),
     };
 
@@ -363,6 +409,7 @@ class ProductService {
     String? locationWilaya,
     String? locationDaira,
     List<String>? deliveryOptions,
+    bool? isNegotiable,
     bool? shippingFree,
     bool? exchangeAfterDelivery,
     bool? insuranceActive,
@@ -449,6 +496,7 @@ class ProductService {
           .where((opt) => opt.isNotEmpty)
           .toList();
     }
+    if (isNegotiable != null) payload['is_negotiable'] = isNegotiable;
     if (shippingFree != null) payload['shipping_free'] = shippingFree;
     if (exchangeAfterDelivery != null) {
       payload['exchange_after_delivery'] = exchangeAfterDelivery;

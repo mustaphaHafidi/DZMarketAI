@@ -2053,6 +2053,7 @@ create table if not exists public.products (
     location_wilaya text,
     location_daira text,
     delivery_options text[] not null default '{}',
+    is_negotiable boolean not null default true,
     shipping_free boolean not null default false,
     exchange_after_delivery boolean not null default false,
     insurance_active boolean not null default false,
@@ -2068,6 +2069,8 @@ create table if not exists public.products (
     brand text,
     size text,
     color text,
+    search_tags text[] not null default '{}',
+    search_keywords text,
     moderation_status text not null default 'approved',
     moderation_reason text,
     moderation_score numeric(6,4),
@@ -2100,6 +2103,15 @@ alter table public.products
 alter table public.products
   add column if not exists delivery_options text[] default '{}';
 alter table public.products
+  add column if not exists is_negotiable boolean default true;
+update public.products
+  set is_negotiable = true
+where is_negotiable is null;
+alter table public.products
+  alter column is_negotiable set default true;
+alter table public.products
+  alter column is_negotiable set not null;
+alter table public.products
   add column if not exists allow_stopdesk boolean default true;
 alter table public.products
   add column if not exists shipping_free boolean default false;
@@ -2127,6 +2139,10 @@ alter table public.products
   add column if not exists moderation_labels jsonb;
 alter table public.products
   add column if not exists moderation_updated_at timestamptz;
+alter table public.products
+  add column if not exists search_tags text[] default '{}';
+alter table public.products
+  add column if not exists search_keywords text;
 alter table public.products enable row level security;
 drop policy if exists "products readable by all" on public.products;
 drop policy if exists "products insert by seller" on public.products;
@@ -2236,6 +2252,8 @@ create index if not exists products_category_slug_idx on public.products (catego
 create index if not exists products_category_id_idx on public.products (category_id);
 create index if not exists products_status_created_idx on public.products (status, created_at desc);
 create index if not exists products_moderation_status_idx on public.products (moderation_status);
+create index if not exists products_search_tags_idx on public.products using gin (search_tags);
+create index if not exists products_search_keywords_idx on public.products (search_keywords);
 
 -- Favorites ------------------------------------------------------------------
 create table if not exists public.favorites (
@@ -3887,6 +3905,7 @@ declare
   v_offer public.offers;
   v_product record;
   v_message text := nullif(left(coalesce(p_message, ''), 240), '');
+  v_min_amount numeric := 1;
 begin
   if auth.uid() is null then
     raise exception 'Unauthorized' using errcode = '42501';
@@ -3900,7 +3919,7 @@ begin
     hashtext('offer_make:' || p_product_id::text || ':' || auth.uid()::text)
   );
 
-  select p.id, p.owner_id, p.status, p.is_archived, p.stock_quantity
+  select p.id, p.owner_id, p.status, p.is_archived, p.stock_quantity, p.price, p.is_negotiable
     into v_product
   from public.products p
   where p.id = p_product_id
@@ -3914,10 +3933,22 @@ begin
     raise exception 'cannot_offer_own_product' using errcode = '42501';
   end if;
 
+  if coalesce(v_product.is_negotiable, true) = false then
+    raise exception 'offer_not_negotiable' using errcode = '22023';
+  end if;
+
   if coalesce(v_product.is_archived, false)
      or coalesce(v_product.stock_quantity, 0) <= 0
      or coalesce(v_product.status, 'active') <> 'active' then
     raise exception 'product_unavailable' using errcode = 'P0001';
+  end if;
+
+  v_min_amount := greatest(1::numeric, ceil(coalesce(v_product.price, 0::numeric) * 0.5));
+  if p_amount < v_min_amount then
+    raise exception 'offer_below_min_ratio'
+      using errcode = '22023',
+            detail = 'min_offer=' || v_min_amount::text,
+            hint = 'offer must be at least 50% of product price';
   end if;
 
   update public.offers
@@ -4887,6 +4918,78 @@ begin
   end if;
 end;
 $$;
+
+-- Cleanup mojibake location names after legacy seeds ------------------------
+create or replace function public.fix_mojibake_text(p_value text)
+returns text
+language plpgsql
+immutable
+as $$
+begin
+  if p_value is null then
+    return null;
+  end if;
+  if position(chr(195) in p_value) > 0
+     or position(chr(194) in p_value) > 0
+     or position(chr(65533) in p_value) > 0 then
+    begin
+      return convert_from(convert_to(p_value, 'LATIN1'), 'UTF8');
+    exception
+      when others then
+        return p_value;
+    end;
+  end if;
+  return p_value;
+end;
+$$;
+
+update public.wilayas
+set name_fr = public.fix_mojibake_text(name_fr),
+    name_ar = public.fix_mojibake_text(name_ar)
+where position(chr(195) in coalesce(name_fr, '')) > 0
+   or position(chr(194) in coalesce(name_fr, '')) > 0
+   or position(chr(65533) in coalesce(name_fr, '')) > 0
+   or position(chr(195) in coalesce(name_ar, '')) > 0
+   or position(chr(194) in coalesce(name_ar, '')) > 0
+   or position(chr(65533) in coalesce(name_ar, '')) > 0;
+
+-- Some rows become identical after decoding (ex: Ain encoded twice).
+-- Keep one row per (wilaya_code, normalized_name_fr) before updating.
+with normalized as (
+  select
+    c.id,
+    c.wilaya_code,
+    public.fix_mojibake_text(c.name_fr) as normalized_name_fr
+  from public.communes c
+),
+ranked as (
+  select
+    n.id,
+    row_number() over (
+      partition by n.wilaya_code, n.normalized_name_fr
+      order by
+        case when c.name_fr = n.normalized_name_fr then 0 else 1 end,
+        c.id
+    ) as rn
+  from normalized n
+  join public.communes c on c.id = n.id
+)
+delete from public.communes c
+using ranked r
+where c.id = r.id
+  and r.rn > 1;
+
+update public.communes
+set name_fr = public.fix_mojibake_text(name_fr),
+    name_ar = public.fix_mojibake_text(name_ar)
+where position(chr(195) in coalesce(name_fr, '')) > 0
+   or position(chr(194) in coalesce(name_fr, '')) > 0
+   or position(chr(65533) in coalesce(name_fr, '')) > 0
+   or position(chr(195) in coalesce(name_ar, '')) > 0
+   or position(chr(194) in coalesce(name_ar, '')) > 0
+   or position(chr(65533) in coalesce(name_ar, '')) > 0;
+
+drop function if exists public.fix_mojibake_text(text);
 
 
 

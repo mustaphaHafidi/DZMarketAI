@@ -1,8 +1,12 @@
 import 'dart:async';
 
-import 'package:dzmarket/src/services/input_sanitizer.dart';
-import 'package:dzmarket/src/services/rate_limiter.dart';
+import 'package:dzmarket/src/models/app_notification.dart';
+import 'package:dzmarket/src/services/i18n.dart';
+import 'package:dzmarket/src/services/locale_service.dart';
+import 'package:dzmarket/src/services/notification_inbox_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class NotificationService {
@@ -11,41 +15,86 @@ class NotificationService {
 
   RealtimeChannel? _channel;
   StreamSubscription<AuthState>? _authSub;
+  StreamSubscription<NotificationPreferences>? _prefsSub;
   GlobalKey<ScaffoldMessengerState>? _messengerKey;
-  final Map<String, bool> _orderAccessCache = {};
+  final Set<int> _shownNotificationIds = <int>{};
+  final NotificationInboxService _inboxService = NotificationInboxService();
+  final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
+  NotificationPreferences _prefs = const NotificationPreferences(userId: '');
+  bool _localNotificationsReady = false;
+  bool _started = false;
 
   void start(GlobalKey<ScaffoldMessengerState> messengerKey) {
     _messengerKey = messengerKey;
+    if (_started) return;
+    _started = true;
+    unawaited(_initLocalNotifications());
     _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((event) {
       _subscribe();
     });
     _subscribe();
   }
 
+  Future<void> _initLocalNotifications() async {
+    if (kIsWeb) return;
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const darwinSettings = DarwinInitializationSettings();
+    const settings = InitializationSettings(
+      android: androidSettings,
+      iOS: darwinSettings,
+      macOS: darwinSettings,
+    );
+    try {
+      await _localNotifications.initialize(settings);
+      await _requestPermissions();
+      _localNotificationsReady = true;
+    } catch (_) {
+      _localNotificationsReady = false;
+    }
+  }
+
+  Future<void> _requestPermissions() async {
+    final androidImpl = _localNotifications
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    await androidImpl?.requestNotificationsPermission();
+
+    final iosImpl = _localNotifications
+        .resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin
+        >();
+    await iosImpl?.requestPermissions(alert: true, badge: true, sound: true);
+
+    final macImpl = _localNotifications
+        .resolvePlatformSpecificImplementation<
+          MacOSFlutterLocalNotificationsPlugin
+        >();
+    await macImpl?.requestPermissions(alert: true, badge: true, sound: true);
+  }
+
   void _subscribe() {
     _channel?.unsubscribe();
+    _channel = null;
+    _prefsSub?.cancel();
+    _shownNotificationIds.clear();
+    _prefs = const NotificationPreferences(userId: '');
+
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
+    _prefsSub = _inboxService.watchPreferences().listen((prefs) {
+      _prefs = prefs;
+    });
+
     _channel = Supabase.instance.client
-        .channel('public:notifications')
+        .channel('public:notifications:$userId')
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,
           schema: 'public',
-          table: 'messages',
+          table: 'notification_events',
           callback: (payload) {
-            _handleMessageInsert(payload, userId);
-          },
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'offers',
-          callback: (payload) {
-            final newRow = payload.newRecord;
-            final sellerId = newRow['seller_id'] as String?;
-            if (sellerId != userId) return;
-            final amount = newRow['amount']?.toString() ?? '';
-            _showSnack('New offer', 'Offer: $amount');
+            _handleNotificationInsert(payload, userId);
           },
         )
         .subscribe();
@@ -53,12 +102,18 @@ class NotificationService {
 
   Future<void> dispose() async {
     await _authSub?.cancel();
+    await _prefsSub?.cancel();
     await _channel?.unsubscribe();
   }
 
-  void notifyLocal(String title, String body) => _showSnack(title, body);
+  void notifyLocal(String title, String body) {
+    _showSnack(title, body);
+    final id = DateTime.now().millisecondsSinceEpoch % 2147483647;
+    unawaited(_showLocalNotification(id: id, title: title, body: body));
+  }
 
   void _showSnack(String title, String body) {
+    if (title.trim().isEmpty && body.trim().isEmpty) return;
     _messengerKey?.currentState?.showSnackBar(
       SnackBar(
         content: Column(
@@ -73,78 +128,106 @@ class NotificationService {
     );
   }
 
-  void _handleMessageInsert(PostgresChangePayload payload, String userId) {
+  Future<void> _showLocalNotification({
+    required int id,
+    required String title,
+    required String body,
+  }) async {
+    if (!_localNotificationsReady || kIsWeb) return;
+    final android = AndroidNotificationDetails(
+      'dzmarket_events',
+      'DZMarket notifications',
+      channelDescription: 'Messages, offres et commandes',
+      importance: Importance.max,
+      priority: Priority.high,
+    );
+    const darwin = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+    final details = NotificationDetails(
+      android: android,
+      iOS: darwin,
+      macOS: darwin,
+    );
+    await _localNotifications.show(
+      id,
+      title,
+      body,
+      details,
+      payload: 'notification_event',
+    );
+  }
+
+  bool _isCategoryEnabled(AppNotificationCategory category) {
+    if (_prefs.isMutedNow) return false;
+    switch (category) {
+      case AppNotificationCategory.chat:
+        return _prefs.enableChat;
+      case AppNotificationCategory.offer:
+        return _prefs.enableOffer;
+      case AppNotificationCategory.order:
+        return _prefs.enableOrder;
+      case AppNotificationCategory.system:
+        return _prefs.enableSystem;
+    }
+  }
+
+  void _handleNotificationInsert(PostgresChangePayload payload, String userId) {
     final newRow = payload.newRecord;
-    final sender = newRow['sender_id'] as String?;
-    if (sender == userId) return;
-    final roomId = newRow['room_id'] as String?;
-    if (roomId == null || roomId.isEmpty) return;
-    final msgType = newRow['type']?.toString();
-    final msgPayload = newRow['payload'];
+    if (newRow['user_id']?.toString() != userId) return;
 
-    // Skip global room notifications to reduce noise unless explicitly needed.
-    if (roomId == 'general') return;
+    final notification = AppNotification.fromJson(newRow);
+    if (_shownNotificationIds.contains(notification.id)) return;
+    _shownNotificationIds.add(notification.id);
+    if (!_isCategoryEnabled(notification.category)) return;
 
-    if (roomId.startsWith('product:')) {
-      final parts = roomId.split(':');
-      if (!parts.contains(userId)) return;
-      final content = newRow['content'] as String? ?? 'New message';
-      _showSnack('New message', content);
-      return;
-    }
-
-    if (roomId.startsWith('order:')) {
-      final parts = roomId.split(':');
-      if (parts.length < 2) return;
-      final orderId = parts[1];
-      if (msgType == 'label') {
-        final tracking = msgPayload is Map
-            ? msgPayload['tracking_number']?.toString()
-            : null;
-        final body =
-            tracking == null ? 'Bordereau disponible' : 'Bordereau $tracking';
-        _handleOrderMessage(orderId, userId, body, title: 'Bordereau');
-        return;
-      }
-      final content = newRow['content'] as String? ?? 'New message';
-      _handleOrderMessage(orderId, userId, content);
-      return;
-    }
+    final locale = LocaleService.instance.locale.value?.languageCode ?? 'fr';
+    final title = L10n.trLocale(
+      locale,
+      notification.titleI18n,
+      fallback: 'Notification',
+    );
+    final body = _bodyText(notification, locale);
+    _showSnack(title, body);
+    unawaited(
+      _showLocalNotification(id: notification.id, title: title, body: body),
+    );
   }
 
-  Future<void> _handleOrderMessage(
-    String orderId,
-    String userId,
-    String content,
-    {String title = 'New message'}
-  ) async {
-    final cached = _orderAccessCache[orderId];
-    if (cached != null) {
-      if (cached) _showSnack(title, content);
-      return;
-    }
-    final allowed = await _hasOrderAccess(orderId, userId);
-    _orderAccessCache[orderId] = allowed;
-    if (allowed) _showSnack(title, content);
+  String _bodyText(AppNotification notification, String locale) {
+    final payload = notification.payload;
+    final amountText = _amountText(payload['amount']);
+    final orderId = payload['order_id']?.toString();
+    final statusKey = payload['status_i18n']?.toString();
+    final statusText = statusKey == null
+        ? (payload['status']?.toString() ?? '')
+        : L10n.trLocale(
+            locale,
+            statusKey,
+            fallback: payload['status']?.toString(),
+          );
+    final snippet = payload['snippet']?.toString();
+    return L10n.trLocale(
+      locale,
+      notification.bodyI18n,
+      fallback: notification.bodyI18n,
+      params: {
+        'amount': amountText,
+        'id': orderId ?? '',
+        'status': statusText,
+        'snippet': snippet ?? '',
+      },
+    );
   }
 
-  Future<bool> _hasOrderAccess(String orderId, String userId) async {
-    try {
-      final safeOrderId = InputSanitizer.sanitizeId(orderId, maxLength: 64);
-      final safeUserId = InputSanitizer.sanitizeId(userId, maxLength: 64);
-      final row = await RateLimiter.instance.run(
-        'orders.access.check',
-        () => Supabase.instance.client
-            .from('orders')
-            .select('id')
-            .eq('id', safeOrderId)
-            .or(
-                'buyer_id.eq.$safeUserId,seller_id.eq.$safeUserId,driver_id.eq.$safeUserId')
-            .maybeSingle(),
-      );
-      return row != null;
-    } catch (_) {
-      return false;
-    }
+  String _amountText(Object? amountRaw) {
+    if (amountRaw == null) return '0';
+    final amountNum = amountRaw is num
+        ? amountRaw.toDouble()
+        : double.tryParse(amountRaw.toString());
+    if (amountNum == null) return amountRaw.toString();
+    return amountNum.toStringAsFixed(0);
   }
 }

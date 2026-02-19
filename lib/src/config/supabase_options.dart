@@ -1,11 +1,7 @@
 class SupabaseOptions {
   // Do not ship secrets in source. Provide values at build/run time via --dart-define.
-  static const supabaseUrl = String.fromEnvironment(
-    'SUPABASE_URL',
-  );
-  static const supabaseAnonKey = String.fromEnvironment(
-    'SUPABASE_ANON_KEY',
-  );
+  static const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+  static const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
   // Defaults can be overridden with --dart-define for staging/prod.
   static const labelBucket = String.fromEnvironment(
@@ -38,6 +34,8 @@ class SupabaseTables {
   static const addresses = 'addresses';
   static const reviews = 'reviews';
   static const reports = 'reports';
+  static const notificationEvents = 'notification_events';
+  static const notificationPreferences = 'notification_preferences';
   static const categories = 'categories';
   static const wilayas = 'wilayas';
   static const communes = 'communes';

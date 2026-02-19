@@ -1,8 +1,10 @@
+import 'package:dzmarket/src/utils/label_url_resolver.dart';
+
 class ShipmentEvent {
   ShipmentEvent.fromJson(Map<String, dynamic> json)
-      : title = json['title'] as String? ?? '',
-        description = json['description'] as String?,
-        at = json['at'] != null ? DateTime.tryParse(json['at'] as String) : null;
+    : title = json['title'] as String? ?? '',
+      description = json['description'] as String?,
+      at = json['at'] != null ? DateTime.tryParse(json['at'] as String) : null;
 
   final String title;
   final String? description;
@@ -31,16 +33,15 @@ class Shipment {
   final List<ShipmentEvent> events;
 
   factory Shipment.fromJson(Map<String, dynamic> json) => Shipment(
-        orderId: json['order_id']?.toString() ?? '',
-        trackingNumber: json['tracking_number'] as String?,
-        labelUrl: json['label_url'] as String?,
-        status: json['status'] as String?,
-        carrier: json['carrier'] as String?,
-        option: json['option'] as String?,
-        deliveryMode: json['delivery_mode'] as String?,
-        events: ((json['events'] as List?) ?? const [])
-            .map((e) => ShipmentEvent.fromJson(
-                Map<String, dynamic>.from(e as Map)))
-            .toList(),
-      );
+    orderId: json['order_id']?.toString() ?? '',
+    trackingNumber: json['tracking_number'] as String?,
+    labelUrl: normalizeLabelUrl(json['label_url'] as String?),
+    status: json['status'] as String?,
+    carrier: json['carrier'] as String?,
+    option: json['option'] as String?,
+    deliveryMode: json['delivery_mode'] as String?,
+    events: ((json['events'] as List?) ?? const [])
+        .map((e) => ShipmentEvent.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList(),
+  );
 }

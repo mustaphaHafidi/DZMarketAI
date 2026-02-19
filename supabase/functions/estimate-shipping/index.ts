@@ -177,11 +177,54 @@ const pickNumber = (record: Record<string, unknown>, keys: string[]) => {
 };
 
 const firstLikelyPrice = (record: Record<string, unknown>) => {
-  const ignored = ["id", "code", "min", "max", "wilaya", "commune", "retour"];
+  const ignored = [
+    "id",
+    "code",
+    "min",
+    "max",
+    "wilaya",
+    "commune",
+    "retour",
+    "day",
+    "days",
+    "hour",
+    "hours",
+    "delay",
+    "delai",
+    "eta",
+    "kg",
+    "weight",
+    "poids",
+    "zone",
+    "distance",
+    "lat",
+    "lng",
+    "long",
+    "name",
+    "title",
+    "phone",
+  ];
+  const positiveFeeHints = [
+    "tarif",
+    "fee",
+    "price",
+    "livraison",
+    "delivery",
+    "home",
+    "desk",
+    "pickup",
+    "stopdesk",
+    "montant",
+    "amount",
+    "rate",
+    "cost",
+    "cout",
+  ];
   for (const [key, raw] of Object.entries(record)) {
     const keyNorm = normalizeToken(key);
     if (!keyNorm) continue;
     if (ignored.some((token) => keyNorm.includes(token))) continue;
+    if (!positiveFeeHints.some((token) => keyNorm.includes(token))) continue;
     const parsed = numberValue(raw);
     if (parsed != null && parsed > 0) return parsed;
   }
@@ -375,14 +418,15 @@ serve(async (req) => {
     return jsonResponse({ ok: false, message: "Server misconfigured" }, 500);
   }
 
-  const supabase = createClient(url, serviceKey, {
+  const token = auth.replace(/^Bearer\s+/i, "").trim();
+  const admin = createClient(url, serviceKey, {
     auth: { persistSession: false },
-    global: { headers: { Authorization: auth } },
   });
 
   let userId = "";
   try {
-    const { data } = await supabase.auth.getUser();
+    const { data, error } = await admin.auth.getUser(token);
+    if (error) throw error;
     userId = data.user?.id ?? "";
   } catch {
     userId = "";
@@ -390,7 +434,7 @@ serve(async (req) => {
   if (!userId) return jsonResponse({ ok: false, message: "Unauthorized" }, 401);
 
   try {
-    const ok = await consumeRateLimit(supabase, `shipping_quote:${userId}`, 40, 60);
+    const ok = await consumeRateLimit(admin, `shipping_quote:${userId}`, 40, 60);
     if (!ok) {
       return jsonResponse({ ok: false, message: "Rate limit exceeded" }, 429);
     }
@@ -431,7 +475,7 @@ serve(async (req) => {
   let effectiveSenderWilayaId = senderWilayaId;
   let effectiveSenderWilayaName = senderWilayaName;
   if (productId) {
-    const { data: product } = await supabase
+    const { data: product } = await admin
       .from("products")
       .select("id,owner_id,shipping_free,location_wilaya")
       .eq("id", productId)
@@ -460,27 +504,64 @@ serve(async (req) => {
     });
   }
 
-  const { data: settings } = await supabase
-    .from("seller_delivery_settings")
-    .select("api_key,api_secret")
-    .eq("owner_id", sellerId)
-    .eq("courier_id", courierId)
-    .maybeSingle();
-  const apiKey = textValue(settings?.api_key);
-  const apiSecret = textValue(settings?.api_secret);
-  if (!apiKey) {
-    return jsonResponse({ ok: false, message: "missing seller courier settings" }, 400);
-  }
-
   const carrierCode = canonicalCarrierCode(courierId, courierName);
   const senderRouteValue = effectiveSenderWilayaId || effectiveSenderWilayaName;
   const receiverRouteValue = receiverWilayaId || receiverWilayaName;
+  let apiKey = "";
+  let apiSecret = "";
+
+  try {
+    const { data: secureRows } = await admin.rpc("get_seller_delivery_settings_secure", {
+      p_owner: sellerId,
+      p_courier_id: courierId,
+    });
+    if (Array.isArray(secureRows) && secureRows.length > 0) {
+      const secureRow = (secureRows[0] ?? {}) as Record<string, unknown>;
+      apiKey = textValue(secureRow.api_key);
+      apiSecret = textValue(secureRow.api_secret);
+    }
+  } catch {
+    // Fallback to plain fields when secure function is unavailable.
+  }
+
+  if (!apiKey) {
+    const { data: settings } = await admin
+      .from("seller_delivery_settings")
+      .select("api_key,api_secret")
+      .eq("owner_id", sellerId)
+      .eq("courier_id", courierId)
+      .maybeSingle();
+    apiKey = textValue(settings?.api_key);
+    apiSecret = textValue(settings?.api_secret);
+  }
+
+  if (!apiKey) {
+    const fallback = fallbackEstimate(
+      senderRouteValue,
+      receiverRouteValue,
+      weightKg,
+      heightCm,
+      widthCm,
+      lengthCm,
+    );
+    return jsonResponse({
+      ok: true,
+      fee: fallback.fee,
+      base_fee: fallback.baseFee,
+      overweight_fee: fallback.overweightFee,
+      currency: fallback.currency,
+      source: fallback.source,
+      free_shipping: false,
+      courier_code: carrierCode,
+      meta: { warning: "missing_seller_courier_settings" },
+    });
+  }
 
   let quote: QuoteResult | null = null;
   try {
     if (carrierCode === "ecotrack") {
       const resp = await carrierFetch(
-        supabase,
+        admin,
         carrierCode,
         sellerId,
         "https://api.ecotrack.dz/api/v1/get/fees",
@@ -505,7 +586,7 @@ serve(async (req) => {
       if (senderRouteValue) route.searchParams.set("from_wilaya_id", senderRouteValue);
       if (receiverRouteValue) route.searchParams.set("to_wilaya_id", receiverRouteValue);
       const resp = await carrierFetch(
-        supabase,
+        admin,
         carrierCode,
         sellerId,
         route.toString(),
@@ -527,7 +608,7 @@ serve(async (req) => {
       if (senderRouteValue) route.searchParams.set("from_wilaya_id", senderRouteValue);
       if (receiverRouteValue) route.searchParams.set("to_wilaya_id", receiverRouteValue);
       const resp = await carrierFetch(
-        supabase,
+        admin,
         carrierCode,
         sellerId,
         route.toString(),
@@ -551,7 +632,7 @@ serve(async (req) => {
           encodeURIComponent(toTerritoryId)
         }`;
         const resp = await carrierFetch(
-          supabase,
+          admin,
           carrierCode,
           sellerId,
           route,
@@ -575,6 +656,23 @@ serve(async (req) => {
   }
 
   if (!quote) {
+    quote = fallbackEstimate(
+      senderRouteValue,
+      receiverRouteValue,
+      weightKg,
+      heightCm,
+      widthCm,
+      lengthCm,
+    );
+  }
+
+  // Guardrail for malformed carrier payloads (observed tiny values like 3 DZD).
+  if (
+    carrierCode === "guepex" &&
+    quote &&
+    quote.fee > 0 &&
+    quote.fee < 50
+  ) {
     quote = fallbackEstimate(
       senderRouteValue,
       receiverRouteValue,

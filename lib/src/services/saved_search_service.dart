@@ -24,6 +24,21 @@ class SavedSearch {
 }
 
 class SavedSearchService {
+  Future<List<SavedSearch>> fetchSavedSearches(String userId) async {
+    final safeUserId = InputSanitizer.sanitizeId(userId, maxLength: 64);
+    final rows = await RateLimiter.instance.run(
+      'saved_searches.fetch',
+      () => supabase
+          .from('saved_searches')
+          .select()
+          .eq('user_id', safeUserId)
+          .order('created_at'),
+    );
+    return (rows as List<dynamic>)
+        .map((e) => SavedSearch.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   Stream<List<SavedSearch>> streamSavedSearches(String userId) {
     final safeUserId = InputSanitizer.sanitizeId(userId, maxLength: 64);
     return RateLimiter.instance.stream(

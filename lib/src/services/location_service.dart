@@ -13,6 +13,7 @@ class LocationService {
     );
     String? wilaya;
     String? daira;
+    String? countryCode;
     try {
       final placemarks = await placemarkFromCoordinates(
         position.latitude,
@@ -20,6 +21,7 @@ class LocationService {
       );
       if (placemarks.isNotEmpty) {
         final p = placemarks.first;
+        countryCode = p.isoCountryCode?.trim().toUpperCase();
         wilaya = p.administrativeArea?.isNotEmpty == true
             ? p.administrativeArea
             : p.subAdministrativeArea;
@@ -33,6 +35,7 @@ class LocationService {
       longitude: position.longitude,
       wilaya: wilaya,
       daira: daira,
+      countryCode: countryCode,
     );
   }
 
@@ -54,10 +57,12 @@ class LocationData {
     required this.longitude,
     this.wilaya,
     this.daira,
+    this.countryCode,
   });
 
   final double latitude;
   final double longitude;
   final String? wilaya;
   final String? daira;
+  final String? countryCode;
 }

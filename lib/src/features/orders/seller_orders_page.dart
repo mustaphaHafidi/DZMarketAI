@@ -4,6 +4,7 @@ import 'package:dzmarket/src/models/order.dart';
 import 'package:dzmarket/src/services/buyer_return_service.dart';
 import 'package:dzmarket/src/services/order_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/utils/label_url_resolver.dart';
 import 'package:dzmarket/src/utils/delivery_mode_utils.dart';
 import 'package:dzmarket/src/widgets/refresh_controller.dart';
 import 'package:dzmarket/src/services/i18n.dart';
@@ -133,7 +134,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
                         }
                       },
                       onOpenLabel: (labelUrl) async {
-                        final uri = Uri.tryParse(labelUrl);
+                        final uri = resolveLabelUri(labelUrl);
                         if (uri != null) {
                           await launchUrl(
                             uri,

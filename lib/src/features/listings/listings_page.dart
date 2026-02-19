@@ -41,7 +41,6 @@ class _ListingsPageState extends State<ListingsPage> {
   String _sort = 'newest';
   bool _showFavoritesOnly = false;
   bool _nearbyOnly = false;
-  bool _quickMax5000 = false;
   bool _quickNewOnly = false;
   bool _quickDeliveryOnly = false;
   String? _buyerWilaya;
@@ -55,6 +54,7 @@ class _ListingsPageState extends State<ListingsPage> {
   String? _loadError;
   bool _loadErrorOffline = false;
   String? _lastLoggedLoadError;
+  int _savedSearchesRefreshTick = 0;
 
   List<Map<String, String>> _categories = const [
     {'id': 'any'},
@@ -150,10 +150,11 @@ class _ListingsPageState extends State<ListingsPage> {
           if (userId != null)
             _SavedSearchesRow(
               userId: userId,
-              apply: _applySavedSearch,
               clearFilters: _clearFilters,
+              openSavedFilters: _openSavedFiltersSheet,
               saveSearch: _saveSearch,
-              deleteSearch: _deleteSavedSearch,
+              canSave: _canSaveCurrentSearch(),
+              refreshTick: _savedSearchesRefreshTick,
             ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
@@ -204,39 +205,6 @@ class _ListingsPageState extends State<ListingsPage> {
                         return;
                       }
                       setState(() => _nearbyOnly = value);
-                      _refresh();
-                    },
-                  ),
-                  if (_hasActiveFilters()) ...[
-                    const SizedBox(width: 8),
-                    _FilterPill(
-                      icon: Icons.clear_all,
-                      label: L10n.tr(context, 'common.reset'),
-                      onPressed: _clearFilters,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: SizedBox(
-              height: 36,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
-                  FilterChip(
-                    selected: _quickMax5000,
-                    label: Text(
-                      L10n.tr(
-                        context,
-                        'listing.quick.max_5000',
-                        fallback: '< 5000 DA',
-                      ),
-                    ),
-                    onSelected: (value) {
-                      setState(() => _quickMax5000 = value);
                       _refresh();
                     },
                   ),
@@ -386,12 +354,7 @@ class _ListingsPageState extends State<ListingsPage> {
 
   double? _effectiveMinPrice() => _safeMinPrice();
 
-  double? _effectiveMaxPrice() {
-    final baseMax = _safeMaxPrice();
-    if (!_quickMax5000) return baseMax;
-    if (baseMax == null) return 5000;
-    return baseMax <= 5000 ? baseMax : 5000;
-  }
+  double? _effectiveMaxPrice() => _safeMaxPrice();
 
   String _queryKey() {
     final userId = supabase.auth.currentUser?.id ?? '';
@@ -706,7 +669,6 @@ class _ListingsPageState extends State<ListingsPage> {
       _sort = (f['sort'] as String?) ?? 'newest';
       _showFavoritesOnly = (f['favoritesOnly'] as bool?) ?? false;
       _nearbyOnly = (f['nearbyOnly'] as bool?) ?? false;
-      _quickMax5000 = (f['quickMax5000'] as bool?) ?? false;
       _quickNewOnly = (f['quickNewOnly'] as bool?) ?? false;
       _quickDeliveryOnly = (f['quickDeliveryOnly'] as bool?) ?? false;
     });
@@ -726,10 +688,14 @@ class _ListingsPageState extends State<ListingsPage> {
       'sort': _sort,
       'favoritesOnly': _showFavoritesOnly,
       'nearbyOnly': _nearbyOnly,
-      'quickMax5000': _quickMax5000,
       'quickNewOnly': _quickNewOnly,
       'quickDeliveryOnly': _quickDeliveryOnly,
     };
+  }
+
+  bool _canSaveCurrentSearch() {
+    if (_safeSearch().isNotEmpty) return true;
+    return _hasActiveFilters();
   }
 
   Future<void> _saveSearch() async {
@@ -764,6 +730,7 @@ class _ListingsPageState extends State<ListingsPage> {
       filters: _currentFilters(),
     );
     if (!mounted) return;
+    setState(() => _savedSearchesRefreshTick++);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(L10n.tr(context, 'saved_search.saved'))),
     );
@@ -794,7 +761,6 @@ class _ListingsPageState extends State<ListingsPage> {
                 _sort = 'newest';
                 _showFavoritesOnly = false;
                 _nearbyOnly = false;
-                _quickMax5000 = false;
                 _quickNewOnly = false;
                 _quickDeliveryOnly = false;
               });
@@ -1042,7 +1008,7 @@ class _ListingsPageState extends State<ListingsPage> {
     );
   }
 
-  Future<void> _deleteSavedSearch(SavedSearch saved) async {
+  Future<bool> _deleteSavedSearch(SavedSearch saved) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1066,11 +1032,133 @@ class _ListingsPageState extends State<ListingsPage> {
         ],
       ),
     );
-    if (confirmed != true) return;
+    if (confirmed != true) return false;
     await SavedSearchService().deleteSearch(saved.id);
-    if (!mounted) return;
+    if (!mounted) return false;
+    setState(() => _savedSearchesRefreshTick++);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(L10n.tr(context, 'saved_search.deleted'))),
+    );
+    return true;
+  }
+
+  Future<void> _openSavedFiltersSheet() async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+    var sheetRefreshTick = _savedSearchesRefreshTick;
+    await showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              child: FutureBuilder<List<SavedSearch>>(
+                key: ValueKey('saved-filters-$sheetRefreshTick'),
+                future: SavedSearchService().fetchSavedSearches(userId),
+                builder: (context, snapshot) {
+                  final saved = snapshot.data ?? const <SavedSearch>[];
+                  final loading =
+                      snapshot.connectionState == ConnectionState.waiting &&
+                      snapshot.data == null;
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                        child: Row(
+                          children: [
+                            Text(
+                              L10n.tr(
+                                context,
+                                'saved_search.my_filters',
+                                fallback: 'Mes filtres',
+                              ),
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const Spacer(),
+                            if (_canSaveCurrentSearch())
+                              TextButton.icon(
+                                onPressed: () async {
+                                  Navigator.of(sheetContext).pop();
+                                  await _saveSearch();
+                                },
+                                icon: const Icon(Icons.bookmark_add_outlined),
+                                label: Text(L10n.tr(context, 'common.save')),
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (loading)
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(16, 4, 16, 20),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else if (snapshot.hasError)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+                          child: TextButton(
+                            onPressed: () {
+                              setSheetState(() => sheetRefreshTick++);
+                            },
+                            child: Text(
+                              L10n.tr(
+                                context,
+                                'common.retry',
+                                fallback: 'Reessayer',
+                              ),
+                            ),
+                          ),
+                        )
+                      else if (saved.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+                          child: Text(
+                            L10n.tr(
+                              context,
+                              'saved_search.empty',
+                              fallback: 'Aucun filtre enregistre.',
+                            ),
+                          ),
+                        )
+                      else
+                        Flexible(
+                          child: ListView.separated(
+                            shrinkWrap: true,
+                            itemCount: saved.length,
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final s = saved[index];
+                              return ListTile(
+                                leading: const Icon(Icons.bookmark_outline),
+                                title: Text(s.name),
+                                onTap: () {
+                                  Navigator.of(sheetContext).pop();
+                                  _applySavedSearch(s);
+                                },
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.delete_outline),
+                                  onPressed: () async {
+                                    final deleted = await _deleteSavedSearch(s);
+                                    if (deleted) {
+                                      setSheetState(() => sheetRefreshTick++);
+                                    }
+                                  },
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      const SizedBox(height: 8),
+                    ],
+                  );
+                },
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1104,8 +1192,6 @@ class _ListingsPageState extends State<ListingsPage> {
     if (_sort != 'newest') count++;
     if (_nearbyOnly) count++;
     if (_showFavoritesOnly) count++;
-    if (_quickMax5000) count++;
-    if (_quickNewOnly) count++;
     if (_quickDeliveryOnly) count++;
     return count;
   }
@@ -1259,7 +1345,6 @@ class _ListingsPageState extends State<ListingsPage> {
       _sort = 'newest';
       _showFavoritesOnly = false;
       _nearbyOnly = false;
-      _quickMax5000 = false;
       _quickNewOnly = false;
       _quickDeliveryOnly = false;
     });
@@ -1276,61 +1361,60 @@ class _ListingsPageState extends State<ListingsPage> {
 class _SavedSearchesRow extends StatelessWidget {
   const _SavedSearchesRow({
     required this.userId,
-    required this.apply,
     required this.clearFilters,
+    required this.openSavedFilters,
     required this.saveSearch,
-    required this.deleteSearch,
+    required this.canSave,
+    required this.refreshTick,
   });
 
   final String userId;
-  final void Function(SavedSearch) apply;
   final VoidCallback clearFilters;
+  final VoidCallback openSavedFilters;
   final VoidCallback saveSearch;
-  final Future<void> Function(SavedSearch) deleteSearch;
+  final bool canSave;
+  final int refreshTick;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 52,
-      child: Row(
+      height: 50,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
         children: [
-          TextButton.icon(
+          TextButton(
             onPressed: clearFilters,
-            icon: const Icon(Icons.clear_all),
-            label: Text(L10n.tr(context, 'common.reset')),
+            child: Text(L10n.tr(context, 'common.reset')),
           ),
-          TextButton.icon(
-            onPressed: saveSearch,
-            icon: const Icon(Icons.bookmark_add_outlined),
-            label: Text(L10n.tr(context, 'common.save')),
-          ),
-          Expanded(
-            child: StreamBuilder<List<SavedSearch>>(
-              stream: SavedSearchService().streamSavedSearches(userId),
-              builder: (context, snapshot) {
-                final saved = snapshot.data ?? const [];
-                if (saved.isEmpty) return const SizedBox.shrink();
-                return ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  itemBuilder: (context, index) {
-                    final s = saved[index];
-                    return InputChip(
-                      label: Text(s.name),
-                      onPressed: () => apply(s),
-                      onDeleted: () => deleteSearch(s),
-                      deleteIcon: const Icon(Icons.close),
+          const SizedBox(width: 2),
+          FutureBuilder<List<SavedSearch>>(
+            key: ValueKey('saved-searches-count-$refreshTick'),
+            future: SavedSearchService().fetchSavedSearches(userId),
+            builder: (context, snapshot) {
+              final count = (snapshot.data ?? const <SavedSearch>[]).length;
+              final label = count > 0
+                  ? '${L10n.tr(context, 'saved_search.my_filters', fallback: 'Mes filtres')} ($count)'
+                  : L10n.tr(
+                      context,
+                      'saved_search.my_filters',
+                      fallback: 'Mes filtres',
                     );
-                  },
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemCount: saved.length,
-                );
-              },
-            ),
+              return TextButton.icon(
+                onPressed: openSavedFilters,
+                icon: const Icon(Icons.bookmark_outline),
+                label: Text(label),
+              );
+            },
           ),
+          if (canSave) ...[
+            const SizedBox(width: 4),
+            TextButton.icon(
+              onPressed: saveSearch,
+              icon: const Icon(Icons.bookmark_add_outlined),
+              label: Text(L10n.tr(context, 'common.save')),
+            ),
+          ],
         ],
       ),
     );
@@ -1389,7 +1473,6 @@ class _ProductCard extends StatelessWidget {
                         imageUrl: firstImage,
                         fit: BoxFit.cover,
                         memCacheWidth: imagePrefs.listImageMemCacheWidth,
-                        memCacheHeight: imagePrefs.listImageMemCacheHeight,
                         fadeInDuration: imagePrefs.imageFadeInDuration,
                         fadeOutDuration: imagePrefs.imageFadeOutDuration,
                         imageRenderMethodForWeb:
@@ -1537,6 +1620,15 @@ class _ProductCard extends StatelessWidget {
                           label: L10n.tr(
                             context,
                             'listing.detail.delivery_pickup',
+                          ),
+                        ),
+                      if (product.isNegotiable)
+                        _CardMiniBadge(
+                          icon: Icons.sell_outlined,
+                          label: L10n.tr(
+                            context,
+                            'listing.negotiable',
+                            fallback: 'Prix negociable',
                           ),
                         ),
                     ],

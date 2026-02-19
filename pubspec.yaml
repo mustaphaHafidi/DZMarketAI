@@ -53,8 +53,10 @@ dependencies:
   firebase_core: ^3.0.0
   firebase_analytics: ^11.0.0
   firebase_crashlytics: ^4.0.0
+  flutter_local_notifications: ^17.2.4
   connectivity_plus: ^6.0.0
   flutter_svg: ^2.0.10
+  google_mlkit_image_labeling: ^0.14.1
 
 dev_dependencies:
   flutter_test:
@@ -86,6 +88,7 @@ flutter:
     - assets/i18n/ar.json
     - assets/branding/dzmarket_logo.svg
     - assets/branding/dzmarket_logo_ui.svg
+    - logos/
 
   # To add assets to your application, add an assets section, like this:
   # assets:
@@ -123,15 +126,17 @@ flutter_launcher_icons:
   ios: true
   web:
     generate: true
-    image_path: "logos/Logo_DZM1_app.png"
-    background_color: "#ffffff"
-    theme_color: "#ffffff"
+    image_path: "logos/logo_launcher_square.png"
+    background_color: "#eaf5ea"
+    theme_color: "#eaf5ea"
   windows:
     generate: true
-    image_path: "logos/Logo_DZM1_app.png"
+    image_path: "logos/logo_launcher_square.png"
     icon_size: 256
   macos:
     generate: true
-    image_path: "logos/Logo_DZM1_app.png"
-  image_path: "logos/Logo_DZM1_app.png"
+    image_path: "logos/logo_launcher_square.png"
+  image_path: "logos/logo_launcher_square.png"
+  adaptive_icon_foreground: "logos/logo_launcher_foreground.png"
+  adaptive_icon_background: "#eaf5ea"
   remove_alpha_ios: true

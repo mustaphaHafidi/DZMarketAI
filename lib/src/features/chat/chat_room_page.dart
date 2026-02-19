@@ -40,6 +40,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   bool _sending = false;
   bool _offerActionBusy = false;
   String? _offerBusyMessageId;
+  bool _isProductNegotiable = true;
   String? _buyerId;
   String? _sellerId;
   String? _productId;
@@ -101,10 +102,14 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
 
       final product = await supabase
           .from('products')
-          .select('id,title,image_url,price,status')
+          .select('id,title,image_url,price,status,is_negotiable')
           .eq('id', productId)
           .maybeSingle();
       if (product == null) return null;
+      final isNegotiable = product['is_negotiable'] as bool? ?? true;
+      if (mounted && _isProductNegotiable != isNegotiable) {
+        setState(() => _isProductNegotiable = isNegotiable);
+      }
 
       return _ProductHeaderData(
         productId: product['id'].toString(),
@@ -112,6 +117,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         imageUrl: product['image_url']?.toString(),
         price: (product['price'] as num?)?.toDouble(),
         status: product['status']?.toString(),
+        isNegotiable: isNegotiable,
       );
     } catch (e) {
       return null;
@@ -213,6 +219,23 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   Future<void> _sendOfferFromChat() async {
     final currentUser = supabase.auth.currentUser?.id;
     if (currentUser == null || _productId == null || _sellerId == null) return;
+    final header = await _headerFuture;
+    final isNegotiable = header?.isNegotiable ?? _isProductNegotiable;
+    if (!isNegotiable) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            L10n.tr(
+              context,
+              'offers.not_negotiable',
+              fallback: 'Ce produit n\'accepte pas les offres.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
     final minOffer = await _minOfferAmountForCurrentProduct();
     if (!mounted) return;
     final amountController = TextEditingController();
@@ -235,6 +258,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                       'Offre minimum: DA ${minOffer.toStringAsFixed(0)} (50%).',
                   params: {'amount': minOffer.toStringAsFixed(0)},
                 ),
+                helperMaxLines: 2,
               ),
             ),
           ],
@@ -247,8 +271,33 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
           TextButton(
             onPressed: () async {
               try {
+                final normalized = amountController.text.trim().replaceAll(
+                  ',',
+                  '.',
+                );
+                final parsed = double.tryParse(normalized);
+                if (parsed == null) {
+                  throw FormatException(
+                    L10n.tr(
+                      context,
+                      'payment.invalid_amount',
+                      fallback: 'Montant invalide',
+                    ),
+                  );
+                }
+                if (parsed < minOffer) {
+                  throw FormatException(
+                    L10n.tr(
+                      context,
+                      'offers.min_50_percent',
+                      fallback:
+                          'Offre minimum: DA ${minOffer.toStringAsFixed(0)} (50%).',
+                      params: {'amount': minOffer.toStringAsFixed(0)},
+                    ),
+                  );
+                }
                 final amount = InputSanitizer.parseAmount(
-                  amountController.text,
+                  normalized,
                   min: minOffer,
                 );
                 await _offerService.makeOffer(
@@ -266,6 +315,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                 if (!context.mounted) return;
                 final lower = e.toString().toLowerCase();
                 final isMinOfferError = lower.contains('offer_below_min_ratio');
+                final isNotNegotiableError = lower.contains(
+                  'offer_not_negotiable',
+                );
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
@@ -276,6 +328,12 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                               fallback:
                                   'Offre minimum: DA ${minOffer.toStringAsFixed(0)} (50%).',
                               params: {'amount': minOffer.toStringAsFixed(0)},
+                            )
+                          : isNotNegotiableError
+                          ? L10n.tr(
+                              context,
+                              'offers.not_negotiable',
+                              fallback: 'Ce produit n\'accepte pas les offres.',
                             )
                           : e.toString(),
                     ),
@@ -542,6 +600,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                                           'amount': minOffer.toStringAsFixed(0),
                                         },
                                       ),
+                                      helperMaxLines: 2,
                                     ),
                                   ),
                                   actions: [
@@ -554,8 +613,37 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                                     TextButton(
                                       onPressed: () {
                                         try {
+                                          final normalized = ctrl.text
+                                              .trim()
+                                              .replaceAll(',', '.');
+                                          final parsed = double.tryParse(
+                                            normalized,
+                                          );
+                                          if (parsed == null) {
+                                            throw FormatException(
+                                              L10n.tr(
+                                                context,
+                                                'payment.invalid_amount',
+                                                fallback: 'Montant invalide',
+                                              ),
+                                            );
+                                          }
+                                          if (parsed < minOffer) {
+                                            throw FormatException(
+                                              L10n.tr(
+                                                context,
+                                                'offers.min_50_percent',
+                                                fallback:
+                                                    'Offre minimum: DA ${minOffer.toStringAsFixed(0)} (50%).',
+                                                params: {
+                                                  'amount': minOffer
+                                                      .toStringAsFixed(0),
+                                                },
+                                              ),
+                                            );
+                                          }
                                           final v = InputSanitizer.parseAmount(
-                                            ctrl.text,
+                                            normalized,
                                             min: minOffer,
                                           );
                                           Navigator.pop(context, v);
@@ -608,6 +696,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
               if (offerEvent == 'rejected' &&
                   currentUserId != null &&
                   currentUserId == _buyerId &&
+                  _isProductNegotiable &&
                   isLatestOfferMessage &&
                   !canRespond)
                 Padding(
@@ -902,7 +991,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
               child: Row(
                 children: [
-                  if (isBuyer && _productId != null && _sellerId != null) ...[
+                  if (isBuyer &&
+                      _productId != null &&
+                      _sellerId != null &&
+                      _isProductNegotiable) ...[
                     IconButton(
                       onPressed: _sendOfferFromChat,
                       tooltip: L10n.tr(context, 'offers.make_offer'),
@@ -982,6 +1074,7 @@ class _ProductHeaderData {
     required this.price,
     required this.imageUrl,
     required this.status,
+    required this.isNegotiable,
   });
 
   final String productId;
@@ -989,4 +1082,5 @@ class _ProductHeaderData {
   final double? price;
   final String? imageUrl;
   final String? status;
+  final bool isNegotiable;
 }

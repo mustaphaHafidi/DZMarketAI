@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cached_network_image_platform_interface/cached_network_image_platform_interface.dart';
 import 'package:dzmarket/src/features/admin/app_errors_page.dart';
 import 'package:dzmarket/src/features/admin/moderation_admin_page.dart';
+import 'package:dzmarket/src/features/notifications/notifications_page.dart';
 import 'package:dzmarket/src/features/orders/shipments_dashboard_page.dart';
 import 'package:dzmarket/src/features/orders/seller_orders_page.dart';
 import 'package:dzmarket/src/features/profile/courier_settings_page.dart';
@@ -19,6 +20,7 @@ import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:dzmarket/src/services/location_data_service.dart';
 import 'package:dzmarket/src/services/location_service.dart';
+import 'package:dzmarket/src/services/notification_inbox_service.dart';
 import 'package:dzmarket/src/services/storage_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:file_picker/file_picker.dart';
@@ -34,6 +36,8 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
+  final NotificationInboxService _notificationInboxService =
+      NotificationInboxService();
   final _nameCtrl = TextEditingController();
   final _bioCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
@@ -381,6 +385,106 @@ class _ProfilePageState extends State<ProfilePage> {
     return _pickLocalizedName(context, fr, ar);
   }
 
+  static const Map<String, String> _latinFoldMap = {
+    'à': 'a',
+    'á': 'a',
+    'â': 'a',
+    'ä': 'a',
+    'ã': 'a',
+    'å': 'a',
+    'ç': 'c',
+    'è': 'e',
+    'é': 'e',
+    'ê': 'e',
+    'ë': 'e',
+    'ì': 'i',
+    'í': 'i',
+    'î': 'i',
+    'ï': 'i',
+    'ñ': 'n',
+    'ò': 'o',
+    'ó': 'o',
+    'ô': 'o',
+    'ö': 'o',
+    'õ': 'o',
+    'ù': 'u',
+    'ú': 'u',
+    'û': 'u',
+    'ü': 'u',
+    'ý': 'y',
+    'ÿ': 'y',
+    'œ': 'oe',
+    'æ': 'ae',
+  };
+
+  String _normalizeGeoToken(String? value) {
+    var normalized = (value ?? '').trim().toLowerCase();
+    if (normalized.isEmpty) return '';
+    for (final entry in _latinFoldMap.entries) {
+      normalized = normalized.replaceAll(entry.key, entry.value);
+    }
+    normalized = normalized
+        .replaceAll(
+          RegExp(
+            r'\b(wilaya|province|state|commune|daira|da[iï]ra|district)\b',
+          ),
+          ' ',
+        )
+        .replaceAll(RegExp(r"[’'`´_-]"), ' ')
+        .replaceAll(RegExp(r'[^a-z0-9\u0600-\u06FF ]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    return normalized;
+  }
+
+  bool _isSoftLocationMatch(String a, String b) {
+    if (a.isEmpty || b.isEmpty) return false;
+    if (a == b) return true;
+    if (a.length >= 4 && b.length >= 4) {
+      return a.contains(b) || b.contains(a);
+    }
+    return false;
+  }
+
+  Map<String, String>? _matchWilayaFromText(String? raw) {
+    final target = _normalizeGeoToken(raw);
+    if (target.isEmpty) return null;
+    final targetDigits = target.replaceAll(RegExp(r'[^0-9]'), '');
+    for (final item in _wilayas) {
+      final code = (item['code'] ?? '').trim();
+      if (code.isEmpty) continue;
+      final codeNoLeadingZero = code.replaceFirst(RegExp(r'^0+'), '');
+      if (target == code || target == codeNoLeadingZero) return item;
+      if (targetDigits.isNotEmpty &&
+          (targetDigits == code || targetDigits == codeNoLeadingZero)) {
+        return item;
+      }
+      final fr = _normalizeGeoToken(item['name_fr']);
+      final ar = _normalizeGeoToken(item['name_ar']);
+      if (_isSoftLocationMatch(target, fr) ||
+          _isSoftLocationMatch(target, ar)) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  Map<String, String>? _matchCommuneFromText(String? raw) {
+    final target = _normalizeGeoToken(raw);
+    if (target.isEmpty) return null;
+    for (final item in _communes) {
+      final id = _normalizeGeoToken(item['id']);
+      final fr = _normalizeGeoToken(item['name_fr']);
+      final ar = _normalizeGeoToken(item['name_ar']);
+      if (_isSoftLocationMatch(target, id) ||
+          _isSoftLocationMatch(target, fr) ||
+          _isSoftLocationMatch(target, ar)) {
+        return item;
+      }
+    }
+    return null;
+  }
+
   Future<Map<String, String>?> _showLocationPicker({
     required BuildContext context,
     required String title,
@@ -449,11 +553,22 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildPickerField({
+    required BuildContext context,
     required String label,
     required String value,
     required VoidCallback? onTap,
     required IconData icon,
+    bool isPlaceholder = false,
   }) {
+    final colors = Theme.of(context).colorScheme;
+    final valueStyle = Theme.of(context).textTheme.bodyLarge?.copyWith(
+      color: onTap == null ? colors.onSurfaceVariant : colors.onSurface,
+    );
+    final textStyle = isPlaceholder
+        ? Theme.of(
+            context,
+          ).textTheme.bodyLarge?.copyWith(color: colors.onSurfaceVariant)
+        : valueStyle;
     return InkWell(
       onTap: onTap,
       child: InputDecorator(
@@ -464,8 +579,20 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
         child: Row(
           children: [
-            Expanded(child: Text(value)),
-            const Icon(Icons.arrow_drop_down),
+            Expanded(
+              child: Text(
+                value,
+                style: textStyle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Icon(
+              Icons.arrow_drop_down,
+              color: onTap == null
+                  ? colors.onSurfaceVariant.withValues(alpha: 0.6)
+                  : colors.onSurfaceVariant,
+            ),
           ],
         ),
       ),
@@ -474,22 +601,76 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _useMyLocation() async {
     setState(() => _saving = true);
+    if (_wilayas.isEmpty && !_loadingLocations) {
+      await _loadLocations();
+    }
     final data = await LocationService.instance.fetchLocation();
     if (!mounted) return;
-    setState(() {
-      _saving = false;
-      if (data != null) {
+    if (data == null) {
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(L10n.tr(context, 'profile.location_permission_denied')),
+        ),
+      );
+      return;
+    }
+
+    final countryCode = data.countryCode?.trim().toUpperCase();
+    if (countryCode != null && countryCode.isNotEmpty && countryCode != 'DZ') {
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(L10n.tr(context, 'profile.location_outside_algeria')),
+        ),
+      );
+      return;
+    }
+
+    final matchedWilaya = _matchWilayaFromText(data.wilaya);
+    if (matchedWilaya == null) {
+      setState(() {
+        _saving = false;
         _lat = data.latitude;
         _lng = data.longitude;
-        if (data.wilaya != null) {
-          _wilayaCtrl.text = data.wilaya!;
-        }
-        if (data.daira != null) {
-          _dairaCtrl.text = data.daira!;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(L10n.tr(context, 'profile.location_not_detected')),
+        ),
+      );
+      return;
+    }
+
+    final wilayaCode = matchedWilaya['code'] ?? '';
+    final wilayaName = matchedWilaya['name_fr'] ?? wilayaCode;
+    setState(() {
+      _lat = data.latitude;
+      _lng = data.longitude;
+      _selectedWilayaCode = wilayaCode.isNotEmpty ? wilayaCode : null;
+      _wilayaCtrl.text = wilayaName;
+      _selectedCommuneId = null;
+      _dairaCtrl.text = '';
+      _communes = const [];
+    });
+    if (wilayaCode.isNotEmpty) {
+      await _loadCommunes(wilayaCode);
+      if (mounted && data.daira?.trim().isNotEmpty == true) {
+        final matchedCommune = _matchCommuneFromText(data.daira);
+        if (matchedCommune != null) {
+          final communeId = matchedCommune['id'] ?? '';
+          setState(() {
+            _selectedCommuneId = communeId.isNotEmpty ? communeId : null;
+            _dairaCtrl.text = matchedCommune['name_fr'] ?? communeId;
+          });
         }
       }
-    });
-    _syncLocationSelectionFromText();
+    }
+    if (!mounted) return;
+    setState(() => _saving = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(L10n.tr(context, 'profile.location_updated'))),
+    );
   }
 
   Future<void> _pickAvatar() async {
@@ -545,6 +726,123 @@ class _ProfilePageState extends State<ProfilePage> {
     return letters.toUpperCase();
   }
 
+  Widget _buildProfileHeader({
+    required BuildContext context,
+    required String? safeAvatar,
+    required bool isSeller,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: colors.surface,
+        border: Border.all(
+          color: colors.outlineVariant.withValues(alpha: 0.65),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: colors.shadow.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 28,
+                backgroundColor: colors.secondaryContainer,
+                backgroundImage: safeAvatar != null
+                    ? CachedNetworkImageProvider(
+                        safeAvatar,
+                        imageRenderMethodForWeb:
+                            ImageRenderMethodForWeb.HtmlImage,
+                      )
+                    : null,
+                child: safeAvatar == null
+                    ? Text(
+                        _initials(),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _nameCtrl.text.trim().isEmpty
+                          ? (_profile?.email ?? '')
+                          : _nameCtrl.text.trim(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _profile?.email ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  color: colors.primaryContainer.withValues(alpha: 0.45),
+                ),
+                child: Text(
+                  isSeller
+                      ? L10n.tr(context, 'profile.mode_seller')
+                      : L10n.tr(context, 'profile.mode_buyer'),
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: colors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _saving ? null : _useMyLocation,
+                  icon: const Icon(Icons.my_location_outlined),
+                  label: Text(L10n.tr(context, 'profile.use_location')),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: colors.primary,
+                    foregroundColor: colors.onPrimary,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -583,6 +881,7 @@ class _ProfilePageState extends State<ProfilePage> {
     final safeAvatar = InputSanitizer.safeUrl(_avatarUrl);
     final isSeller = _isSeller;
     final isSuperAdmin = _profile?.role == UserRole.superadmin;
+    final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(title: Text(L10n.tr(context, 'profile.title'))),
@@ -595,69 +894,38 @@ class _ProfilePageState extends State<ProfilePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 32,
-                      backgroundColor: Theme.of(
-                        context,
-                      ).colorScheme.secondaryContainer,
-                      backgroundImage: safeAvatar != null
-                          ? CachedNetworkImageProvider(
-                              safeAvatar,
-                              imageRenderMethodForWeb:
-                                  ImageRenderMethodForWeb.HtmlImage,
-                            )
-                          : null,
-                      child: safeAvatar == null
-                          ? Text(
-                              _initials(),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18,
-                              ),
-                            )
-                          : null,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _profile?.email ?? '',
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            isSeller
-                                ? L10n.tr(context, 'profile.mode_seller')
-                                : L10n.tr(context, 'profile.mode_buyer'),
-                            style: Theme.of(context).textTheme.labelMedium,
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: _saving ? null : _useMyLocation,
-                      icon: const Icon(Icons.my_location_outlined),
-                      tooltip: L10n.tr(context, 'profile.use_location'),
-                    ),
-                  ],
+                _buildProfileHeader(
+                  context: context,
+                  safeAvatar: safeAvatar,
+                  isSeller: isSeller,
                 ),
                 const SizedBox(height: 16),
                 Card(
-                  elevation: 2,
+                  elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(20),
+                    side: BorderSide(
+                      color: colors.outlineVariant.withValues(alpha: 0.45),
+                    ),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        Text(
+                          L10n.tr(
+                            context,
+                            'profile.section_account',
+                            fallback: 'Informations du compte',
+                          ),
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 10),
                         TextField(
                           controller: _nameCtrl,
+                          style: Theme.of(context).textTheme.bodyLarge,
                           decoration: InputDecoration(
                             labelText: L10n.tr(context, 'profile.full_name'),
                             prefixIcon: const Icon(Icons.badge_outlined),
@@ -685,6 +953,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         TextField(
                           controller: _bioCtrl,
                           maxLines: 2,
+                          style: Theme.of(context).textTheme.bodyLarge,
                           decoration: InputDecoration(
                             labelText: L10n.tr(context, 'profile.bio'),
                             prefixIcon: const Icon(Icons.notes_outlined),
@@ -694,6 +963,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         TextField(
                           controller: _phoneCtrl,
                           keyboardType: TextInputType.phone,
+                          style: Theme.of(context).textTheme.bodyLarge,
                           decoration: InputDecoration(
                             labelText: L10n.tr(context, 'profile.phone'),
                             prefixIcon: const Icon(Icons.phone_outlined),
@@ -703,9 +973,13 @@ class _ProfilePageState extends State<ProfilePage> {
                         Column(
                           children: [
                             _buildPickerField(
+                              context: context,
                               label: L10n.tr(context, 'profile.wilaya'),
                               value: _wilayaLabel(context),
                               icon: Icons.map_outlined,
+                              isPlaceholder:
+                                  _selectedWilayaCode == null ||
+                                  _selectedWilayaCode!.isEmpty,
                               onTap: (_loadingLocations || _wilayas.isEmpty)
                                   ? null
                                   : () async {
@@ -741,9 +1015,13 @@ class _ProfilePageState extends State<ProfilePage> {
                             ),
                             const SizedBox(height: 12),
                             _buildPickerField(
+                              context: context,
                               label: L10n.tr(context, 'profile.daira'),
                               value: _communeLabel(context),
                               icon: Icons.place_outlined,
+                              isPlaceholder:
+                                  _selectedCommuneId == null ||
+                                  _selectedCommuneId!.isEmpty,
                               onTap:
                                   (_loadingLocations ||
                                       _selectedWilayaCode == null ||
@@ -890,12 +1168,86 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 const SizedBox(height: 16),
                 Card(
-                  elevation: 1,
+                  elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(20),
+                    side: BorderSide(
+                      color: colors.outlineVariant.withValues(alpha: 0.45),
+                    ),
                   ),
                   child: Column(
                     children: [
+                      ListTile(
+                        title: Text(
+                          L10n.tr(
+                            context,
+                            'profile.section_tools',
+                            fallback: 'Outils et raccourcis',
+                          ),
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      StreamBuilder<int>(
+                        stream: _notificationInboxService.watchUnreadCount(),
+                        builder: (context, snap) {
+                          final unread = snap.data ?? 0;
+                          return ListTile(
+                            leading: const Icon(Icons.notifications_outlined),
+                            title: Text(
+                              L10n.tr(context, 'notifications.title'),
+                            ),
+                            subtitle: Text(
+                              unread > 0
+                                  ? L10n.tr(
+                                      context,
+                                      'notifications.unread_count',
+                                      params: {'count': '$unread'},
+                                    )
+                                  : L10n.tr(
+                                      context,
+                                      'notifications.all_caught_up',
+                                    ),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (unread > 0)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primaryContainer,
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      unread > 99 ? '99+' : '$unread',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onPrimaryContainer,
+                                      ),
+                                    ),
+                                  ),
+                                const SizedBox(width: 6),
+                                const Icon(Icons.chevron_right),
+                              ],
+                            ),
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const NotificationsPage(),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      const Divider(height: 1),
                       if (isSuperAdmin) const Divider(height: 1),
                       if (isSuperAdmin)
                         ListTile(

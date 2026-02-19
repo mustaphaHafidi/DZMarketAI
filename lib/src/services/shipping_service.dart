@@ -15,6 +15,7 @@ import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/locale_service.dart';
+import 'package:dzmarket/src/utils/label_url_resolver.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // Simple generic cache item with expiry.
@@ -907,8 +908,8 @@ class ShippingService {
       final map = Map<String, dynamic>.from(data);
       try {
         final tracking = map['tracking_number']?.toString();
-        final labelUrl = map['label_url']?.toString();
-        final hasLabel = labelUrl != null && labelUrl.isNotEmpty;
+        final labelUrl = normalizeLabelUrl(map['label_url']?.toString());
+        final hasLabel = labelUrl.isNotEmpty;
         final statusValue = hasLabel ? 'shipped' : 'validated';
         final labelKey = hasLabel
             ? 'order.system.shipped'
@@ -1673,10 +1674,14 @@ class ShippingService {
     if (data == null || data.isEmpty) {
       throw StateError('Label generation failed');
     }
-    final labelUrl = data['signed_url'] ?? data['label_url'] ?? data['label'];
+    final labelUrl = normalizeLabelUrl(
+      data['signed_url']?.toString() ??
+          data['label_url']?.toString() ??
+          data['label']?.toString(),
+    );
     final trackingNumber =
         data['tracking_number'] ?? data['tracking'] ?? data['tracking_id'];
-    if (labelUrl == null || labelUrl.toString().isEmpty) {
+    if (labelUrl.isEmpty) {
       throw StateError('Label URL missing from server response');
     }
 
@@ -2642,7 +2647,7 @@ class ShippingService {
           'delivery_method': order['delivery_method'] as String?,
           'tracking_number': r['tracking_number'] as String?,
           'shipping_cost': r['shipping_cost'] ?? order['shipping_cost'],
-          'label_url': r['label_url'] as String?,
+          'label_url': normalizeLabelUrl(r['label_url'] as String?),
           'created_at': createdAt,
         });
       }

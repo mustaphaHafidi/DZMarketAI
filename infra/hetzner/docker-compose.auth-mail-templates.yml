@@ -1,0 +1,7 @@
+﻿services:
+  auth:
+    environment:
+      GOTRUE_MAILER_TEMPLATES_CONFIRMATION: "https://app.dzmarket.pro/auth-email/confirmation.html"
+      GOTRUE_MAILER_TEMPLATES_RECOVERY: "https://app.dzmarket.pro/auth-email/recovery.html"
+      GOTRUE_MAILER_SUBJECTS_CONFIRMATION: "DZMarket - Confirmez votre email / تأكيد البريد الإلكتروني"
+      GOTRUE_MAILER_SUBJECTS_RECOVERY: "DZMarket - Réinitialisation du mot de passe / إعادة تعيين كلمة المرور"

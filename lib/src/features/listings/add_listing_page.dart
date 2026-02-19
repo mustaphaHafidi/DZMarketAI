@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:dzmarket/src/features/profile/my_listings_page.dart';
 import 'package:dzmarket/src/services/category_service.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/i18n.dart';
+import 'package:dzmarket/src/services/listing_suggestion_service.dart';
 import 'package:dzmarket/src/services/location_data_service.dart';
 import 'package:dzmarket/src/services/product_service.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
@@ -12,6 +15,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide StorageException;
 
 class AddListingPage extends StatefulWidget {
   const AddListingPage({super.key});
@@ -40,6 +44,7 @@ class _AddListingPageState extends State<AddListingPage> {
   String? _categoryNameFr;
   String? _categorySlug;
   bool _deliveryEnabled = true;
+  bool _isNegotiable = true;
   bool _freeShipping = false;
   bool _exchangeAfterDelivery = false;
   bool _insuranceActive = false;
@@ -58,10 +63,16 @@ class _AddListingPageState extends State<AddListingPage> {
   List<Map<String, String>> _wilayas = const [];
   List<Map<String, String>> _communes = const [];
   final List<PlatformFile> _pickedFiles = [];
+  static const int _minPhotos = 2;
   static const int _maxPhotos = 5;
   static const String _recentCategoriesKey = 'listing.add.recent_categories.v1';
   static const int _maxRecentCategories = 6;
   List<String> _recentCategoryIds = const [];
+  final _listingSuggestionService = ListingSuggestionService();
+  Timer? _suggestionDebounce;
+  bool _analyzingSuggestions = false;
+  String? _suggestionError;
+  Map<String, String>? _suggestedCategory;
 
   final _conditions = const ['new', 'like new', 'good', 'fair'];
 
@@ -104,6 +115,7 @@ class _AddListingPageState extends State<AddListingPage> {
     _titleCtrl.removeListener(_onFieldChanged);
     _descCtrl.removeListener(_onFieldChanged);
     _priceCtrl.removeListener(_onFieldChanged);
+    _suggestionDebounce?.cancel();
     _titleCtrl.dispose();
     _descCtrl.dispose();
     _priceCtrl.dispose();
@@ -136,6 +148,7 @@ class _AddListingPageState extends State<AddListingPage> {
         );
       }
     });
+    _scheduleSuggestionRefresh();
   }
 
   Future<void> _loadRecentCategories() async {
@@ -257,11 +270,6 @@ class _AddListingPageState extends State<AddListingPage> {
                   ).compareTo(_categoryPathLabel(sheetContext, b)),
                 );
               }
-              final recentItems = _recentCategoryIds
-                  .map(_findCategoryById)
-                  .whereType<Map<String, String>>()
-                  .toList();
-
               Widget buildCategoryTile(
                 Map<String, String> item, {
                 required bool showPath,
@@ -342,37 +350,6 @@ class _AddListingPageState extends State<AddListingPage> {
                     child: ListView(
                       shrinkWrap: true,
                       children: [
-                        if (query.isEmpty && recentItems.isNotEmpty) ...[
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
-                            child: Text(
-                              L10n.tr(
-                                sheetContext,
-                                'listing.add.category_recent',
-                                fallback: 'Recentes',
-                              ),
-                              style: Theme.of(
-                                sheetContext,
-                              ).textTheme.labelLarge,
-                            ),
-                          ),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: recentItems
-                                .map(
-                                  (item) => ActionChip(
-                                    label: Text(
-                                      _categoryItemLabel(sheetContext, item),
-                                    ),
-                                    onPressed: () =>
-                                        Navigator.of(sheetContext).pop(item),
-                                  ),
-                                )
-                                .toList(),
-                          ),
-                          const SizedBox(height: 8),
-                        ],
                         if (query.isNotEmpty)
                           ...filtered.map(
                             (item) => buildCategoryTile(item, showPath: true),
@@ -691,6 +668,7 @@ class _AddListingPageState extends State<AddListingPage> {
     setState(() {
       _pickedFiles.addAll(selected);
     });
+    _scheduleSuggestionRefresh();
     if (unsupportedCount > 0) {
       _setError(L10n.tr(context, 'listing.add.error_unsupported_image'));
     } else if (supported.length > remainingSlots) {
@@ -708,12 +686,80 @@ class _AddListingPageState extends State<AddListingPage> {
     setState(() {
       _pickedFiles.removeAt(index);
     });
+    _scheduleSuggestionRefresh();
+  }
+
+  void _scheduleSuggestionRefresh() {
+    _suggestionDebounce?.cancel();
+    _suggestionDebounce = Timer(
+      const Duration(milliseconds: 320),
+      _refreshSuggestions,
+    );
+  }
+
+  Future<void> _refreshSuggestions() async {
+    if (!mounted) return;
+    if (_categories.isEmpty) return;
+    final imagePaths = _pickedFiles
+        .map((e) => e.path?.trim() ?? '')
+        .where((e) => e.isNotEmpty)
+        .toList();
+    if (imagePaths.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _analyzingSuggestions = false;
+        _suggestionError = null;
+        _suggestedCategory = null;
+      });
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _analyzingSuggestions = true;
+        _suggestionError = null;
+      });
+    }
+    try {
+      final result = await _listingSuggestionService.suggest(
+        imagePaths: imagePaths,
+        categories: _categories,
+      );
+      if (!mounted) return;
+      setState(() {
+        _suggestedCategory = result.category;
+        _analyzingSuggestions = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _analyzingSuggestions = false;
+        _suggestionError = L10n.tr(
+          context,
+          'listing.add.ai_suggestions_error',
+          fallback: 'Suggestions indisponibles pour le moment.',
+        );
+      });
+    }
+  }
+
+  void _applySuggestedCategory() {
+    final suggested = _suggestedCategory;
+    if (suggested == null) return;
+    final id = suggested['id'] ?? '';
+    if (id.isEmpty) return;
+    setState(() {
+      _categoryId = id;
+      _categoryNameFr = suggested['name_fr'];
+      _categorySlug = suggested['slug'];
+    });
+    unawaited(_rememberRecentCategory(id));
   }
 
   bool _validateStep(int step) {
     switch (step) {
       case 0:
-        if (_pickedFiles.isEmpty) {
+        if (_pickedFiles.length < _minPhotos) {
           _setError(L10n.tr(context, 'listing.add.error_min_photo'));
           return false;
         }
@@ -808,8 +854,119 @@ class _AddListingPageState extends State<AddListingPage> {
     }
   }
 
-  void _setError(String message) {
-    setState(() => _error = message);
+  void _setError(String message, {bool showSnack = false}) {
+    final normalized = _friendlyInlineMessage(message);
+    setState(() => _error = normalized);
+    if (showSnack) {
+      _showErrorSnack(normalized);
+    }
+  }
+
+  void _showErrorSnack(String message) {
+    if (!mounted || message.trim().isEmpty) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _friendlyInlineMessage(String rawMessage) {
+    final message = rawMessage.trim();
+    if (message.isEmpty) {
+      return L10n.tr(
+        context,
+        'listing.add.error_publish_failed',
+        fallback: 'Publication impossible pour le moment. Reessayez.',
+      );
+    }
+    final lower = message.toLowerCase();
+    if (lower == 'invalid amount.' || lower == 'invalid amount') {
+      return L10n.tr(
+        context,
+        'payment.invalid_amount',
+        fallback: 'Montant invalide',
+      );
+    }
+    if (lower.startsWith('exception: ')) {
+      return message.substring('exception: '.length).trim();
+    }
+    return message;
+  }
+
+  String _publishFailureMessage(Object error) {
+    if (error is StorageException) return error.message;
+    if (error is FormatException) return _friendlyInlineMessage(error.message);
+
+    final raw = error.toString();
+    final lower = raw.toLowerCase();
+    if (error is PostgrestException) {
+      final details = '${error.message} ${error.details ?? ''}'.toLowerCase();
+      if (error.code == '42501' ||
+          details.contains('permission denied') ||
+          details.contains('row-level security')) {
+        return L10n.tr(
+          context,
+          'listing.add.error_publish_permission',
+          fallback:
+              'Publication refusee par les droits serveur. Reconnectez-vous puis reessayez.',
+        );
+      }
+      if (details.contains('jwt') || details.contains('unauthorized')) {
+        return L10n.tr(
+          context,
+          'listing.add.error_publish_auth',
+          fallback: 'Session expiree. Reconnectez-vous puis reessayez.',
+        );
+      }
+      if (details.contains('timeout') ||
+          details.contains('gateway') ||
+          details.contains('temporarily unavailable')) {
+        return L10n.tr(
+          context,
+          'listing.add.error_publish_network',
+          fallback: 'Reseau instable. Verifiez internet puis reessayez.',
+        );
+      }
+    }
+    if (error is FunctionException) {
+      final details = '${error.details ?? ''} ${error.reasonPhrase ?? ''}'
+          .toLowerCase();
+      if (error.status == 401 || error.status == 403 || details.contains('jwt')) {
+        return L10n.tr(
+          context,
+          'listing.add.error_publish_auth',
+          fallback: 'Session expiree. Reconnectez-vous puis reessayez.',
+        );
+      }
+      if (error.status >= 500 || details.contains('timeout')) {
+        return L10n.tr(
+          context,
+          'listing.add.error_publish_network',
+          fallback: 'Reseau instable. Verifiez internet puis reessayez.',
+        );
+      }
+    }
+    if (lower.contains('socketexception') ||
+        lower.contains('failed host lookup') ||
+        lower.contains('network is unreachable') ||
+        lower.contains('connection reset')) {
+      return L10n.tr(
+        context,
+        'listing.add.error_publish_network',
+        fallback: 'Reseau instable. Verifiez internet puis reessayez.',
+      );
+    }
+    if (lower.contains('sign in') || lower.contains('auth')) {
+      return L10n.tr(
+        context,
+        'listing.add.error_publish_auth',
+        fallback: 'Session expiree. Reconnectez-vous puis reessayez.',
+      );
+    }
+    return L10n.tr(
+      context,
+      'listing.add.error_publish_failed',
+      fallback: 'Publication impossible pour le moment. Reessayez.',
+    );
   }
 
   String _parcelValidationMessage(CourierParcelValidation validation) {
@@ -1049,8 +1206,12 @@ class _AddListingPageState extends State<AddListingPage> {
 
   Future<void> _publish() async {
     _clearError();
-    if (!_validateStep(6)) return;
+    if (!_validateStep(6)) {
+      if (_error != null) _showErrorSnack(_error!);
+      return;
+    }
     setState(() => _saving = true);
+    List<String> uploaded = const <String>[];
     try {
       final title = InputSanitizer.sanitizeText(_titleCtrl.text, maxLength: 80);
       final description = InputSanitizer.sanitizeOptionalText(
@@ -1106,6 +1267,9 @@ class _AddListingPageState extends State<AddListingPage> {
       if (bytes.length != _pickedFiles.length) {
         throw StateError(L10n.tr(context, 'listing.add.error_file_read'));
       }
+      if (bytes.length < _minPhotos) {
+        throw FormatException(L10n.tr(context, 'listing.add.error_min_photo'));
+      }
       if (bytes.length > _maxPhotos) {
         throw FormatException(
           L10n.tr(
@@ -1115,7 +1279,7 @@ class _AddListingPageState extends State<AddListingPage> {
           ),
         );
       }
-      final uploaded = await StorageService().uploadImages(
+      uploaded = await StorageService().uploadImages(
         files: bytes,
         fileNames: names,
       );
@@ -1140,36 +1304,44 @@ class _AddListingPageState extends State<AddListingPage> {
           ? null
           : InputSanitizer.parseAmount(_declaredValueCtrl.text, min: 0);
 
-      await ProductService().createProduct(
-        title: title,
-        price: price,
-        description: description,
-        imageUrl: uploaded.isNotEmpty ? uploaded.first : null,
-        imageUrls: uploaded,
-        categoryId: categoryId,
-        categoryName: categoryName,
-        condition: _condition,
-        brand: brand,
-        size: size,
-        locationWilaya: wilaya,
-        locationDaira: daira,
-        deliveryOptions: deliveryOptions,
-        stockQuantity: stock,
-        costPrice: costPrice,
-        shippingFree: _freeShipping,
-        exchangeAfterDelivery: _exchangeAfterDelivery,
-        insuranceActive: _insuranceActive,
-        allowStopdesk: _allowStopdesk,
-        declaredValue: declaredValue,
-        weightKg: weight,
-        heightCm: height,
-        widthCm: width,
-        lengthCm: length,
-        moderationStatus: requiresReview ? 'masked' : 'approved',
-        moderationReason: moderation.reason,
-        moderationLabels: moderation.labels,
-        moderationScore: moderation.score,
-      );
+      try {
+        await ProductService().createProduct(
+          title: title,
+          price: price,
+          description: description,
+          imageUrl: uploaded.isNotEmpty ? uploaded.first : null,
+          imageUrls: uploaded,
+          categoryId: categoryId,
+          categoryName: categoryName,
+          condition: _condition,
+          brand: brand,
+          size: size,
+          locationWilaya: wilaya,
+          locationDaira: daira,
+          deliveryOptions: deliveryOptions,
+          isNegotiable: _isNegotiable,
+          stockQuantity: stock,
+          costPrice: costPrice,
+          shippingFree: _freeShipping,
+          exchangeAfterDelivery: _exchangeAfterDelivery,
+          insuranceActive: _insuranceActive,
+          allowStopdesk: _allowStopdesk,
+          declaredValue: declaredValue,
+          weightKg: weight,
+          heightCm: height,
+          widthCm: width,
+          lengthCm: length,
+          moderationStatus: requiresReview ? 'masked' : 'approved',
+          moderationReason: moderation.reason,
+          moderationLabels: moderation.labels,
+          moderationScore: moderation.score,
+        );
+      } catch (e) {
+        if (uploaded.isNotEmpty) {
+          unawaited(StorageService().deletePublicUrls(uploaded));
+        }
+        rethrow;
+      }
       if (!mounted) return;
       if (requiresReview) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1179,10 +1351,18 @@ class _AddListingPageState extends State<AddListingPage> {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const MyListingsPage()),
       );
+    } on StorageException catch (e) {
+      _setError(e.message, showSnack: true);
     } on FormatException catch (e) {
-      _setError(e.message);
+      _setError(_friendlyInlineMessage(e.message), showSnack: true);
+    } on PostgrestException catch (e) {
+      _setError(_publishFailureMessage(e), showSnack: true);
+    } on FunctionException catch (e) {
+      _setError(_publishFailureMessage(e), showSnack: true);
+    } on StateError catch (e) {
+      _setError(_publishFailureMessage(e), showSnack: true);
     } catch (e) {
-      _setError(e.toString());
+      _setError(_publishFailureMessage(e), showSnack: true);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -1303,7 +1483,7 @@ class _AddListingPageState extends State<AddListingPage> {
   bool _canContinue() {
     switch (_step) {
       case 0:
-        return _pickedFiles.isNotEmpty;
+        return _pickedFiles.length >= _minPhotos;
       case 1:
         return (_categoryId ?? '').isNotEmpty;
       case 2:
@@ -1598,38 +1778,119 @@ class _AddListingPageState extends State<AddListingPage> {
                           ),
                         ),
                       ),
-                      if (_recentCategoryIds.isNotEmpty) ...[
-                        const SizedBox(height: 10),
-                        Text(
-                          L10n.tr(
-                            context,
-                            'listing.add.category_recent',
-                            fallback: 'Recentes',
+                      const SizedBox(height: 12),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: Theme.of(context).dividerColor,
                           ),
-                          style: Theme.of(context).textTheme.labelMedium,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest
+                              .withValues(alpha: 0.35),
                         ),
-                        const SizedBox(height: 6),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: _recentCategoryIds.map((id) {
-                            final item = _findCategoryById(id);
-                            if (item == null) {
-                              return const SizedBox.shrink();
-                            }
-                            return ActionChip(
-                              onPressed: () {
-                                setState(() {
-                                  _categoryId = item['id'];
-                                  _categoryNameFr = item['name_fr'];
-                                  _categorySlug = item['slug'];
-                                });
-                              },
-                              label: Text(_categoryItemLabel(context, item)),
-                            );
-                          }).toList(),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.auto_awesome_outlined,
+                                  size: 18,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    L10n.tr(
+                                      context,
+                                      'listing.add.ai_suggestions_title',
+                                      fallback: 'Suggestions intelligentes',
+                                    ),
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.labelLarge,
+                                  ),
+                                ),
+                                if (_analyzingSuggestions)
+                                  const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              L10n.tr(
+                                context,
+                                'listing.add.ai_suggestions_hint',
+                                fallback:
+                                    'Suggestions basees uniquement sur vos photos (analyse locale). Vous gardez toujours le controle.',
+                              ),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            if (_suggestionError != null) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                _suggestionError!,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                            if (_suggestedCategory != null) ...[
+                              const SizedBox(height: 10),
+                              Text(
+                                L10n.tr(
+                                  context,
+                                  'listing.add.ai_suggested_category',
+                                  fallback: 'Categorie suggeree',
+                                ),
+                                style: Theme.of(context).textTheme.labelMedium,
+                              ),
+                              const SizedBox(height: 6),
+                              ActionChip(
+                                avatar: Icon(
+                                  (_categoryId ?? '') ==
+                                          (_suggestedCategory!['id'] ?? '')
+                                      ? Icons.check_circle
+                                      : Icons.category_outlined,
+                                  size: 16,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                label: Text(
+                                  _categoryItemLabel(
+                                    context,
+                                    _suggestedCategory!,
+                                  ),
+                                ),
+                                onPressed: _applySuggestedCategory,
+                              ),
+                            ],
+                            if (!_analyzingSuggestions &&
+                                _suggestedCategory == null &&
+                                _pickedFiles.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                L10n.tr(
+                                  context,
+                                  'listing.add.ai_no_suggestion',
+                                  fallback:
+                                      'Aucune suggestion automatique pour le moment.',
+                                ),
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ],
                         ),
-                      ],
+                      ),
                     ],
                   ),
           ),
@@ -1718,6 +1979,25 @@ class _AddListingPageState extends State<AddListingPage> {
                   decoration: InputDecoration(
                     labelText: L10n.tr(context, 'listing.add.cost_label'),
                     prefixText: 'DA ',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  value: _isNegotiable,
+                  onChanged: (v) => setState(() => _isNegotiable = v),
+                  title: Text(
+                    L10n.tr(
+                      context,
+                      'listing.add.negotiable_label',
+                      fallback: 'Prix négociable',
+                    ),
+                  ),
+                  subtitle: Text(
+                    L10n.tr(
+                      context,
+                      'listing.add.negotiable_hint',
+                      fallback: 'Autoriser les acheteurs à envoyer des offres.',
+                    ),
                   ),
                 ),
               ],
@@ -2039,6 +2319,16 @@ class _AddListingPageState extends State<AddListingPage> {
                   value: _stockCtrl.text.trim().isEmpty
                       ? '-'
                       : _stockCtrl.text.trim(),
+                ),
+                _PreviewRow(
+                  label: L10n.tr(
+                    context,
+                    'listing.add.negotiable_label',
+                    fallback: 'Prix négociable',
+                  ),
+                  value: _isNegotiable
+                      ? L10n.tr(context, 'common.yes')
+                      : L10n.tr(context, 'common.no'),
                 ),
                 if (_costCtrl.text.trim().isNotEmpty)
                   _PreviewRow(

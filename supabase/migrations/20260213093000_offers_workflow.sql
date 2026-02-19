@@ -1,4 +1,4 @@
-﻿-- Offer workflow hardening: atomic offer actions + chat thread consistency.
+-- Offer workflow hardening: atomic offer actions + chat thread consistency.
 
 -- Keep only one pending offer per buyer/product before adding unique partial index.
 with ranked as (

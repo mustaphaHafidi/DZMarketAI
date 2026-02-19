@@ -31,6 +31,45 @@ class OfferService {
     return parsed;
   }
 
+  Future<void> _ensureOfferAllowedLegacy({
+    required String productId,
+    required String buyerId,
+    required double amount,
+  }) async {
+    final product = await RateLimiter.instance.run(
+      'offers.product.legacy_guard',
+      () => supabase
+          .from('products')
+          .select(
+            'id,owner_id,status,is_archived,stock_quantity,price,is_negotiable',
+          )
+          .eq('id', productId)
+          .maybeSingle(),
+    );
+    if (product == null) {
+      throw StateError('product_missing');
+    }
+    if (product['owner_id']?.toString() == buyerId) {
+      throw StateError('cannot_offer_own_product');
+    }
+    final isNegotiable = product['is_negotiable'] as bool? ?? true;
+    if (!isNegotiable) {
+      throw StateError('offer_not_negotiable');
+    }
+    final isArchived = product['is_archived'] as bool? ?? false;
+    final status = product['status']?.toString() ?? 'active';
+    final stock = (product['stock_quantity'] as num?)?.toInt() ?? 0;
+    if (isArchived || status != 'active' || stock <= 0) {
+      throw StateError('product_unavailable');
+    }
+    final minAmount = InputSanitizer.offerMinAmountFromBasePrice(
+      (product['price'] as num?)?.toDouble(),
+    );
+    if (amount < minAmount) {
+      throw StateError('offer_below_min_ratio');
+    }
+  }
+
   Future<void> _postLegacyOfferMessage({
     required String productId,
     required String buyerId,
@@ -169,6 +208,11 @@ class OfferService {
       return Offer.fromJson((inserted as Map).cast<String, dynamic>());
     } on PostgrestException catch (e) {
       if (!_isMissingRpc(e, 'make_offer')) rethrow;
+      await _ensureOfferAllowedLegacy(
+        productId: safeProductId,
+        buyerId: buyerId,
+        amount: amount,
+      );
       final inserted = await RateLimiter.instance.run(
         'offers.insert.legacy',
         () => supabase
