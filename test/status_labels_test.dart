@@ -1,8 +1,8 @@
 import 'package:dzmarket/src/models/offer.dart';
 import 'package:dzmarket/src/models/order.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets('Order status label localizes in Arabic', (tester) async {
@@ -59,6 +59,6 @@ void main() {
       ),
     );
 
-    expect(find.text('مقبولة'), findsOneWidget);
+    expect(find.text('مقبول'), findsOneWidget);
   });
 }

@@ -1,49 +1,56 @@
-﻿<!doctype html>
-<html lang='{{if eq .Data.lang "ar"}}ar{{else}}fr{{end}}' dir='{{if eq .Data.lang "ar"}}rtl{{else}}ltr{{end}}'>
+<!doctype html>
+<html lang="{{if eq .Data.lang "ar"}}ar{{else}}fr{{end}}" dir="{{if eq .Data.lang "ar"}}rtl{{else}}ltr{{end}}">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>DZMarket</title>
-  <style>
-    body { margin: 0; background: #edf5ee; font-family: Arial, sans-serif; color: #16322a; }
-    .wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px; }
-    .card { background: #fff; border-radius: 16px; border: 1px solid #e0ece2; padding: 28px 24px; box-shadow: 0 8px 24px rgba(9,49,33,.08); }
-    .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-    .brand img { width: 40px; height: 40px; border-radius: 10px; display: block; }
-    .brand span { font-size: 24px; font-weight: 700; color: #08372a; }
-    h1 { margin: 0 0 12px; font-size: 24px; line-height: 1.25; color: #0a3d2f; }
-    p { margin: 0 0 12px; font-size: 15px; line-height: 1.6; color: #2e4a3f; }
-    .btn { display: inline-block; margin: 12px 0 16px; padding: 12px 18px; border-radius: 10px; background: #34a853; color: #fff !important; font-weight: 700; text-decoration: none; font-size: 15px; }
-    .muted { color: #5f746b; font-size: 13px; word-break: break-word; }
-    .code { display: inline-block; padding: 8px 10px; background: #f4f8f5; border: 1px solid #dfe9e1; border-radius: 8px; font-size: 14px; }
-  </style>
 </head>
-<body>
-  <div class="wrap">
-    <div class="card">
-      <div class="brand">
-        <img src="https://app.dzmarket.pro/assets/logos/logo4_icon_square.png" alt="DZMarket" />
-        <span>DZMarket</span>
-      </div>
+<body style="margin:0;padding:0;background:#eef5ef;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;background:#eef5ef;">
+    <tr>
+      <td align="center" style="padding:24px 12px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="620" style="width:100%;max-width:620px;border-collapse:separate;background:#ffffff;border:1px solid #dfe9e1;border-radius:14px;">
+          <tr>
+            <td style="padding:28px 24px;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;color:#16322a;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+                <tr>
+                  <td style="vertical-align:middle;padding-right:10px;">
+                    <img src="https://app.dzmarket.pro/assets/logos/logo4_icon_square.png" alt="DZMarket" width="40" height="40" style="display:block;border:0;outline:none;text-decoration:none;border-radius:8px;width:40px;height:40px;" />
+                  </td>
+                  <td style="vertical-align:middle;font-size:32px;line-height:32px;font-weight:700;color:#08372a;">DZMarket</td>
+                </tr>
+              </table>
 
-      {{if eq .Data.lang "ar"}}
-      <h1>إعادة تعيين كلمة المرور</h1>
-      <p>تلقّينا طلبًا لإعادة تعيين كلمة المرور الخاصة بحسابك.</p>
-      <p>للمتابعة، اضغط على الزر التالي:</p>
-      <p><a class="btn" href="https://app.dzmarket.pro/auth/callback?type=recovery&token_hash={{ .TokenHash }}&lang=ar&next=%2Freset-password">إعادة تعيين كلمة المرور</a></p>
-      <p class="muted">إذا لم يعمل الزر، انسخ هذا الرابط والصقه في المتصفح:</p>
-      <p class="muted">https://app.dzmarket.pro/auth/callback?type=recovery&token_hash={{ .TokenHash }}&lang=ar&next=%2Freset-password</p>
-      <p class="muted">رمز التحقق: <span class="code">{{ .Token }}</span></p>
-      {{else}}
-      <h1>Réinitialisation du mot de passe</h1>
-      <p>Nous avons reçu une demande de réinitialisation de votre mot de passe.</p>
-      <p>Pour continuer, cliquez sur le bouton suivant :</p>
-      <p><a class="btn" href="https://app.dzmarket.pro/auth/callback?type=recovery&token_hash={{ .TokenHash }}&lang=fr&next=%2Freset-password">Réinitialiser mon mot de passe</a></p>
-      <p class="muted">Si le bouton ne fonctionne pas, copiez/collez ce lien dans votre navigateur :</p>
-      <p class="muted">https://app.dzmarket.pro/auth/callback?type=recovery&token_hash={{ .TokenHash }}&lang=fr&next=%2Freset-password</p>
-      <p class="muted">Code de vérification : <span class="code">{{ .Token }}</span></p>
-      {{end}}
-    </div>
-  </div>
+              {{if eq .Data.lang "ar"}}
+              <h1 style="margin:24px 0 12px;font-size:30px;line-height:1.25;color:#0a3d2f;">إعادة تعيين كلمة المرور</h1>
+              <p style="margin:0 0 12px;font-size:18px;line-height:1.6;color:#2e4a3f;">تلقّينا طلبًا لإعادة تعيين كلمة المرور الخاصة بحسابك.</p>
+              <p style="margin:0 0 16px;font-size:18px;line-height:1.6;color:#2e4a3f;">للمتابعة، اضغط على الزر التالي:</p>
+              <p style="margin:0 0 20px;">
+                <a href="https://app.dzmarket.pro/auth/callback?type=recovery&token_hash={{ .TokenHash }}&lang=ar&next=%2Freset-password" style="display:inline-block;background:#34a853;color:#ffffff;text-decoration:none;font-size:18px;line-height:18px;font-weight:700;padding:14px 20px;border-radius:10px;">إعادة تعيين كلمة المرور</a>
+              </p>
+              <p style="margin:0 0 8px;font-size:14px;line-height:1.5;color:#5f746b;">إذا لم يعمل الزر، انسخ هذا الرابط والصقه في المتصفح:</p>
+              <p style="margin:0 0 12px;font-size:14px;line-height:1.5;color:#5f746b;word-break:break-all;">https://app.dzmarket.pro/auth/callback?type=recovery&token_hash={{ .TokenHash }}&lang=ar&next=%2Freset-password</p>
+              <p style="margin:0;font-size:14px;line-height:1.5;color:#5f746b;">رمز التحقق:
+                <span style="display:inline-block;padding:7px 10px;border-radius:8px;background:#f4f8f5;border:1px solid #dfe9e1;color:#2e4a3f;">{{ .Token }}</span>
+              </p>
+              {{else}}
+              <h1 style="margin:24px 0 12px;font-size:30px;line-height:1.25;color:#0a3d2f;">Réinitialisation du mot de passe</h1>
+              <p style="margin:0 0 12px;font-size:18px;line-height:1.6;color:#2e4a3f;">Nous avons reçu une demande de réinitialisation de votre mot de passe.</p>
+              <p style="margin:0 0 16px;font-size:18px;line-height:1.6;color:#2e4a3f;">Pour continuer, cliquez sur le bouton suivant :</p>
+              <p style="margin:0 0 20px;">
+                <a href="https://app.dzmarket.pro/auth/callback?type=recovery&token_hash={{ .TokenHash }}&lang=fr&next=%2Freset-password" style="display:inline-block;background:#34a853;color:#ffffff;text-decoration:none;font-size:18px;line-height:18px;font-weight:700;padding:14px 20px;border-radius:10px;">Réinitialiser mon mot de passe</a>
+              </p>
+              <p style="margin:0 0 8px;font-size:14px;line-height:1.5;color:#5f746b;">Si le bouton ne fonctionne pas, copiez/collez ce lien dans votre navigateur :</p>
+              <p style="margin:0 0 12px;font-size:14px;line-height:1.5;color:#5f746b;word-break:break-all;">https://app.dzmarket.pro/auth/callback?type=recovery&token_hash={{ .TokenHash }}&lang=fr&next=%2Freset-password</p>
+              <p style="margin:0;font-size:14px;line-height:1.5;color:#5f746b;">Code de vérification :
+                <span style="display:inline-block;padding:7px 10px;border-radius:8px;background:#f4f8f5;border:1px solid #dfe9e1;color:#2e4a3f;">{{ .Token }}</span>
+              </p>
+              {{end}}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>

@@ -112,7 +112,7 @@ class _AuthCallbackPageState extends State<AuthCallbackPage> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = errorDescription;
+        _error = _mapCallbackError(errorDescription);
       });
       return;
     }
@@ -172,20 +172,21 @@ class _AuthCallbackPageState extends State<AuthCallbackPage> {
         _loading = false;
         _error = null;
       });
+      if (_flow == 'recovery') {
+        // Recovery links should continue directly to reset form.
+        context.go(_target);
+      }
     } on AuthException catch (e) {
       if (!mounted) return;
       setState(() {
         _loading = false;
         _error = _mapAuthException(e);
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = _t(
-          'auth.callback.generic_error',
-          fallback: 'Le lien de validation est invalide ou expire.',
-        );
+        _error = _mapUnhandledError(e.toString());
       });
     }
   }
@@ -209,6 +210,14 @@ class _AuthCallbackPageState extends State<AuthCallbackPage> {
 
   String _mapAuthException(AuthException e) {
     final msg = e.message.toLowerCase();
+    if (msg.contains('code verifier') ||
+        msg.contains('pkce') ||
+        msg.contains('invalid flow state')) {
+      return _t(
+        'auth.callback.error_invalid',
+        fallback: 'Ce lien de validation est invalide ou expire.',
+      );
+    }
     if (msg.contains('expired') || msg.contains('otp_expired')) {
       return _t(
         'auth.callback.error_expired',
@@ -225,6 +234,52 @@ class _AuthCallbackPageState extends State<AuthCallbackPage> {
       );
     }
     return e.message;
+  }
+
+  String _mapUnhandledError(String message) {
+    final msg = message.toLowerCase();
+    if (msg.contains('code verifier') ||
+        msg.contains('pkce') ||
+        msg.contains('invalid flow state') ||
+        msg.contains('exchange code')) {
+      return _t(
+        'auth.callback.error_invalid',
+        fallback: 'Ce lien de validation est invalide ou expire.',
+      );
+    }
+    return _t(
+      'auth.callback.generic_error',
+      fallback: 'Le lien de validation est invalide ou expire.',
+    );
+  }
+
+  String _mapCallbackError(String message) {
+    final msg = message.toLowerCase();
+    if (msg.contains('code verifier') ||
+        msg.contains('pkce') ||
+        msg.contains('invalid flow state') ||
+        msg.contains('access_denied')) {
+      return _t(
+        'auth.callback.error_invalid',
+        fallback: 'Ce lien de validation est invalide ou expire.',
+      );
+    }
+    if (msg.contains('expired') || msg.contains('otp_expired')) {
+      return _t(
+        'auth.callback.error_expired',
+        fallback: 'Ce lien a expire. Demandez un nouveau lien.',
+      );
+    }
+    if (msg.contains('network') ||
+        msg.contains('timeout') ||
+        msg.contains('socket')) {
+      return _t(
+        'auth.error_server_unreachable',
+        fallback:
+            'Connexion au serveur impossible pour le moment. Reessayez dans quelques instants.',
+      );
+    }
+    return message;
   }
 
   @override

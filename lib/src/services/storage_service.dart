@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:dzmarket/src/services/connectivity_service.dart';
@@ -6,6 +7,7 @@ import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:dzmarket/src/services/rate_limiter.dart';
+import 'package:image/image.dart' as img;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
@@ -22,6 +24,8 @@ class StorageException implements Exception {
 
 class StorageService {
   static const _bucket = 'products';
+  static const _maxUploadLongEdge = 1280;
+  static const _compressionThresholdBytes = 450 * 1024;
   final _uuid = const Uuid();
 
   Future<List<String>> uploadImages({
@@ -48,9 +52,12 @@ class StorageService {
 
     final urls = <String>[];
     for (var i = 0; i < files.length; i++) {
-      final bytes = files[i];
       final originalName = _sanitizeFileName(fileNames[i]);
-      final path = '$userId/${_uuid.v4()}-$originalName';
+      final prepared = _prepareImageForUpload(
+        bytes: files[i],
+        fileName: originalName,
+      );
+      final path = '$userId/${_uuid.v4()}-${prepared.fileName}';
       await _runUploadWithRetry<void>(
         limiterKey: 'storage.upload',
         timeoutKey: 'storage.error.upload_timeout',
@@ -60,8 +67,11 @@ class StorageService {
             .from(bucket)
             .uploadBinary(
               path,
-              bytes,
-              fileOptions: const FileOptions(upsert: true),
+              prepared.bytes,
+              fileOptions: FileOptions(
+                upsert: true,
+                contentType: prepared.contentType,
+              ),
             ),
       );
       final publicUrl = supabase.storage.from(bucket).getPublicUrl(path);
@@ -189,15 +199,20 @@ class StorageService {
     required String genericKey,
     required String locale,
     required Future<T> Function() task,
-    int attempts = 3,
-    Duration timeout = const Duration(seconds: 20),
+    int attempts = 4,
+    Duration timeout = const Duration(seconds: 30),
+    Duration timeoutIncrement = const Duration(seconds: 15),
   }) async {
     Object? lastError;
     for (var attempt = 1; attempt <= attempts; attempt++) {
+      final effectiveTimeout = Duration(
+        seconds: timeout.inSeconds +
+            (timeoutIncrement.inSeconds * math.max(0, attempt - 1)),
+      );
       try {
         return await RateLimiter.instance.run(
           limiterKey,
-          () => task().timeout(timeout),
+          () => task().timeout(effectiveTimeout),
         );
       } on TimeoutException {
         lastError = StorageException(L10n.trLocale(locale, timeoutKey));
@@ -205,7 +220,7 @@ class StorageService {
         lastError = error;
       }
       if (attempt < attempts) {
-        await Future.delayed(Duration(milliseconds: 300 * attempt));
+        await Future.delayed(Duration(milliseconds: 500 * attempt));
       }
     }
     if (lastError is StorageException) {
@@ -222,4 +237,104 @@ class StorageService {
     final trimmed = safe.replaceAll(RegExp(r'[-_.]{2,}'), '-').trim();
     return trimmed.isEmpty ? 'file' : trimmed;
   }
+
+  _PreparedUpload _prepareImageForUpload({
+    required Uint8List bytes,
+    required String fileName,
+  }) {
+    final originalType = _contentTypeFromName(fileName);
+    if (bytes.length < _compressionThresholdBytes) {
+      return _PreparedUpload(
+        bytes: bytes,
+        fileName: fileName,
+        contentType: originalType,
+      );
+    }
+
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) {
+      return _PreparedUpload(
+        bytes: bytes,
+        fileName: fileName,
+        contentType: originalType,
+      );
+    }
+
+    final resized = _resizeIfNeeded(decoded);
+    final lower = fileName.toLowerCase();
+    final isPng = lower.endsWith('.png');
+
+    try {
+      if (isPng) {
+        final pngBytes = Uint8List.fromList(img.encodePng(resized, level: 6));
+        if (pngBytes.length < bytes.length) {
+          return _PreparedUpload(
+            bytes: pngBytes,
+            fileName: fileName,
+            contentType: 'image/png',
+          );
+        }
+      } else {
+        final jpgBytes = Uint8List.fromList(
+          img.encodeJpg(resized, quality: 78),
+        );
+        if (jpgBytes.length < bytes.length) {
+          return _PreparedUpload(
+            bytes: jpgBytes,
+            fileName: _replaceExtension(fileName, 'jpg'),
+            contentType: 'image/jpeg',
+          );
+        }
+      }
+    } catch (_) {
+      // Keep original image when optimization fails.
+    }
+
+    return _PreparedUpload(
+      bytes: bytes,
+      fileName: fileName,
+      contentType: originalType,
+    );
+  }
+
+  img.Image _resizeIfNeeded(img.Image source) {
+    final longEdge = math.max(source.width, source.height);
+    if (longEdge <= _maxUploadLongEdge) return source;
+
+    final ratio = _maxUploadLongEdge / longEdge;
+    final targetWidth = math.max(1, (source.width * ratio).round());
+    final targetHeight = math.max(1, (source.height * ratio).round());
+    return img.copyResize(
+      source,
+      width: targetWidth,
+      height: targetHeight,
+      interpolation: img.Interpolation.average,
+    );
+  }
+
+  String _replaceExtension(String fileName, String ext) {
+    final dot = fileName.lastIndexOf('.');
+    if (dot <= 0) return '$fileName.$ext';
+    return '${fileName.substring(0, dot)}.$ext';
+  }
+
+  String _contentTypeFromName(String fileName) {
+    final lower = fileName.toLowerCase();
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    if (lower.endsWith('.gif')) return 'image/gif';
+    return 'image/jpeg';
+  }
+}
+
+class _PreparedUpload {
+  const _PreparedUpload({
+    required this.bytes,
+    required this.fileName,
+    required this.contentType,
+  });
+
+  final Uint8List bytes;
+  final String fileName;
+  final String contentType;
 }

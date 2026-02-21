@@ -150,6 +150,18 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
   String _tr(String key, {Map<String, String>? params, String? fallback}) {
     final raw = L10n.tr(context, key, params: params, fallback: fallback);
+    final locale = Localizations.localeOf(context).languageCode;
+    if (raw == key) {
+      return _fallbackTranslation(key, params: params, fallback: fallback);
+    }
+    // If Arabic is selected but we still got the French fallback string,
+    // force the local Arabic fallback to avoid mixed-language UI.
+    if (locale == 'ar') {
+      final frText = _notificationFallbacks['fr']?[key];
+      if (frText != null && raw == frText) {
+        return _fallbackTranslation(key, params: params, fallback: fallback);
+      }
+    }
     if (!_looksCorrupt(raw)) return raw;
     return _fallbackTranslation(key, params: params, fallback: fallback);
   }

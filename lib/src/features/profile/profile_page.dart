@@ -3,14 +3,6 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cached_network_image_platform_interface/cached_network_image_platform_interface.dart';
-import 'package:dzmarket/src/features/admin/app_errors_page.dart';
-import 'package:dzmarket/src/features/admin/moderation_admin_page.dart';
-import 'package:dzmarket/src/features/notifications/notifications_page.dart';
-import 'package:dzmarket/src/features/orders/shipments_dashboard_page.dart';
-import 'package:dzmarket/src/features/orders/seller_orders_page.dart';
-import 'package:dzmarket/src/features/profile/courier_settings_page.dart';
-import 'package:dzmarket/src/features/profile/my_listings_page.dart';
-import 'package:dzmarket/src/features/profile/seller_dashboard_page.dart';
 import 'package:dzmarket/src/models/profile.dart';
 import 'package:dzmarket/src/services/app_error_service.dart';
 import 'package:dzmarket/src/services/auth_service.dart';
@@ -891,479 +883,475 @@ class _ProfilePageState extends State<ProfilePage> {
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildProfileHeader(
-                  context: context,
-                  safeAvatar: safeAvatar,
-                  isSeller: isSeller,
-                ),
-                const SizedBox(height: 16),
-                Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    side: BorderSide(
-                      color: colors.outlineVariant.withValues(alpha: 0.45),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 960),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildProfileHeader(
+                      context: context,
+                      safeAvatar: safeAvatar,
+                      isSeller: isSeller,
                     ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          L10n.tr(
-                            context,
-                            'profile.section_account',
-                            fallback: 'Informations du compte',
-                          ),
-                          style: Theme.of(context).textTheme.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                    const SizedBox(height: 16),
+                    Card(
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        side: BorderSide(
+                          color: colors.outlineVariant.withValues(alpha: 0.45),
                         ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: _nameCtrl,
-                          style: Theme.of(context).textTheme.bodyLarge,
-                          decoration: InputDecoration(
-                            labelText: L10n.tr(context, 'profile.full_name'),
-                            prefixIcon: const Icon(Icons.badge_outlined),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            OutlinedButton.icon(
-                              onPressed: _saving ? null : _pickAvatar,
-                              icon: const Icon(Icons.photo_camera_outlined),
-                              label: Text(
-                                L10n.tr(context, 'profile.photo_upload'),
-                              ),
+                            Text(
+                              L10n.tr(context, 'profile.section_account'),
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w700),
                             ),
-                            const SizedBox(width: 12),
-                            if (safeAvatar != null)
-                              TextButton(
-                                onPressed: _saving ? null : _removeAvatar,
-                                child: Text(L10n.tr(context, 'common.delete')),
+                            const SizedBox(height: 10),
+                            TextField(
+                              controller: _nameCtrl,
+                              style: Theme.of(context).textTheme.bodyLarge,
+                              decoration: InputDecoration(
+                                labelText: L10n.tr(
+                                  context,
+                                  'profile.full_name',
+                                ),
+                                prefixIcon: const Icon(Icons.badge_outlined),
                               ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _bioCtrl,
-                          maxLines: 2,
-                          style: Theme.of(context).textTheme.bodyLarge,
-                          decoration: InputDecoration(
-                            labelText: L10n.tr(context, 'profile.bio'),
-                            prefixIcon: const Icon(Icons.notes_outlined),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _phoneCtrl,
-                          keyboardType: TextInputType.phone,
-                          style: Theme.of(context).textTheme.bodyLarge,
-                          decoration: InputDecoration(
-                            labelText: L10n.tr(context, 'profile.phone'),
-                            prefixIcon: const Icon(Icons.phone_outlined),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Column(
-                          children: [
-                            _buildPickerField(
-                              context: context,
-                              label: L10n.tr(context, 'profile.wilaya'),
-                              value: _wilayaLabel(context),
-                              icon: Icons.map_outlined,
-                              isPlaceholder:
-                                  _selectedWilayaCode == null ||
-                                  _selectedWilayaCode!.isEmpty,
-                              onTap: (_loadingLocations || _wilayas.isEmpty)
-                                  ? null
-                                  : () async {
-                                      final selected =
-                                          await _showLocationPicker(
-                                            context: context,
-                                            title: L10n.tr(
-                                              context,
-                                              'profile.wilaya',
-                                            ),
-                                            items: _wilayas,
-                                            itemLabel: (item) =>
-                                                _wilayaItemLabel(context, item),
-                                          );
-                                      if (!mounted || selected == null) {
-                                        return;
-                                      }
-                                      final code = selected['code'] ?? '';
-                                      setState(() {
-                                        _selectedWilayaCode = code.isNotEmpty
-                                            ? code
-                                            : null;
-                                        _wilayaCtrl.text =
-                                            selected['name_fr'] ?? code;
-                                        _selectedCommuneId = null;
-                                        _dairaCtrl.text = '';
-                                        _communes = const [];
-                                      });
-                                      if (code.isNotEmpty) {
-                                        await _loadCommunes(code);
-                                      }
-                                    },
                             ),
                             const SizedBox(height: 12),
-                            _buildPickerField(
-                              context: context,
-                              label: L10n.tr(context, 'profile.daira'),
-                              value: _communeLabel(context),
-                              icon: Icons.place_outlined,
-                              isPlaceholder:
-                                  _selectedCommuneId == null ||
-                                  _selectedCommuneId!.isEmpty,
-                              onTap:
-                                  (_loadingLocations ||
-                                      _selectedWilayaCode == null ||
-                                      _communes.isEmpty)
-                                  ? null
-                                  : () async {
-                                      final selected =
-                                          await _showLocationPicker(
-                                            context: context,
-                                            title: L10n.tr(
-                                              context,
-                                              'profile.daira',
-                                            ),
-                                            items: _communes,
-                                            itemLabel: (item) =>
-                                                _communeItemLabel(
-                                                  context,
-                                                  item,
-                                                ),
-                                          );
-                                      if (!mounted || selected == null) {
-                                        return;
-                                      }
-                                      final communeId = selected['id'] ?? '';
-                                      setState(() {
-                                        _selectedCommuneId =
-                                            communeId.isNotEmpty
-                                            ? communeId
-                                            : null;
-                                        _dairaCtrl.text =
-                                            selected['name_fr'] ??
-                                            (communeId.isNotEmpty
-                                                ? communeId
-                                                : '');
-                                      });
-                                    },
-                            ),
-                          ],
-                        ),
-                        if (_loadingLocations)
-                          const Padding(
-                            padding: EdgeInsets.only(top: 8),
-                            child: LinearProgressIndicator(minHeight: 2),
-                          ),
-                        if (_locationLoadError != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Text(
-                              _locationLoadError!,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          value: _lang,
-                          decoration: InputDecoration(
-                            labelText: L10n.tr(context, 'profile.language'),
-                            prefixIcon: const Icon(Icons.language_outlined),
-                          ),
-                          items: [
-                            DropdownMenuItem(
-                              value: 'fr',
-                              child: Text(L10n.tr(context, 'profile.lang_fr')),
-                            ),
-                            DropdownMenuItem(
-                              value: 'ar',
-                              child: Text(L10n.tr(context, 'profile.lang_ar')),
-                            ),
-                          ],
-                          onChanged: (v) async {
-                            final code = v ?? 'fr';
-                            setState(() => _lang = code);
-                            await LocaleService.instance.setLocale(code);
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        SwitchListTile(
-                          value: _isPublic,
-                          onChanged: (v) => setState(() => _isPublic = v),
-                          title: Text(L10n.tr(context, 'profile.public')),
-                          subtitle: Text(
-                            L10n.tr(context, 'profile.public_hint'),
-                          ),
-                        ),
-                        SwitchListTile(
-                          value: _isSeller,
-                          onChanged: (v) => setState(() => _isSeller = v),
-                          title: Text(L10n.tr(context, 'profile.seller_mode')),
-                          subtitle: Text(
-                            L10n.tr(context, 'profile.seller_mode_hint'),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        ElevatedButton.icon(
-                          onPressed: _saving
-                              ? null
-                              : () async {
-                                  await AuthService.instance.signOut();
-                                  if (context.mounted) {
-                                    context.go('/sign-in');
-                                  }
-                                },
-                          icon: const Icon(Icons.logout),
-                          label: Text(L10n.tr(context, 'auth.sign_out')),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Theme.of(
-                              context,
-                            ).colorScheme.error,
-                            foregroundColor: Theme.of(
-                              context,
-                            ).colorScheme.onError,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        ElevatedButton.icon(
-                          onPressed: _saving ? null : _save,
-                          icon: _saving
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.save_outlined),
-                          label: Text(
-                            _saving
-                                ? L10n.tr(context, 'common.saving')
-                                : L10n.tr(context, 'common.save'),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    side: BorderSide(
-                      color: colors.outlineVariant.withValues(alpha: 0.45),
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      ListTile(
-                        title: Text(
-                          L10n.tr(
-                            context,
-                            'profile.section_tools',
-                            fallback: 'Outils et raccourcis',
-                          ),
-                          style: Theme.of(context).textTheme.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                      const Divider(height: 1),
-                      StreamBuilder<int>(
-                        stream: _notificationInboxService.watchUnreadCount(),
-                        builder: (context, snap) {
-                          final unread = snap.data ?? 0;
-                          return ListTile(
-                            leading: const Icon(Icons.notifications_outlined),
-                            title: Text(
-                              L10n.tr(context, 'notifications.title'),
-                            ),
-                            subtitle: Text(
-                              unread > 0
-                                  ? L10n.tr(
-                                      context,
-                                      'notifications.unread_count',
-                                      params: {'count': '$unread'},
-                                    )
-                                  : L10n.tr(
-                                      context,
-                                      'notifications.all_caught_up',
-                                    ),
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
+                            Row(
                               children: [
-                                if (unread > 0)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 3,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primaryContainer,
-                                      borderRadius: BorderRadius.circular(999),
-                                    ),
+                                OutlinedButton.icon(
+                                  onPressed: _saving ? null : _pickAvatar,
+                                  icon: const Icon(Icons.photo_camera_outlined),
+                                  label: Text(
+                                    L10n.tr(context, 'profile.photo_upload'),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                if (safeAvatar != null)
+                                  TextButton(
+                                    onPressed: _saving ? null : _removeAvatar,
                                     child: Text(
-                                      unread > 99 ? '99+' : '$unread',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.onPrimaryContainer,
-                                      ),
+                                      L10n.tr(context, 'common.delete'),
                                     ),
                                   ),
-                                const SizedBox(width: 6),
-                                const Icon(Icons.chevron_right),
                               ],
                             ),
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const NotificationsPage(),
+                            const SizedBox(height: 12),
+                            TextField(
+                              controller: _bioCtrl,
+                              maxLines: 2,
+                              style: Theme.of(context).textTheme.bodyLarge,
+                              decoration: InputDecoration(
+                                labelText: L10n.tr(context, 'profile.bio'),
+                                prefixIcon: const Icon(Icons.notes_outlined),
                               ),
                             ),
-                          );
+                            const SizedBox(height: 12),
+                            TextField(
+                              controller: _phoneCtrl,
+                              keyboardType: TextInputType.phone,
+                              style: Theme.of(context).textTheme.bodyLarge,
+                              decoration: InputDecoration(
+                                labelText: L10n.tr(context, 'profile.phone'),
+                                prefixIcon: const Icon(Icons.phone_outlined),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Column(
+                              children: [
+                                _buildPickerField(
+                                  context: context,
+                                  label: L10n.tr(context, 'profile.wilaya'),
+                                  value: _wilayaLabel(context),
+                                  icon: Icons.map_outlined,
+                                  isPlaceholder:
+                                      _selectedWilayaCode == null ||
+                                      _selectedWilayaCode!.isEmpty,
+                                  onTap: (_loadingLocations || _wilayas.isEmpty)
+                                      ? null
+                                      : () async {
+                                          final selected =
+                                              await _showLocationPicker(
+                                                context: context,
+                                                title: L10n.tr(
+                                                  context,
+                                                  'profile.wilaya',
+                                                ),
+                                                items: _wilayas,
+                                                itemLabel: (item) =>
+                                                    _wilayaItemLabel(
+                                                      context,
+                                                      item,
+                                                    ),
+                                              );
+                                          if (!mounted || selected == null) {
+                                            return;
+                                          }
+                                          final code = selected['code'] ?? '';
+                                          setState(() {
+                                            _selectedWilayaCode =
+                                                code.isNotEmpty ? code : null;
+                                            _wilayaCtrl.text =
+                                                selected['name_fr'] ?? code;
+                                            _selectedCommuneId = null;
+                                            _dairaCtrl.text = '';
+                                            _communes = const [];
+                                          });
+                                          if (code.isNotEmpty) {
+                                            await _loadCommunes(code);
+                                          }
+                                        },
+                                ),
+                                const SizedBox(height: 12),
+                                _buildPickerField(
+                                  context: context,
+                                  label: L10n.tr(context, 'profile.daira'),
+                                  value: _communeLabel(context),
+                                  icon: Icons.place_outlined,
+                                  isPlaceholder:
+                                      _selectedCommuneId == null ||
+                                      _selectedCommuneId!.isEmpty,
+                                  onTap:
+                                      (_loadingLocations ||
+                                          _selectedWilayaCode == null ||
+                                          _communes.isEmpty)
+                                      ? null
+                                      : () async {
+                                          final selected =
+                                              await _showLocationPicker(
+                                                context: context,
+                                                title: L10n.tr(
+                                                  context,
+                                                  'profile.daira',
+                                                ),
+                                                items: _communes,
+                                                itemLabel: (item) =>
+                                                    _communeItemLabel(
+                                                      context,
+                                                      item,
+                                                    ),
+                                              );
+                                          if (!mounted || selected == null) {
+                                            return;
+                                          }
+                                          final communeId =
+                                              selected['id'] ?? '';
+                                          setState(() {
+                                            _selectedCommuneId =
+                                                communeId.isNotEmpty
+                                                ? communeId
+                                                : null;
+                                            _dairaCtrl.text =
+                                                selected['name_fr'] ??
+                                                (communeId.isNotEmpty
+                                                    ? communeId
+                                                    : '');
+                                          });
+                                        },
+                                ),
+                              ],
+                            ),
+                            if (_loadingLocations)
+                              const Padding(
+                                padding: EdgeInsets.only(top: 8),
+                                child: LinearProgressIndicator(minHeight: 2),
+                              ),
+                            if (_locationLoadError != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Text(
+                                  _locationLoadError!,
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.error,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            const SizedBox(height: 12),
+                            DropdownButtonFormField<String>(
+                              value: _lang,
+                              decoration: InputDecoration(
+                                labelText: L10n.tr(context, 'profile.language'),
+                                prefixIcon: const Icon(Icons.language_outlined),
+                              ),
+                              items: [
+                                DropdownMenuItem(
+                                  value: 'fr',
+                                  child: Text(
+                                    L10n.tr(context, 'profile.lang_fr'),
+                                  ),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'ar',
+                                  child: Text(
+                                    L10n.tr(context, 'profile.lang_ar'),
+                                  ),
+                                ),
+                              ],
+                              onChanged: (v) async {
+                                final code = v ?? 'fr';
+                                setState(() => _lang = code);
+                                await LocaleService.instance.setLocale(code);
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            SwitchListTile(
+                              value: _isPublic,
+                              onChanged: (v) => setState(() => _isPublic = v),
+                              title: Text(L10n.tr(context, 'profile.public')),
+                              subtitle: Text(
+                                L10n.tr(context, 'profile.public_hint'),
+                              ),
+                            ),
+                            SwitchListTile(
+                              value: _isSeller,
+                              onChanged: (v) => setState(() => _isSeller = v),
+                              title: Text(
+                                L10n.tr(context, 'profile.seller_mode'),
+                              ),
+                              subtitle: Text(
+                                L10n.tr(context, 'profile.seller_mode_hint'),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            ElevatedButton.icon(
+                              onPressed: _saving
+                                  ? null
+                                  : () async {
+                                      await AuthService.instance.signOut();
+                                      if (context.mounted) {
+                                        context.go('/sign-in');
+                                      }
+                                    },
+                              icon: const Icon(Icons.logout),
+                              label: Text(L10n.tr(context, 'auth.sign_out')),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Theme.of(
+                                  context,
+                                ).colorScheme.error,
+                                foregroundColor: Theme.of(
+                                  context,
+                                ).colorScheme.onError,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            ElevatedButton.icon(
+                              onPressed: _saving ? null : _save,
+                              icon: _saving
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.save_outlined),
+                              label: Text(
+                                _saving
+                                    ? L10n.tr(context, 'common.saving')
+                                    : L10n.tr(context, 'common.save'),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Card(
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        side: BorderSide(
+                          color: colors.outlineVariant.withValues(alpha: 0.45),
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          ListTile(
+                            title: Text(
+                              L10n.tr(context, 'profile.section_tools'),
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          const Divider(height: 1),
+                          StreamBuilder<int>(
+                            stream: _notificationInboxService
+                                .watchUnreadCount(),
+                            builder: (context, snap) {
+                              final unread = snap.data ?? 0;
+                              return ListTile(
+                                leading: const Icon(
+                                  Icons.notifications_outlined,
+                                ),
+                                title: Text(
+                                  L10n.tr(context, 'notifications.title'),
+                                ),
+                                subtitle: Text(
+                                  unread > 0
+                                      ? L10n.tr(
+                                          context,
+                                          'notifications.unread_count',
+                                          params: {'count': '$unread'},
+                                        )
+                                      : L10n.tr(
+                                          context,
+                                          'notifications.all_caught_up',
+                                        ),
+                                ),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (unread > 0)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 3,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.primaryContainer,
+                                          borderRadius: BorderRadius.circular(
+                                            999,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          unread > 99 ? '99+' : '$unread',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onPrimaryContainer,
+                                          ),
+                                        ),
+                                      ),
+                                    const SizedBox(width: 6),
+                                    const Icon(Icons.chevron_right),
+                                  ],
+                                ),
+                                onTap: () => context.push('/notifications'),
+                              );
+                            },
+                          ),
+                          const Divider(height: 1),
+                          if (isSuperAdmin) const Divider(height: 1),
+                          if (isSuperAdmin)
+                            ListTile(
+                              leading: const Icon(
+                                Icons.admin_panel_settings_outlined,
+                              ),
+                              title: Text(
+                                L10n.tr(context, 'admin.errors_title'),
+                              ),
+                              subtitle: Text(
+                                L10n.tr(context, 'admin.errors_subtitle'),
+                              ),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () => context.push('/admin/errors'),
+                            ),
+                          if (isSuperAdmin) const Divider(height: 1),
+                          if (isSuperAdmin)
+                            ListTile(
+                              leading: const Icon(Icons.gpp_good_outlined),
+                              title: Text(
+                                L10n.tr(context, 'admin.moderation.title'),
+                              ),
+                              subtitle: Text(
+                                L10n.tr(context, 'admin.moderation.subtitle'),
+                              ),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () => context.push('/admin/moderation'),
+                            ),
+                          if (isSeller) const Divider(height: 1),
+                          if (isSeller)
+                            ListTile(
+                              leading: const Icon(Icons.sell_outlined),
+                              title: Text(
+                                L10n.tr(context, 'seller_orders.title'),
+                              ),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () => context.push('/seller/orders'),
+                            ),
+                          if (isSeller) const Divider(height: 1),
+                          if (isSeller)
+                            ListTile(
+                              leading: const Icon(Icons.analytics_outlined),
+                              title: Text(
+                                L10n.tr(context, 'profile.dashboard'),
+                              ),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () => context.push('/seller/dashboard'),
+                            ),
+                          if (isSeller) const Divider(height: 1),
+                          if (isSeller)
+                            ListTile(
+                              leading: const Icon(Icons.inventory_2_outlined),
+                              title: Text(
+                                L10n.tr(context, 'profile.my_listings'),
+                              ),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () => context.push('/seller/listings'),
+                            ),
+                          if (isSeller) const Divider(height: 1),
+                          if (isSeller)
+                            ListTile(
+                              leading: const Icon(
+                                Icons.local_shipping_outlined,
+                              ),
+                              title: Text(
+                                L10n.tr(context, 'profile.shipments_board'),
+                              ),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () => context.push('/seller/shipments'),
+                            ),
+                          if (isSeller) const Divider(height: 1),
+                          if (isSeller)
+                            ListTile(
+                              leading: const Icon(
+                                Icons.settings_applications_outlined,
+                              ),
+                              title: Text(
+                                L10n.tr(context, 'profile.courier_settings'),
+                              ),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () => context.push('/seller/couriers'),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      L10n.tr(
+                        context,
+                        'profile.geo',
+                        params: {
+                          'lat': _lat?.toStringAsFixed(4) ?? '--',
+                          'lng': _lng?.toStringAsFixed(4) ?? '--',
                         },
                       ),
-                      const Divider(height: 1),
-                      if (isSuperAdmin) const Divider(height: 1),
-                      if (isSuperAdmin)
-                        ListTile(
-                          leading: const Icon(
-                            Icons.admin_panel_settings_outlined,
-                          ),
-                          title: Text(L10n.tr(context, 'admin.errors_title')),
-                          subtitle: Text(
-                            L10n.tr(context, 'admin.errors_subtitle'),
-                          ),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const AppErrorsPage(),
-                            ),
-                          ),
-                        ),
-                      if (isSuperAdmin) const Divider(height: 1),
-                      if (isSuperAdmin)
-                        ListTile(
-                          leading: const Icon(Icons.gpp_good_outlined),
-                          title: Text(
-                            L10n.tr(context, 'admin.moderation.title'),
-                          ),
-                          subtitle: Text(
-                            L10n.tr(context, 'admin.moderation.subtitle'),
-                          ),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const ModerationAdminPage(),
-                            ),
-                          ),
-                        ),
-                      if (isSeller) const Divider(height: 1),
-                      if (isSeller)
-                        ListTile(
-                          leading: const Icon(Icons.sell_outlined),
-                          title: Text(L10n.tr(context, 'seller_orders.title')),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const SellerOrdersPage(),
-                            ),
-                          ),
-                        ),
-                      if (isSeller) const Divider(height: 1),
-                      if (isSeller)
-                        ListTile(
-                          leading: const Icon(Icons.analytics_outlined),
-                          title: Text(L10n.tr(context, 'profile.dashboard')),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const SellerDashboardPage(),
-                            ),
-                          ),
-                        ),
-                      if (isSeller) const Divider(height: 1),
-                      if (isSeller)
-                        ListTile(
-                          leading: const Icon(Icons.inventory_2_outlined),
-                          title: Text(L10n.tr(context, 'profile.my_listings')),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const MyListingsPage(),
-                            ),
-                          ),
-                        ),
-                      if (isSeller) const Divider(height: 1),
-                      if (isSeller)
-                        ListTile(
-                          leading: const Icon(Icons.local_shipping_outlined),
-                          title: Text(
-                            L10n.tr(context, 'profile.shipments_board'),
-                          ),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const ShipmentsDashboardPage(),
-                            ),
-                          ),
-                        ),
-                      if (isSeller) const Divider(height: 1),
-                      if (isSeller)
-                        ListTile(
-                          leading: const Icon(
-                            Icons.settings_applications_outlined,
-                          ),
-                          title: Text(
-                            L10n.tr(context, 'profile.courier_settings'),
-                          ),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const CourierSettingsPage(),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  L10n.tr(
-                    context,
-                    'profile.geo',
-                    params: {
-                      'lat': _lat?.toStringAsFixed(4) ?? '--',
-                      'lng': _lng?.toStringAsFixed(4) ?? '--',
-                    },
-                  ),
-                  style: Theme.of(context).textTheme.labelSmall,
-                ),
-              ],
+              ),
             ),
           ),
         ),

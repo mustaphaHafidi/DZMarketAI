@@ -37,31 +37,42 @@ class TranslationService {
   }
 
   Future<void> _loadAssetLocale(String locale) async {
-    try {
-      final raw = await rootBundle.loadString('assets/i18n/$locale.json');
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) return;
-      final map = <String, String>{};
-      for (final entry in decoded.entries) {
-        final value = entry.value;
-        if (value is String && value.isNotEmpty) {
-          map[entry.key] = value;
+    final assetPaths = [
+      'assets/i18n/$locale.json',
+      'assets/assets/i18n/$locale.json',
+    ];
+    for (final path in assetPaths) {
+      try {
+        final raw = await rootBundle.loadString(path);
+        final decoded = jsonDecode(raw);
+        if (decoded is! Map<String, dynamic>) return;
+        final map = <String, String>{};
+        for (final entry in decoded.entries) {
+          final value = entry.value;
+          if (value is String && value.isNotEmpty) {
+            map[entry.key] = value;
+          }
         }
+        if (map.isNotEmpty) {
+          _cache[locale] = map;
+          return;
+        }
+      } catch (_) {
+        // Try the next asset path.
       }
-      if (map.isNotEmpty) {
-        _cache[locale] = map;
-      }
-    } catch (_) {
-      // Ignore; assets might not be present in some test contexts.
     }
   }
 
   String? translate(String locale, String key) {
     final normalized = locale.toLowerCase();
-    if (normalized == 'fr' || normalized.startsWith('fr_')) {
+    if (normalized == 'fr' ||
+        normalized.startsWith('fr_') ||
+        normalized.startsWith('fr-')) {
       return _cache['fr']?[key];
     }
-    if (normalized == 'ar' || normalized.startsWith('ar_')) {
+    if (normalized == 'ar' ||
+        normalized.startsWith('ar_') ||
+        normalized.startsWith('ar-')) {
       return _cache['ar']?[key];
     }
     return _cache['fr']?[key] ?? _cache[normalized]?[key];
@@ -89,10 +100,22 @@ class TranslationService {
   }
 
   bool _looksPlaceholderText(String key, String text) {
-    final normalizedKey = key.trim().toLowerCase();
-    final normalizedText = text.trim().toLowerCase();
+    final normalizedKey = _normalizePlaceholderCandidate(key);
+    final normalizedText = _normalizePlaceholderCandidate(text);
     if (normalizedText == normalizedKey) return true;
-    final looksLikeKey = RegExp(r'^[a-z0-9_.-]+$').hasMatch(normalizedText);
-    return looksLikeKey && normalizedText.contains('.');
+    // Some DB rows contain hidden bidi/zero-width chars around values that are
+    // effectively i18n keys (e.g. "listing.add.title_label"). Treat all such
+    // key-like values as placeholders so assets stay authoritative.
+    return RegExp(r'^[a-z0-9_-]+(?:\.[a-z0-9_-]+)+$').hasMatch(normalizedText);
+  }
+
+  String _normalizePlaceholderCandidate(String input) {
+    return input
+        .replaceAll(
+          RegExp(r'[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]'),
+          '',
+        )
+        .trim()
+        .toLowerCase();
   }
 }

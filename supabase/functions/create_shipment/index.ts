@@ -228,6 +228,7 @@ const uploadLabel = async (
   sellerId: string,
   fileName: string,
   bytes: Uint8Array,
+  preferredOrigin?: URL | null,
 ) => {
   const path = `${sellerId}/${crypto.randomUUID()}-${fileName}`;
   const { error: uploadError } = await supabase.storage
@@ -239,7 +240,7 @@ const uploadLabel = async (
     .from("labels")
     .createSignedUrl(path, 60 * 60 * 24);
   if (error) throw new Error(error.message);
-  return rewriteSignedLabelUrl(data?.signedUrl ?? "");
+  return rewriteSignedLabelUrl(data?.signedUrl ?? "", { preferredOrigin });
 };
 
 const internalSupabaseHosts = new Set([
@@ -250,6 +251,7 @@ const internalSupabaseHosts = new Set([
   "0.0.0.0",
   "::1",
 ]);
+const internalProxyPorts = new Set(["8000", "8443"]);
 
 const parseHttpUrl = (value: string) => {
   try {
@@ -266,28 +268,85 @@ const parseHttpUrl = (value: string) => {
 const isInternalSupabaseHost = (host: string) =>
   internalSupabaseHosts.has(host.trim().toLowerCase());
 
-const publicSignedUrlOrigin = () => {
+const firstCsvValue = (value: string) =>
+  textValue(value).split(",")[0]?.trim() ?? "";
+
+const normalizePublicOrigin = (candidate: URL) => {
+  const normalized = new URL(candidate.toString());
+  if (normalized.hostname.toLowerCase().startsWith("app.")) {
+    normalized.hostname = `api.${normalized.hostname.substring(4)}`;
+  }
+  if (
+    normalized.protocol === "https:" &&
+    (normalized.port === "443" || normalized.port === "80" ||
+      internalProxyPorts.has(normalized.port))
+  ) {
+    normalized.port = "";
+  }
+  if (normalized.protocol === "http:" && normalized.port === "80") {
+    normalized.port = "";
+  }
+  return normalized;
+};
+
+const parsePublicOriginCandidate = (candidate: string) => {
+  const parsed = parseHttpUrl(textValue(candidate));
+  if (!parsed) return null;
+  const normalized = normalizePublicOrigin(parsed);
+  if (isInternalSupabaseHost(normalized.hostname)) return null;
+  return normalized;
+};
+
+const publicSignedUrlOrigin = (req?: Request) => {
   const candidates = [
     Deno.env.get("SIGNED_URL_PUBLIC_BASE_URL") ?? "",
     Deno.env.get("API_EXTERNAL_URL") ?? "",
     Deno.env.get("SUPABASE_PUBLIC_URL") ?? "",
   ];
   for (const candidate of candidates) {
-    const parsed = parseHttpUrl(textValue(candidate));
-    if (!parsed) continue;
-    if (isInternalSupabaseHost(parsed.hostname)) continue;
-    return parsed;
+    const parsed = parsePublicOriginCandidate(candidate);
+    if (parsed) return parsed;
   }
+
+  if (req) {
+    const forwardedHost = firstCsvValue(req.headers.get("x-forwarded-host") ?? "");
+    const host = forwardedHost || firstCsvValue(req.headers.get("host") ?? "");
+    const protoRaw = firstCsvValue(req.headers.get("x-forwarded-proto") ?? "");
+    const proto = protoRaw === "http" ? "http" : "https";
+    if (host) {
+      const parsed = parsePublicOriginCandidate(`${proto}://${host}`);
+      if (parsed) return parsed;
+    }
+
+    const headerCandidates = [
+      req.headers.get("origin") ?? "",
+      req.headers.get("referer") ?? "",
+      req.url,
+    ];
+    for (const candidate of headerCandidates) {
+      const parsed = parsePublicOriginCandidate(candidate);
+      if (parsed) return parsed;
+    }
+  }
+
   return null;
 };
 
-const rewriteSignedLabelUrl = (rawUrl: string) => {
+const rewriteSignedLabelUrl = (
+  rawUrl: string,
+  options?: { request?: Request; preferredOrigin?: URL | null },
+) => {
   const parsed = parseHttpUrl(textValue(rawUrl));
   if (!parsed) return textValue(rawUrl);
-  if (!isInternalSupabaseHost(parsed.hostname)) return parsed.toString();
-
-  const externalOrigin = publicSignedUrlOrigin();
+  const externalOrigin = options?.preferredOrigin ??
+    publicSignedUrlOrigin(options?.request);
   if (!externalOrigin) return parsed.toString();
+
+  const samePublicHost =
+    parsed.hostname.toLowerCase() === externalOrigin.hostname.toLowerCase();
+  const needsHostRewrite = isInternalSupabaseHost(parsed.hostname);
+  const needsPortRewrite = samePublicHost && internalProxyPorts.has(parsed.port);
+  if (!needsHostRewrite && !needsPortRewrite) return parsed.toString();
 
   parsed.protocol = externalOrigin.protocol;
   parsed.hostname = externalOrigin.hostname;
@@ -513,6 +572,7 @@ serve(async (req) => {
   }
   const userId = userData?.user?.id ?? "";
   const ip = clientIp(req);
+  const requestPublicOrigin = publicSignedUrlOrigin(req);
 
   try {
     const userOk = await consumeRateLimit(
@@ -587,10 +647,14 @@ serve(async (req) => {
     .eq("order_id", orderId)
     .maybeSingle();
   if (existingShipment?.label_url && existingShipment?.tracking_number) {
+    const safeLabelUrl = rewriteSignedLabelUrl(
+      textValue(existingShipment.label_url),
+      { preferredOrigin: requestPublicOrigin },
+    );
     return jsonResponse({
       ok: true,
       tracking_number: existingShipment.tracking_number,
-      label_url: existingShipment.label_url,
+      label_url: safeLabelUrl,
     });
   }
 
@@ -791,6 +855,7 @@ serve(async (req) => {
         outboundOwnerId,
         `yalidine-${orderId}.pdf`,
         bytes,
+        requestPublicOrigin,
       );
     } else {
       labelUrl = "";
@@ -1052,6 +1117,7 @@ serve(async (req) => {
         outboundOwnerId,
         `guepex-${orderId}.pdf`,
         bytes,
+        requestPublicOrigin,
       );
     } else {
       labelUrl = "";
@@ -1215,6 +1281,7 @@ serve(async (req) => {
         outboundOwnerId,
         `ecotrack-${trackingNumber}.pdf`,
         bytes,
+        requestPublicOrigin,
       );
     } else {
       labelUrl = "";
@@ -1723,6 +1790,7 @@ serve(async (req) => {
         outboundOwnerId,
         `zrexpress-${trackingNumber}.pdf`,
         labelBytes,
+        requestPublicOrigin,
       );
     } else {
       labelUrl = labelLink;
@@ -1732,6 +1800,12 @@ serve(async (req) => {
       tracking: trackingNumber,
       label_url: labelUrl,
     };
+  }
+
+  if (labelUrl) {
+    labelUrl = rewriteSignedLabelUrl(labelUrl, {
+      preferredOrigin: requestPublicOrigin,
+    });
   }
 
   const shipmentPayload: Record<string, unknown> = {

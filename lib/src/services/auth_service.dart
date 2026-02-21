@@ -504,7 +504,11 @@ class AuthService {
     final candidate =
         (raw ?? LocaleService.instance.locale.value?.languageCode ?? 'fr')
             .toLowerCase();
-    if (candidate == 'ar' || candidate.startsWith('ar_')) return 'ar';
+    if (candidate == 'ar' ||
+        candidate.startsWith('ar_') ||
+        candidate.startsWith('ar-')) {
+      return 'ar';
+    }
     return 'fr';
   }
 }

@@ -332,9 +332,14 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                   ],
                   const SizedBox(height: 16),
                   TextButton(
-                    onPressed: () => context.go('/sign-in'),
+                    onPressed: () => context.go(hasSession ? '/' : '/sign-in'),
                     child: Text(
-                      _t('auth.sign_in.cta', fallback: 'Se connecter'),
+                      hasSession
+                          ? _t(
+                              'auth.reset_password.back_home',
+                              fallback: "Aller a l'accueil",
+                            )
+                          : _t('auth.sign_in.cta', fallback: 'Se connecter'),
                     ),
                   ),
                 ],

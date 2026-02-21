@@ -7,6 +7,7 @@ import 'package:dzmarket/src/services/chat_repository.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/notification_inbox_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/widgets/web_frame.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -22,6 +23,7 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   static const _tabs = ['listings', 'chat', 'profile'];
+  static const double _desktopBreakpoint = 920;
   static final ChatRepository _chatRepository = ChatRepository();
   static final NotificationInboxService _notificationInboxService =
       NotificationInboxService();
@@ -50,30 +52,83 @@ class _HomeShellState extends State<HomeShell> {
       const ProfilePage(), // index 2: Profile
     ];
     final userId = supabase.auth.currentUser?.id;
+    final shellBody = IndexedStack(index: _currentIndex, children: pages);
 
-    return Scaffold(
-      body: IndexedStack(index: _currentIndex, children: pages),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: _onTabSelected,
-        destinations: [
-          NavigationDestination(
-            icon: const Icon(Icons.storefront_outlined),
-            label: L10n.tr(context, 'nav.browse'),
-          ),
-          NavigationDestination(
-            icon: _ChatBadge(userId: userId, chatRepository: _chatRepository),
-            label: L10n.tr(context, 'nav.chat'),
-          ),
-          NavigationDestination(
-            icon: _ProfileBadge(
-              userId: userId,
-              inboxService: _notificationInboxService,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth >= _desktopBreakpoint;
+        if (!isDesktop) {
+          return Scaffold(
+            body: shellBody,
+            bottomNavigationBar: NavigationBar(
+              selectedIndex: _currentIndex,
+              onDestinationSelected: _onTabSelected,
+              destinations: [
+                NavigationDestination(
+                  icon: const Icon(Icons.storefront_outlined),
+                  label: L10n.tr(context, 'nav.browse', fallback: 'Parcourir'),
+                ),
+                NavigationDestination(
+                  icon: _ChatBadge(
+                    userId: userId,
+                    chatRepository: _chatRepository,
+                  ),
+                  label: L10n.tr(context, 'nav.chat', fallback: 'Chat'),
+                ),
+                NavigationDestination(
+                  icon: _ProfileBadge(
+                    userId: userId,
+                    inboxService: _notificationInboxService,
+                  ),
+                  label: L10n.tr(context, 'nav.profile', fallback: 'Profil'),
+                ),
+              ],
             ),
-            label: L10n.tr(context, 'nav.profile'),
+          );
+        }
+
+        return Scaffold(
+          body: SafeArea(
+            child: Row(
+              children: [
+                NavigationRail(
+                  selectedIndex: _currentIndex,
+                  onDestinationSelected: _onTabSelected,
+                  labelType: NavigationRailLabelType.all,
+                  destinations: [
+                    NavigationRailDestination(
+                      icon: const Icon(Icons.storefront_outlined),
+                      label: Text(
+                        L10n.tr(context, 'nav.browse', fallback: 'Parcourir'),
+                      ),
+                    ),
+                    NavigationRailDestination(
+                      icon: _ChatBadge(
+                        userId: userId,
+                        chatRepository: _chatRepository,
+                      ),
+                      label: Text(
+                        L10n.tr(context, 'nav.chat', fallback: 'Chat'),
+                      ),
+                    ),
+                    NavigationRailDestination(
+                      icon: _ProfileBadge(
+                        userId: userId,
+                        inboxService: _notificationInboxService,
+                      ),
+                      label: Text(
+                        L10n.tr(context, 'nav.profile', fallback: 'Profil'),
+                      ),
+                    ),
+                  ],
+                ),
+                const VerticalDivider(width: 1),
+                Expanded(child: WebFrame(child: shellBody)),
+              ],
+            ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 

@@ -4,11 +4,20 @@ import 'package:dzmarket/src/features/auth/auth_callback_page.dart';
 import 'package:dzmarket/src/features/auth/sign_in_page.dart';
 import 'package:dzmarket/src/features/auth/sign_up_page.dart';
 import 'package:dzmarket/src/features/auth/reset_password_page.dart';
+import 'package:dzmarket/src/features/admin/app_errors_page.dart';
+import 'package:dzmarket/src/features/admin/moderation_admin_page.dart';
 import 'package:dzmarket/src/features/chat/order_chat_gate_page.dart';
 import 'package:dzmarket/src/features/home/home_shell.dart';
 import 'package:dzmarket/src/features/legal/legal_page.dart';
 import 'package:dzmarket/src/features/listings/product_detail_page.dart';
+import 'package:dzmarket/src/features/notifications/notifications_page.dart';
+import 'package:dzmarket/src/features/orders/seller_orders_page.dart';
+import 'package:dzmarket/src/features/orders/shipments_dashboard_page.dart';
+import 'package:dzmarket/src/features/profile/courier_settings_page.dart';
+import 'package:dzmarket/src/features/profile/my_listings_page.dart';
+import 'package:dzmarket/src/features/profile/seller_dashboard_page.dart';
 import 'package:dzmarket/src/features/tracking/map_tracking_page.dart';
+import 'package:dzmarket/src/widgets/web_frame.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -124,17 +133,17 @@ GoRouter createRouter({List<NavigatorObserver> observers = const []}) {
       GoRoute(
         path: '/sign-in',
         pageBuilder: (context, state) =>
-            const NoTransitionPage(child: SignInPage()),
+            const NoTransitionPage(child: WebFrame(child: SignInPage())),
       ),
       GoRoute(
         path: '/sign-up',
         pageBuilder: (context, state) =>
-            const NoTransitionPage(child: SignUpPage()),
+            const NoTransitionPage(child: WebFrame(child: SignUpPage())),
       ),
       GoRoute(
         path: '/reset-password',
         pageBuilder: (context, state) =>
-            const NoTransitionPage(child: ResetPasswordPage()),
+            const NoTransitionPage(child: WebFrame(child: ResetPasswordPage())),
       ),
       GoRoute(
         path: '/auth/callback',
@@ -149,28 +158,78 @@ GoRouter createRouter({List<NavigatorObserver> observers = const []}) {
       GoRoute(
         path: '/legal/privacy',
         pageBuilder: (context, state) => const NoTransitionPage(
-          child: LegalPage(
-            titleKey: 'legal.privacy.title',
-            bodyKey: 'legal.privacy.body',
+          child: WebFrame(
+            child: LegalPage(
+              titleKey: 'legal.privacy.title',
+              bodyKey: 'legal.privacy.body',
+            ),
           ),
         ),
       ),
       GoRoute(
         path: '/legal/terms',
         pageBuilder: (context, state) => const NoTransitionPage(
-          child: LegalPage(
-            titleKey: 'legal.terms.title',
-            bodyKey: 'legal.terms.body',
+          child: WebFrame(
+            child: LegalPage(
+              titleKey: 'legal.terms.title',
+              bodyKey: 'legal.terms.body',
+            ),
           ),
         ),
       ),
       GoRoute(
         path: '/legal/imprint',
         pageBuilder: (context, state) => const NoTransitionPage(
-          child: LegalPage(
-            titleKey: 'legal.imprint.title',
-            bodyKey: 'legal.imprint.body',
+          child: WebFrame(
+            child: LegalPage(
+              titleKey: 'legal.imprint.title',
+              bodyKey: 'legal.imprint.body',
+            ),
           ),
+        ),
+      ),
+      GoRoute(
+        path: '/notifications',
+        pageBuilder: (context, state) =>
+            const NoTransitionPage(child: WebFrame(child: NotificationsPage())),
+      ),
+      GoRoute(
+        path: '/seller/orders',
+        pageBuilder: (context, state) =>
+            const NoTransitionPage(child: WebFrame(child: SellerOrdersPage())),
+      ),
+      GoRoute(
+        path: '/seller/dashboard',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: WebFrame(child: SellerDashboardPage()),
+        ),
+      ),
+      GoRoute(
+        path: '/seller/listings',
+        pageBuilder: (context, state) =>
+            const NoTransitionPage(child: WebFrame(child: MyListingsPage())),
+      ),
+      GoRoute(
+        path: '/seller/shipments',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: WebFrame(child: ShipmentsDashboardPage()),
+        ),
+      ),
+      GoRoute(
+        path: '/seller/couriers',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: WebFrame(child: CourierSettingsPage()),
+        ),
+      ),
+      GoRoute(
+        path: '/admin/errors',
+        pageBuilder: (context, state) =>
+            const NoTransitionPage(child: WebFrame(child: AppErrorsPage())),
+      ),
+      GoRoute(
+        path: '/admin/moderation',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: WebFrame(child: ModerationAdminPage()),
         ),
       ),
       GoRoute(

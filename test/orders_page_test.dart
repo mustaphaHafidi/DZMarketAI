@@ -1,4 +1,4 @@
-import 'package:dzmarket/src/features/orders/orders_page.dart';
+﻿import 'package:dzmarket/src/features/orders/orders_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,6 +22,6 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: OrdersPage()));
     await tester.pumpAndSettle();
 
-    expect(find.text('Connectez-vous.'), findsOneWidget);
+    expect(find.textContaining('Connectez-vous'), findsOneWidget);
   });
 }

@@ -21,26 +21,34 @@ class AppConfig {
   final bool analyticsEnabled;
   final bool crashlyticsEnabled;
 
+  static AppConfig? _current;
+
+  static AppConfig? get current => _current;
+
   static const _envFlavor = String.fromEnvironment(
     'APP_FLAVOR',
     defaultValue: 'dev',
   );
 
   static const _envSupabaseUrl = String.fromEnvironment('SUPABASE_URL');
-  static const _envSupabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+  static const _envSupabaseAnonKey = String.fromEnvironment(
+    'SUPABASE_ANON_KEY',
+  );
 
-  static const _envFirebaseApiKey =
-      String.fromEnvironment('FIREBASE_API_KEY');
-  static const _envFirebaseAppId =
-      String.fromEnvironment('FIREBASE_APP_ID');
-  static const _envFirebaseSenderId =
-      String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID');
-  static const _envFirebaseProjectId =
-      String.fromEnvironment('FIREBASE_PROJECT_ID');
-  static const _envFirebaseStorageBucket =
-      String.fromEnvironment('FIREBASE_STORAGE_BUCKET');
-  static const _envFirebaseMeasurementId =
-      String.fromEnvironment('FIREBASE_MEASUREMENT_ID');
+  static const _envFirebaseApiKey = String.fromEnvironment('FIREBASE_API_KEY');
+  static const _envFirebaseAppId = String.fromEnvironment('FIREBASE_APP_ID');
+  static const _envFirebaseSenderId = String.fromEnvironment(
+    'FIREBASE_MESSAGING_SENDER_ID',
+  );
+  static const _envFirebaseProjectId = String.fromEnvironment(
+    'FIREBASE_PROJECT_ID',
+  );
+  static const _envFirebaseStorageBucket = String.fromEnvironment(
+    'FIREBASE_STORAGE_BUCKET',
+  );
+  static const _envFirebaseMeasurementId = String.fromEnvironment(
+    'FIREBASE_MEASUREMENT_ID',
+  );
 
   static bool _envBool(String key, {required bool defaultValue}) {
     const map = <String, String>{
@@ -80,10 +88,14 @@ class AppConfig {
           runtime['firebaseMeasurementId'] ?? firebaseMeasurementId;
     }
 
-    final analyticsEnabled =
-        _envBool('ENABLE_ANALYTICS', defaultValue: kReleaseMode);
-    final crashlyticsEnabled =
-        _envBool('ENABLE_CRASHLYTICS', defaultValue: kReleaseMode);
+    final analyticsEnabled = _envBool(
+      'ENABLE_ANALYTICS',
+      defaultValue: kReleaseMode,
+    );
+    final crashlyticsEnabled = _envBool(
+      'ENABLE_CRASHLYTICS',
+      defaultValue: kReleaseMode,
+    );
 
     final options = _firebaseOptionsFromValues(
       apiKey: firebaseApiKey,
@@ -94,7 +106,7 @@ class AppConfig {
       measurementId: firebaseMeasurementId,
     );
 
-    return AppConfig(
+    final config = AppConfig(
       flavor: flavor,
       supabaseUrl: supabaseUrl.trim(),
       supabaseAnonKey: supabaseAnonKey.trim(),
@@ -102,6 +114,8 @@ class AppConfig {
       analyticsEnabled: analyticsEnabled,
       crashlyticsEnabled: crashlyticsEnabled,
     );
+    _current = config;
+    return config;
   }
 
   static FirebaseOptions? _firebaseOptionsFromValues({

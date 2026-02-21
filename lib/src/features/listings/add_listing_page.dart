@@ -930,7 +930,9 @@ class _AddListingPageState extends State<AddListingPage> {
     if (error is FunctionException) {
       final details = '${error.details ?? ''} ${error.reasonPhrase ?? ''}'
           .toLowerCase();
-      if (error.status == 401 || error.status == 403 || details.contains('jwt')) {
+      if (error.status == 401 ||
+          error.status == 403 ||
+          details.contains('jwt')) {
         return L10n.tr(
           context,
           'listing.add.error_publish_auth',
@@ -1383,8 +1385,47 @@ class _AddListingPageState extends State<AddListingPage> {
     return RegExp(r'[\u0600-\u06FF]').hasMatch(value);
   }
 
+  bool _looksKeyLikeToken(String value) {
+    final normalized = value
+        .replaceAll(
+          RegExp(r'[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]'),
+          '',
+        )
+        .trim()
+        .toLowerCase();
+    return RegExp(r'^[a-z0-9_-]+(?:\.[a-z0-9_-]+)+$').hasMatch(normalized);
+  }
+
   bool _looksMojibake(String value) {
-    return value.contains('Ã') || value.contains('Â') || value.contains('�');
+    if (value.isEmpty) return false;
+    if (_looksKeyLikeToken(value)) return true;
+    if (value.contains('\uFFFD') || value.contains('�')) return true;
+    // Common UTF-8/Latin-1 corruption markers.
+    if (value.contains('Ã') ||
+        value.contains('Â') ||
+        value.contains('\u00C3') ||
+        value.contains('\u00C2')) {
+      return true;
+    }
+    if (RegExp(r'[A-Za-z]\?[A-Za-z]').hasMatch(value)) return true;
+    return false;
+  }
+
+  String _humanizeSlug(String slug) {
+    final normalized = slug.trim().toLowerCase();
+    if (normalized.isEmpty) return '-';
+    final words = normalized
+        .replaceAll('_', '-')
+        .split('-')
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (words.isEmpty) return '-';
+    return words
+        .map(
+          (word) =>
+              '${word[0].toUpperCase()}${word.length > 1 ? word.substring(1) : ''}',
+        )
+        .join(' ');
   }
 
   String _pickLocalizedName(BuildContext context, String fr, String ar) {
@@ -1407,7 +1448,10 @@ class _AddListingPageState extends State<AddListingPage> {
     final slug = item['slug'] ?? '';
     final fr = item['name_fr'] ?? '';
     final ar = item['name_ar'] ?? fr;
-    final fallback = _pickLocalizedName(context, fr, ar);
+    var fallback = _pickLocalizedName(context, fr, ar);
+    if (_looksMojibake(fallback) || fallback.trim().isEmpty) {
+      fallback = _humanizeSlug(slug);
+    }
     if (slug.isEmpty) return fallback;
     final translated = L10n.tr(context, 'category.$slug', fallback: fallback);
     return _looksMojibake(translated) ? fallback : translated;

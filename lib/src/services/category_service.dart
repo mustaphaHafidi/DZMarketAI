@@ -22,7 +22,9 @@ class CategoryService {
         'categories.select',
         () => supabase
             .from(SupabaseTables.categories)
-          .select('id, slug, name_fr, name_ar, icon, parent_id, sort_order, is_active')
+            .select(
+              'id, slug, name_fr, name_ar, icon, parent_id, sort_order, is_active',
+            )
             .eq('is_active', true)
             .order('sort_order')
             .order('name_fr'),
@@ -32,8 +34,8 @@ class CategoryService {
             (r) => {
               'id': r['id']?.toString() ?? '',
               'slug': r['slug']?.toString() ?? '',
-              'name_fr': r['name_fr']?.toString() ?? '',
-              'name_ar': r['name_ar']?.toString() ?? '',
+              'name_fr': _normalizeName(r['name_fr']?.toString()),
+              'name_ar': _normalizeName(r['name_ar']?.toString()),
               'icon': r['icon']?.toString() ?? '',
               'parent_id': r['parent_id']?.toString() ?? '',
               'sort_order': r['sort_order']?.toString() ?? '',
@@ -61,7 +63,12 @@ class CategoryService {
           .whereType<Map>()
           .map(
             (e) => e.map(
-              (k, v) => MapEntry(k.toString(), v?.toString() ?? ''),
+              (k, v) => MapEntry(
+                k.toString(),
+                k.toString().startsWith('name_')
+                    ? _normalizeName(v?.toString())
+                    : (v?.toString() ?? ''),
+              ),
             ),
           )
           .toList();
@@ -80,5 +87,31 @@ class CategoryService {
       });
       await prefs.setString(_cacheKey, payload);
     } catch (_) {}
+  }
+
+  bool _looksMojibake(String value) {
+    if (value.isEmpty) return false;
+    if (value.contains('\uFFFD')) return true;
+    // Common UTF-8 -> Latin-1 mojibake markers.
+    if (value.contains('\u00C3') || value.contains('\u00C2')) return true;
+    if (value.contains('\u00E2\u20AC\u2122') ||
+        value.contains('\u00E2\u20AC\u201C') ||
+        value.contains('\u00E2\u20AC\u201D')) {
+      return true;
+    }
+    return false;
+  }
+
+  String _normalizeName(String? value) {
+    final input = value?.trim() ?? '';
+    if (input.isEmpty || !_looksMojibake(input)) return input;
+    try {
+      final decoded = utf8.decode(latin1.encode(input));
+      final normalized = decoded.trim();
+      if (normalized.isNotEmpty && !_looksMojibake(normalized)) {
+        return normalized;
+      }
+    } catch (_) {}
+    return input;
   }
 }

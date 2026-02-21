@@ -122,8 +122,18 @@ class _ListingsPageState extends State<ListingsPage> {
       symbol: 'DA',
     );
     final userId = supabase.auth.currentUser?.id;
-    final isWide = MediaQuery.of(context).size.width > 900;
-    final crossAxisCount = isWide ? 3 : 2;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final crossAxisCount = switch (screenWidth) {
+      >= 1500 => 5,
+      >= 1200 => 4,
+      >= 900 => 3,
+      _ => 2,
+    };
+    final gridAspectRatio = switch (crossAxisCount) {
+      >= 4 => 0.80,
+      3 => 0.76,
+      _ => 0.72,
+    };
 
     return Scaffold(
       appBar: AppBar(
@@ -299,6 +309,7 @@ class _ListingsPageState extends State<ListingsPage> {
                     userId,
                     currency,
                     crossAxisCount,
+                    gridAspectRatio,
                   ),
                 );
               },
@@ -534,6 +545,7 @@ class _ListingsPageState extends State<ListingsPage> {
     String? userId,
     NumberFormat currency,
     int crossAxisCount,
+    double childAspectRatio,
   ) {
     final showSkeleton = _initialLoad && _loading;
     final filtered = _applyClientFilters(_products, favorites);
@@ -576,7 +588,7 @@ class _ListingsPageState extends State<ListingsPage> {
         controller: _scrollController,
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: crossAxisCount,
-          childAspectRatio: 0.72,
+          childAspectRatio: childAspectRatio,
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
         ),
@@ -639,12 +651,26 @@ class _ListingsPageState extends State<ListingsPage> {
     final fr = category['name_fr'] ?? category['name'] ?? '';
     final ar = category['name_ar'] ?? fr;
     final locale = Localizations.localeOf(context).languageCode;
-    final fallback = locale == 'ar'
+    var fallback = locale == 'ar'
         ? (_hasArabicLetters(ar) ? ar : (fr.isNotEmpty ? fr : ar))
         : (fr.isNotEmpty ? fr : ar);
+    if (_looksMojibake(fallback) || fallback.trim().isEmpty) {
+      fallback = _humanizeSlug(slug);
+    }
     if (slug.isEmpty) return fallback;
     final translated = L10n.tr(context, 'category.$slug', fallback: fallback);
     return _looksMojibake(translated) ? fallback : translated;
+  }
+
+  bool _looksKeyLikeToken(String value) {
+    final normalized = value
+        .replaceAll(
+          RegExp(r'[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]'),
+          '',
+        )
+        .trim()
+        .toLowerCase();
+    return RegExp(r'^[a-z0-9_-]+(?:\.[a-z0-9_-]+)+$').hasMatch(normalized);
   }
 
   bool _hasArabicLetters(String value) {
@@ -652,7 +678,34 @@ class _ListingsPageState extends State<ListingsPage> {
   }
 
   bool _looksMojibake(String value) {
-    return value.contains('Ã') || value.contains('Â') || value.contains('�');
+    if (value.isEmpty) return false;
+    if (_looksKeyLikeToken(value)) return true;
+    if (value.contains('\uFFFD') || value.contains('�')) return true;
+    if (value.contains('Ã') ||
+        value.contains('Â') ||
+        value.contains('\u00C3') ||
+        value.contains('\u00C2')) {
+      return true;
+    }
+    if (RegExp(r'[A-Za-z]\?[A-Za-z]').hasMatch(value)) return true;
+    return false;
+  }
+
+  String _humanizeSlug(String slug) {
+    final normalized = slug.trim().toLowerCase();
+    if (normalized.isEmpty) return '-';
+    final words = normalized
+        .replaceAll('_', '-')
+        .split('-')
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (words.isEmpty) return '-';
+    return words
+        .map(
+          (word) =>
+              '${word[0].toUpperCase()}${word.length > 1 ? word.substring(1) : ''}',
+        )
+        .join(' ');
   }
 
   void _applySavedSearch(SavedSearch saved) {

@@ -46,6 +46,10 @@ Future<void> main() async {
   await Supabase.initialize(
     url: config.supabaseUrl,
     anonKey: config.supabaseAnonKey,
+    // We handle auth callback links ourselves in /auth/callback.
+    // This avoids blank page crashes when a PKCE code link is opened from an
+    // email client without local PKCE verifier storage.
+    authOptions: const FlutterAuthClientOptions(detectSessionInUri: false),
     // Supabase client auto-refreshes tokens by default; no extra options needed here.
   );
   await FirebaseService.instance.init(config);
