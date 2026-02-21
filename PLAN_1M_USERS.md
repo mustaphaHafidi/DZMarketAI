@@ -1,81 +1,81 @@
-# Plan 1M users/an - DZMarket (Supabase self-host + PostgreSQL)
+﻿# Plan 1M Utilisateurs/An - DZMarket
 
-## 1) Objectif et hypotheses (validees)
-- Budget Phase 1: 200-300 EUR/mois.
-- MAU cible Phase 1: 100k-500k.
-- Media: 3 photos max/annonce, 4 MB max/photo.
-- Zone: public DZ uniquement, hebergement EU proche (latence OK).
+## 1) Objectif
+- Cible business: 1M utilisateurs/an (trafic annuel, croissance progressive).
+- Cible technique: disponibilite > 99.5%, temps de reponse API p95 < 400 ms.
+- Contrainte budget: scale par paliers, sans surdimensionner trop tot.
 
-## 2) Architecture cible (simple + pro)
-- Supabase self-host (Auth/REST/Realtime/Storage/Edge).
-- PostgreSQL (primary + 1 replica en phase 2).
-- MinIO (stockage objets) + CDN.
-- Redis (cache + rate limit + sessions, phase 2).
-- Observabilite: Grafana + Loki + Prometheus.
-- Cloudflare (DNS, SSL, cache, WAF).
+## 2) Hypotheses de charge
+- 3 photos max/annonce, 4 MB max/photo (12 MB brut/annonce).
+- Forte saisonnalite (pics soir/weekend, promos, retours colis).
+- Flux critiques: auth, creation annonce, messagerie, commandes, bordereaux.
 
-## 3) Phases d'evolution
-### Phase 1 (100k -> 500k MAU, budget 200-300 EUR)
-- 3 serveurs (cible stable):
-  - DB: 16 vCPU / 32 GB RAM / NVMe (priorite performances write).
-  - App/Edge/Realtime: 8 vCPU / 16 GB.
-  - Storage (MinIO): 4-8 vCPU / 16 GB + disque large.
-- Backups automatiques DB (quotidien + hebdo).
-- Alerting (erreurs API, latence, disque).
-- Cache CDN pour images.
+## 3) Architecture cible
+- Web/App: `app.dzmarket.pro`
+- API Supabase/Kong: `api.dzmarket.pro`
+- Stack: Supabase self-host (Auth, PostgREST, Realtime, Storage, Edge Functions)
+- DB: PostgreSQL (primary, puis replica lecture)
+- Objet: MinIO/S3 compatible + CDN
+- Reverse proxy/TLS: Caddy
+- Securite edge: Cloudflare (DNS, SSL, WAF, rate limit)
 
-### Phase 2 (500k -> 800k MAU)
-- Ajouter replica PostgreSQL (lecture).
-- Isoler Realtime sur serveur dedie.
-- Redis obligatoire.
-- Workers/cron dedies (jobs, tracking).
+## 4) Phasage de montee en charge
+### Phase A - Lancement (jusqu'a ~100k utilisateurs/an)
+- 3 noeuds separes: app/api, db, storage.
+- Sauvegardes DB + tests de restauration mensuels.
+- Alerting minimal: CPU, RAM, disque, erreurs 5xx, latence p95.
 
-### Phase 3 (800k -> 1M/an)
-- HA DB (primary + replica + failover).
-- Load balancer API/Edge.
-- Storage en cluster (ou S3 compatible).
-- Monitoring pro + rotations de logs.
+### Phase B - Croissance (~100k -> 500k/an)
+- Ajout Redis (cache + throttling + anti-spike).
+- Replica PostgreSQL pour lectures lourdes (dashboard, stats vendeur).
+- Jobs asynchrones dedies (notifications, transporteurs, recalcul stats).
+- Objectif: p95 API < 350 ms.
 
-## 4) Points critiques app (performance)
-- Chat: 30 derniers messages + pagination stricte.
-- Index DB: orders, messages, products, reads, shipments.
-- Images: compression + thumbnails, limiter taille.
-- Stats vendeur: pre-calcul (table "seller_stats").
+### Phase C - Acceleration (~500k -> 1M/an)
+- API horizontalisee derriere LB.
+- Realtime isole si saturation.
+- DB haute dispo (primary + replica + failover teste).
+- Stockage objet redondant + politique lifecycle.
+- Objectif: p95 API < 250 ms sur endpoints critiques.
 
-## 5) Securite et conformite
-- Secrets en .env / GitHub Secrets.
-- Tokens transporteurs chiffrés.
-- RLS stricte, audit logs.
-- Backups off-site (hebdo).
+## 5) Seuils d'upgrade (gating)
+- CPU > 70% soutenu 15 min.
+- RAM > 80% soutenu 15 min.
+- DB connexions > 75% du max.
+- p95 endpoint critique > 400 ms (3 fenetres de suite).
+- Erreurs 5xx > 1% sur 5 min.
+- Stockage > 75% capacite.
 
-## 6) Domaines .dz
-- app.dz -> Web
-- api.app.dz -> Supabase API
-- SSL via Cloudflare
+## 6) Optimisations produit obligatoires
+- Pagination stricte sur annonces/messages.
+- Index DB revus trimestriellement (orders, messages, products, shipments).
+- Pre-calcul KPI vendeur (eviter agregats lourds en live).
+- Upload image: compression + miniatures + controle taille.
+- Rate-limit sur auth, reset password, creation offre/commande.
 
-## 7) Budget (ordre de grandeur)
-- Phase 1: 200-300 EUR/mois (objectif).
-- Phase 2: 400-800 EUR/mois.
-- Phase 3: 800-1500 EUR/mois.
+## 7) Securite et conformite
+- Secrets hors repo (`.env`, secret manager CI/CD).
+- RLS stricte + audit des policies.
+- Chiffrement des tokens transporteurs et journaux d'acces.
+- Backup off-site hebdo + test restore mensuel.
+- Journalisation des actions sensibles (auth, commandes, remboursements).
 
-## 8) Estimation stockage (photos)
-- 3 photos/annonce, 4 MB max => 12 MB/annonce brut.
-- Avec compression + thumbnails: viser 4-6 MB/annonce reel.
-- Ex: 200k annonces => ~0.8-1.2 TB.
-- Prevoir disque storage 2-3 TB minimum (evolution).
+## 8) Budget indicatif
+- Phase A: 200-400 EUR/mois
+- Phase B: 400-900 EUR/mois
+- Phase C: 900-1800 EUR/mois
 
-## 9) Prochaines actions recommandees
-- Choisir provider (OVH/Hetzner).
-- Preparer stack Docker Compose prod.
-- Lancer monitoring + backups.
-- Definir seuils upgrade (MAU, latence, storage).
+## 9) Roadmap operationnelle (prochaines actions)
+1. Finaliser observabilite (dashboards + alertes p95/5xx).
+2. Executer tests de charge realistes (auth, chat, annonce, commande, label).
+3. Definir runbook incident (DB saturee, queue bloquee, provider transport down).
+4. Mettre en place revue capacite hebdomadaire (SLO + couts + saturation).
 
-## 10) Checklist avant lancement public
-- Tests de charge (auth, upload, chat, orders).
-- Rollback plan (DB + storage).
-- SLA simple + pages status.
-- Support client (retours colis, litiges).
+## 10) Checklist avant scale publique large
+- Test E2E complet (web + mobile) valide.
+- Test charge valide avec rapport chiffre.
+- Rollback DB + rollback web documentes et testes.
+- Support operationnel pret (retours, litiges, pannes transporteurs).
 
-## Next Updates
-See NEXT_UPDATES.md for the current prioritized roadmap and release checklist.
-
+---
+Reference execution: `NEXT_UPDATES.md` (priorites) + `infra/HETZNER_MIGRATION_RUNBOOK.md` (runbook infra).
