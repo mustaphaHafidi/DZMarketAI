@@ -13,6 +13,19 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('Router refresh: redirects on auth change', (tester) async {
+    Future<void> waitFor(
+      Finder finder, {
+      Duration timeout = const Duration(seconds: 20),
+      Duration step = const Duration(milliseconds: 200),
+    }) async {
+      final deadline = DateTime.now().add(timeout);
+      while (DateTime.now().isBefore(deadline)) {
+        await tester.pump(step);
+        if (finder.evaluate().isNotEmpty) return;
+      }
+      fail('Timed out waiting for ${finder.description}');
+    }
+
     if (!TestEnv.hasAuthCreds) {
       return;
     }
@@ -26,7 +39,7 @@ void main() {
 
     final messengerKey = GlobalKey<ScaffoldMessengerState>();
     await tester.pumpWidget(DZMarketApp(scaffoldMessengerKey: messengerKey));
-    await tester.pumpAndSettle();
+    await waitFor(find.text('Se connecter'));
 
     expect(find.text('Se connecter'), findsOneWidget);
 
@@ -34,11 +47,11 @@ void main() {
       TestEnv.testEmail!,
       TestEnv.testPassword!,
     );
-    await tester.pumpAndSettle();
+    await waitFor(find.byType(HomeShell));
     expect(find.byType(HomeShell), findsOneWidget);
 
     await AuthService.instance.signOut();
-    await tester.pumpAndSettle();
+    await waitFor(find.text('Se connecter'));
     expect(find.text('Se connecter'), findsOneWidget);
   }, skip: !TestEnv.hasAuthCreds);
 }

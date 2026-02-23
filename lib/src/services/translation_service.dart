@@ -23,7 +23,7 @@ class TranslationService {
       );
       for (final row in rows) {
         final key = row['key'] as String? ?? '';
-        final locale = row['locale'] as String? ?? '';
+        final locale = _normalizeLocaleCode(row['locale'] as String? ?? '');
         final text = row['text'] as String? ?? '';
         if (key.isEmpty || locale.isEmpty || text.isEmpty) continue;
         if (_looksCorrupt(locale, text) || _looksPlaceholderText(key, text)) {
@@ -64,7 +64,7 @@ class TranslationService {
   }
 
   String? translate(String locale, String key) {
-    final normalized = locale.toLowerCase();
+    final normalized = _normalizeLocaleCode(locale);
     if (normalized == 'fr' ||
         normalized.startsWith('fr_') ||
         normalized.startsWith('fr-')) {
@@ -76,6 +76,22 @@ class TranslationService {
       return _cache['ar']?[key];
     }
     return _cache['fr']?[key] ?? _cache[normalized]?[key];
+  }
+
+  String _normalizeLocaleCode(String locale) {
+    final normalized = locale.trim().toLowerCase();
+    if (normalized.isEmpty) return '';
+    if (normalized == 'fr' ||
+        normalized.startsWith('fr_') ||
+        normalized.startsWith('fr-')) {
+      return 'fr';
+    }
+    if (normalized == 'ar' ||
+        normalized.startsWith('ar_') ||
+        normalized.startsWith('ar-')) {
+      return 'ar';
+    }
+    return normalized;
   }
 
   bool _looksCorrupt(String locale, String text) {
@@ -102,11 +118,31 @@ class TranslationService {
   bool _looksPlaceholderText(String key, String text) {
     final normalizedKey = _normalizePlaceholderCandidate(key);
     final normalizedText = _normalizePlaceholderCandidate(text);
-    if (normalizedText == normalizedKey) return true;
+    if (normalizedText.isEmpty || normalizedText == normalizedKey) return true;
+    final collapsedText = normalizedText
+        .replaceAll(RegExp(r'[\u00A0\u2007\u202F]'), ' ')
+        .replaceAll(RegExp(r'\s+'), '')
+        .replaceAll(RegExp("[\"'`«»“”]"), '');
+    if (collapsedText == normalizedKey) return true;
     // Some DB rows contain hidden bidi/zero-width chars around values that are
     // effectively i18n keys (e.g. "listing.add.title_label"). Treat all such
     // key-like values as placeholders so assets stay authoritative.
-    return RegExp(r'^[a-z0-9_-]+(?:\.[a-z0-9_-]+)+$').hasMatch(normalizedText);
+    if (_looksDottedPlaceholder(collapsedText) ||
+        _looksDottedPlaceholder(normalizedText)) {
+      return true;
+    }
+    final dots = '.'.allMatches(collapsedText).length;
+    if (dots >= 2 &&
+        !collapsedText.contains(' ') &&
+        collapsedText.length <= normalizedKey.length + 8 &&
+        collapsedText.startsWith(normalizedKey.split('.').first)) {
+      return true;
+    }
+    return false;
+  }
+
+  bool _looksDottedPlaceholder(String value) {
+    return RegExp(r'^[a-z0-9_-]+(?:\.[a-z0-9_-]+)+$').hasMatch(value);
   }
 
   String _normalizePlaceholderCandidate(String input) {

@@ -28,8 +28,25 @@ void main() {
     final orderId = await OrderService().createOrder(
       productId: TestEnv.testProductId!,
       paymentMethod: 'cod',
-      shippingOption: 'home',
+      shippingOption: 'cod',
       deliveryMethod: 'home',
+      shippingCost: 0,
+      feeAmount: 0,
+      shippingSelection: const {
+        'senderWilaya': 'Alger',
+        'receiverWilaya': 'M\'Sila',
+        'receiverCommune': 'M\'Sila',
+        'firstname': 'Test',
+        'familyname': 'Test',
+        'phone': '0700000000',
+        'address': 'Test address',
+        'productList': 'Test product',
+        'price': 1000,
+        'weight': 2,
+        'height': 30,
+        'width': 30,
+        'length': 30,
+      },
     );
     expect(orderId, isNotNull);
 

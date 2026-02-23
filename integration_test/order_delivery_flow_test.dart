@@ -19,77 +19,83 @@ String _courierIdFromName(String name, String? fallback) {
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('COD: wilaya/commune load + order creation', (tester) async {
-    if (!TestEnv.hasAuthCreds || (TestEnv.testProductId ?? '').isEmpty) {
-      return;
-    }
-    await ensureSupabaseInitialized(
-      url: TestEnv.supabaseUrl!,
-      anonKey: TestEnv.supabaseAnonKey!,
-    );
+  testWidgets(
+    'COD: wilaya/commune load + order creation',
+    (tester) async {
+      if (!TestEnv.hasAuthCreds || (TestEnv.testProductId ?? '').isEmpty) {
+        return;
+      }
+      await ensureSupabaseInitialized(
+        url: TestEnv.supabaseUrl!,
+        anonKey: TestEnv.supabaseAnonKey!,
+      );
 
-    await AuthService.instance.signIn(
-      TestEnv.testEmail!,
-      TestEnv.testPassword!,
-    );
+      await AuthService.instance.signIn(
+        TestEnv.testEmail!,
+        TestEnv.testPassword!,
+      );
 
-    final courierName = TestEnv.testCourierName ?? 'Yalidine Express';
-    final courierId = _courierIdFromName(courierName, TestEnv.testCourierId);
-    final settings = {
-      if (TestEnv.testCourierApiKey != null)
-        'api_key': TestEnv.testCourierApiKey!,
-      if ((TestEnv.testCourierApiSecret ?? '').isNotEmpty)
-        'api_secret': TestEnv.testCourierApiSecret!,
-    };
+      final courierName = TestEnv.testCourierName ?? 'Yalidine Express';
+      final courierId = _courierIdFromName(courierName, TestEnv.testCourierId);
+      final settings = {
+        if (TestEnv.testCourierApiKey != null)
+          'api_key': TestEnv.testCourierApiKey!,
+        if ((TestEnv.testCourierApiSecret ?? '').isNotEmpty)
+          'api_secret': TestEnv.testCourierApiSecret!,
+      };
 
-    final shipping = ShippingService();
-    final wilayas = await shipping.fetchCourierWilayas(
-      courierId: courierId,
-      settings: settings,
-    );
-    expect(wilayas.isNotEmpty, isTrue);
-    final wilayaCode = wilayas.first['code'] ?? wilayas.first['id'] ?? '';
+      final shipping = ShippingService();
+      final wilayas = await shipping.fetchCourierWilayas(
+        courierId: courierId,
+        settings: settings,
+      );
+      expect(wilayas.isNotEmpty, isTrue);
+      final wilayaCode = wilayas.first['code'] ?? wilayas.first['id'] ?? '';
 
-    final communes = await shipping.fetchCourierCommunes(
-      courierId: courierId,
-      settings: settings,
-      wilayaCode: wilayaCode,
-    );
-    expect(communes.isNotEmpty, isTrue);
+      final communes = await shipping.fetchCourierCommunes(
+        courierId: courierId,
+        settings: settings,
+        wilayaCode: wilayaCode,
+      );
+      expect(communes.isNotEmpty, isTrue);
 
-    final orderId = await OrderService().createOrder(
-      productId: TestEnv.testProductId!,
-      paymentMethod: 'cod',
-      shippingOption: 'cod',
-      deliveryMethod: 'home',
-      shippingSelection: const {
-        'senderWilaya': 'Alger',
-        'receiverWilaya': 'M\'Sila',
-        'receiverCommune': 'M\'Sila',
-        'firstname': 'Test',
-        'familyname': 'Test',
-        'phone': '0700000000',
-        'address': 'Test address',
-        'productList': 'Test product',
-        'price': 1000,
-        'weight': 2,
-        'height': 30,
-        'width': 30,
-        'length': 30,
-      },
-    );
-    expect(orderId, isNotNull);
+      final orderId = await OrderService().createOrder(
+        productId: TestEnv.testProductId!,
+        paymentMethod: 'cod',
+        shippingOption: 'cod',
+        deliveryMethod: 'home',
+        shippingCost: 0,
+        feeAmount: 0,
+        shippingSelection: const {
+          'senderWilaya': 'Alger',
+          'receiverWilaya': 'M\'Sila',
+          'receiverCommune': 'M\'Sila',
+          'firstname': 'Test',
+          'familyname': 'Test',
+          'phone': '0700000000',
+          'address': 'Test address',
+          'productList': 'Test product',
+          'price': 1000,
+          'weight': 2,
+          'height': 30,
+          'width': 30,
+          'length': 30,
+        },
+      );
+      expect(orderId, isNotNull);
 
-    final row = await Supabase.instance.client
-        .from('orders')
-        .select('id,status,payment_status')
-        .eq('id', orderId!)
-        .maybeSingle();
-    expect(row?['status'], 'pending');
-    expect(row?['payment_status'], 'pending');
+      final row = await Supabase.instance.client
+          .from('orders')
+          .select('id,status,payment_status')
+          .eq('id', orderId!)
+          .maybeSingle();
+      expect(row?['status'], 'pending');
+      expect(row?['payment_status'], 'pending');
 
-    await AuthService.instance.signOut();
-  }, skip: !TestEnv.hasAuthCreds || (TestEnv.testProductId ?? '').isEmpty);
+      await AuthService.instance.signOut();
+    },
+    skip: !TestEnv.hasAuthCreds || (TestEnv.testProductId ?? '').isEmpty,
+  );
 
   testWidgets('COD: invalid product triggers error', (tester) async {
     if (!TestEnv.hasAuthCreds) {
@@ -106,10 +112,8 @@ void main() {
     );
 
     expect(
-      () async => OrderService().createOrder(
-        productId: '0',
-        paymentMethod: 'cod',
-      ),
+      () async =>
+          OrderService().createOrder(productId: '0', paymentMethod: 'cod'),
       throwsA(anything),
     );
 

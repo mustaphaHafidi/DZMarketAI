@@ -1838,6 +1838,20 @@ class L10n {
       }
     }
 
+    if (_looksKeyLikePlaceholder(text)) {
+      final hard =
+          _hardFallback(normalizedLocale, key) ?? _hardFallback('fr', key);
+      if (hard != null && !_looksCorrupt(hard)) {
+        text = hard;
+      } else if (fallback != null &&
+          !_looksCorrupt(fallback) &&
+          !_looksKeyLikePlaceholder(fallback)) {
+        text = fallback;
+      } else {
+        text = _humanizeKey(key);
+      }
+    }
+
     if (params != null && params.isNotEmpty) {
       params.forEach((k, v) {
         text = text.replaceAll('{$k}', v);
@@ -1922,5 +1936,15 @@ class L10n {
         )
         .trim()
         .toLowerCase();
+  }
+
+  static String _humanizeKey(String key) {
+    final last = key.split('.').last;
+    if (last.isEmpty) return key;
+    return last
+        .split('_')
+        .where((part) => part.isNotEmpty)
+        .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+        .join(' ');
   }
 }
