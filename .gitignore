@@ -58,3 +58,9 @@ rollout-*.jsonl
 # Local ops secrets (never commit)
 infra/hetzner/.secrets.local.md
 infra/hetzner/*.local.secrets.md
+
+# Local load-test/runtime artifacts (never commit)
+/load/env.local
+/k6-results/
+/dzmarket-web.zip
+/K6 test.txt

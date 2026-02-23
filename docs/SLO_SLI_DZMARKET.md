@@ -88,3 +88,16 @@ P3 (normal priority):
 - Daily: quick check of 5xx, p95, infrastructure saturation
 - Weekly: capacity review and scaling decision
 - Monthly: SLO report, error budget policy, threshold tuning
+
+## 8) Quick Operational Check Command
+Run from repository root:
+
+```powershell
+.\scripts\sli_quick_check.ps1
+```
+
+This command validates:
+- p95/error rate on app/api/auth/storage endpoints
+- DB active connections ratio
+- unhealthy containers
+- Caddy 5xx ratio over the selected window
