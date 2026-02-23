@@ -89,12 +89,47 @@ After:
 2. Write bottleneck summary and scaling decision.
 3. Create follow-up issues with owner + ETA.
 
-## 8) Minimal k6 Structure (example)
+## 8) k6 Structure (implemented)
+- `load/shared.js`
 - `load/auth.js`
 - `load/listings.js`
 - `load/orders.js`
 - `load/shipments.js`
-- `load/config.js` (base URL, keys, env)
+- `load/env.example`
+- `scripts/run_k6_phase.ps1` (phase runner)
+
+### Quick start
+1. Copy env template:
+
+```powershell
+copy load/env.example load/env.local
+```
+
+2. Fill `ANON_KEY` and (optionally) test tokens in `load/env.local`.
+   - For realistic auth load, use a user pool instead of one account:
+     - `AUTH_TEST_MODE=pool`
+     - `TEST_USERS_JSON=[{"email":"u1@test.com","password":"..."},{"email":"u2@test.com","password":"..."}]`
+   - Optional auth SLO override for experiments: `AUTH_P95_MS=1500`
+
+3. Dry-run command generation:
+
+```powershell
+.\scripts\run_k6_phase.ps1 -Phase baseline -Scenario listings -EnvFile load/env.local -DryRun
+```
+
+4. Execute baseline:
+
+```powershell
+.\scripts\run_k6_phase.ps1 -Phase baseline -Scenario listings -EnvFile load/env.local
+```
+
+5. Execute other phases:
+
+```powershell
+.\scripts\run_k6_phase.ps1 -Phase step -Scenario auth -EnvFile load/env.local
+.\scripts\run_k6_phase.ps1 -Phase spike -Scenario orders -EnvFile load/env.local
+.\scripts\run_k6_phase.ps1 -Phase soak -Scenario shipments -EnvFile load/env.local
+```
 
 ## 9) Reporting Template
 - Test date/time:
@@ -106,3 +141,34 @@ After:
 - Immediate actions (24h):
 - Short-term actions (7d):
 - Long-term scaling actions (30d):
+
+## 10) Latest Capacity Validation (2026-02-23)
+
+Validated with `scripts/run_k6_mix_matrix.ps1` using `load/env.local`:
+
+| Test | Duration | Result |
+|---|---:|---|
+| listings=220 + auth=5 | 30m | PASS |
+| listings=220 + auth=5 | 120m soak | PASS |
+| listings=230 + auth=5 | 30m | PASS |
+| listings=240 + auth=5 | 30m | FAIL (listings threshold breach) |
+
+Observed limit (current stack):
+- Hard limit (short run): `230 listings + 5 auth`
+- Stable soak limit: `220 listings + 5 auth`
+
+Recommended production operating budget (15% safety margin):
+- `195 listings + 4 auth`
+
+Notes:
+- In these matrix runs, `sli_check` can be `SKIP` if SSH is unstable on the load runner.
+- Run `scripts/sli_quick_check.ps1` from a host with stable SSH reachability before final go/no-go.
+
+## 11) Next Optimization Track (to unlock 240+ reliably)
+
+1. Read-path query/index tuning on `products` browse/filter endpoints.
+2. Add short TTL cache for anonymous browse responses (edge/API layer).
+3. Re-test matrix:
+   - `230+5` (confirm baseline),
+   - `240+5`,
+   - `250+5` only if `240+5` passes.

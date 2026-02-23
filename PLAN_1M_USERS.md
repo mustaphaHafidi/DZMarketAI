@@ -71,6 +71,16 @@
 3. Definir runbook incident (DB saturee, queue bloquee, provider transport down).
 4. Mettre en place revue capacite hebdomadaire (SLO + couts + saturation).
 
+## 9.1) Capacite mesuree (etat actuel)
+- Mix valide 30 min: `230 listings + 5 auth`.
+- Mix valide 2h (soak): `220 listings + 5 auth`.
+- Echec observe a `240 listings + 5 auth` (depassement latence listings).
+- Budget d'exploitation recommande (marge 15%): `195 listings + 4 auth`.
+
+Implication:
+- La croissance utilisateurs est possible si la concurrence active reste dans ce budget.
+- Pour augmenter ce budget, prioriser optimisation read-path (listings) puis retester.
+
 ## 10) Checklist avant scale publique large
 - Test E2E complet (web + mobile) valide.
 - Test charge valide avec rapport chiffre.
