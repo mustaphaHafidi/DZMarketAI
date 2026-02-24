@@ -11,6 +11,11 @@ if (-not (Test-Path $SshKeyPath)) {
   throw "SSH key not found: $SshKeyPath"
 }
 
+$sshBin = "$env:WINDIR\System32\OpenSSH\ssh.exe"
+if (-not (Test-Path $sshBin)) {
+  $sshBin = "ssh"
+}
+
 $sendRecovery = if ($SendRecoveryTest.IsPresent) { "true" } else { "false" }
 
 $remoteScript = @'
@@ -86,7 +91,10 @@ $encodedScript = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($remot
 $remoteCommand = "echo '$encodedScript' | base64 -d | bash -s -- '$TestEmail' '$sendRecovery'"
 
 Write-Host "Running auth smoke check on root@$AppServerIp ..."
-& ssh -i $SshKeyPath -o IdentitiesOnly=yes "root@$AppServerIp" $remoteCommand
+$sshOut = & $sshBin -o BatchMode=yes -i $SshKeyPath -o IdentitiesOnly=yes "root@$AppServerIp" $remoteCommand 2>&1
+if ($sshOut) {
+  $sshOut | Write-Output
+}
 
 if ($LASTEXITCODE -ne 0) {
   throw "Auth smoke check failed."

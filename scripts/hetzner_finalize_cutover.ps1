@@ -16,9 +16,14 @@ if (-not (Test-Path $SshKeyPath)) {
   throw "SSH key not found: $SshKeyPath"
 }
 
+$sshBin = "$env:WINDIR\System32\OpenSSH\ssh.exe"
+if (-not (Test-Path $sshBin)) {
+  $sshBin = "ssh"
+}
+
 Write-Host "Step 1/4 - Read keys from dzm-app-01 .env"
 $remoteCmd = "grep -E '^(ANON_KEY|SERVICE_ROLE_KEY)=' /opt/supabase/docker/.env"
-$raw = & ssh -i $SshKeyPath -o IdentitiesOnly=yes "root@$AppServerIp" $remoteCmd
+$raw = & $sshBin -o BatchMode=yes -i $SshKeyPath -o IdentitiesOnly=yes "root@$AppServerIp" $remoteCmd
 
 $anonLine = ($raw | Where-Object { $_ -like "ANON_KEY=*" } | Select-Object -First 1)
 $serviceLine = ($raw | Where-Object { $_ -like "SERVICE_ROLE_KEY=*" } | Select-Object -First 1)
