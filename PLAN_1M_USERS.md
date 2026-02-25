@@ -81,6 +81,13 @@ Implication:
 - La croissance utilisateurs est possible si la concurrence active reste dans ce budget.
 - Pour augmenter ce budget, prioriser optimisation read-path (listings) puis retester.
 
+## 9.2) Validation lancement large (25 Feb 2026)
+- Gate final PASS: mix `220 listings + 5 auth` (60m) + SLI PASS + auth smoke PASS.
+- Monitoring 24h + 48h: stable, pas d'incident critique.
+- Capacite prod validee actuelle: `220 + 5`.
+- Budget recommande (marge 15%): `195 listings + 4 auth`.
+- Prochaine montee planifiee: `230`, puis `240` (30m, avec SLI check).
+
 ## 10) Checklist avant scale publique large
 - Test E2E complet (web + mobile) valide.
 - Test charge valide avec rapport chiffre.
