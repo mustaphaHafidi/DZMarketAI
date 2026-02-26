@@ -1,0 +1,39 @@
+workflows:
+  ios-testflight:
+    name: DZMarket iOS TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    integrations:
+      app_store_connect: dzmarket_appstore
+    environment:
+      flutter: stable
+      xcode: latest
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.dzmarket.app
+      vars:
+        APP_FLAVOR: prod
+        ENABLE_ANALYTICS: "true"
+        ENABLE_CRASHLYTICS: "true"
+    scripts:
+      - name: Flutter pub get
+        script: |
+          flutter pub get
+      - name: Build IPA
+        script: |
+          flutter build ipa \
+            --release \
+            --build-name=1.0.1 \
+            --build-number=$BUILD_NUMBER \
+            --dart-define=APP_FLAVOR=$APP_FLAVOR \
+            --dart-define=SUPABASE_URL=$SUPABASE_URL \
+            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+            --dart-define=ENABLE_ANALYTICS=$ENABLE_ANALYTICS \
+            --dart-define=ENABLE_CRASHLYTICS=$ENABLE_CRASHLYTICS
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
