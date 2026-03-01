@@ -426,6 +426,9 @@ class L10n {
     'legal.imprint.body':
         'Éditeur : Master Codes\nForme juridique : À compléter\nRC/NIF : À compléter\nAdresse : À compléter\nEmail : Dzmarket@dzmarket.dz\nHébergeur : À compléter\n\nResponsable légal : À compléter.',
     'legal.imprint.title': 'Mentions légales',
+    'legal.account_deletion.title': 'Suppression de compte',
+    'legal.account_deletion.body':
+        'Pour demander la suppression de votre compte DZMarket et des donnees associees, envoyez un email a Dzmarket@dzmarket.dz avec l\'adresse email du compte concerne et l\'objet "Suppression de compte".\n\nNous supprimons ou anonymisons les donnees de profil (nom, email, telephone), les annonces, les messages et les preferences non obligatoires.\n\nCertaines donnees peuvent etre conservees temporairement pour des obligations legales, comptables, antifraude et de securite (maximum 36 mois sauf obligation legale plus longue).\n\nDelai de traitement: sous 30 jours maximum.',
     'legal.privacy.body':
         'Nous collectons les données nécessaires au fonctionnement de DZMarket : email, téléphone, adresse, annonces, messages et commandes.\n\nFinalités : création de compte, exécution des commandes, livraison, support et prévention des abus.\n\nBase légale : consentement explicite et obligations légales (loi 18-07, loi 18-05).\n\nConservation : 36 mois ou jusqu’à suppression du compte, sauf obligations légales.\n\nVos droits : accès, rectification, suppression et opposition. Contact : Dzmarket@dzmarket.dz.\n\nResponsable du traitement : Master Codes.',
     'legal.privacy.title': 'Politique de confidentialité',
@@ -1326,6 +1329,9 @@ class L10n {
     'legal.imprint.body':
         'الناشر: Master Codes\nالشكل القانوني: يُستكمل لاحقاً\nرقم السجل/التعريف: يُستكمل لاحقاً\nالعنوان: يُستكمل لاحقاً\nالبريد الإلكتروني: Dzmarket@dzmarket.dz\nالاستضافة: يُستكمل لاحقاً\n\nالمسؤول القانوني: يُستكمل لاحقاً.',
     'legal.imprint.title': 'البيانات القانونية',
+    'legal.account_deletion.title': 'Suppression de compte',
+    'legal.account_deletion.body':
+        'Pour demander la suppression de votre compte DZMarket et des donnees associees, envoyez un email a Dzmarket@dzmarket.dz avec l\'adresse email du compte concerne et l\'objet "Suppression de compte".\n\nNous supprimons ou anonymisons les donnees de profil (nom, email, telephone), les annonces, les messages et les preferences non obligatoires.\n\nCertaines donnees peuvent etre conservees temporairement pour des obligations legales, comptables, antifraude et de securite (maximum 36 mois sauf obligation legale plus longue).\n\nDelai de traitement: sous 30 jours maximum.',
     'legal.privacy.body':
         'نقوم بجمع البيانات اللازمة لتشغيل DZMarket: البريد الإلكتروني، الهاتف، العنوان، الإعلانات، الرسائل والطلبات.\n\nالأهداف: إنشاء الحساب، تنفيذ الطلبات، التوصيل، الدعم، ومنع إساءة الاستخدام.\n\nالأساس القانوني: موافقة صريحة والالتزامات القانونية (القانون 18-07، القانون 18-05).\n\nمدة الاحتفاظ: 36 شهراً أو حتى حذف الحساب، إلا إذا فرض القانون خلاف ذلك.\n\nحقوقك: الاطلاع، التصحيح، الحذف والاعتراض. للتواصل: Dzmarket@dzmarket.dz.\n\nمسؤول المعالجة: Master Codes.',
     'legal.privacy.title': 'سياسة الخصوصية',

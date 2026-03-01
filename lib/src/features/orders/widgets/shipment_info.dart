@@ -1,12 +1,13 @@
 import 'package:dzmarket/src/models/shipment.dart';
+import 'package:dzmarket/src/services/label_url_service.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
-import 'package:dzmarket/src/utils/label_url_resolver.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ShipmentInfo extends StatelessWidget {
   const ShipmentInfo({super.key, required this.orderId, required this.service});
+  static final LabelUrlService _labelUrlService = LabelUrlService();
 
   final String orderId;
   final ShippingService service;
@@ -60,8 +61,27 @@ class ShipmentInfo extends StatelessWidget {
             if ((s.labelUrl ?? '').isNotEmpty)
               TextButton.icon(
                 onPressed: () async {
-                  final uri = resolveLabelUri(s.labelUrl);
-                  if (uri == null) return;
+                  final uri = await _labelUrlService.resolveFreshLabelUri(
+                    s.labelUrl,
+                    orderId: orderId,
+                  );
+                  if (uri == null) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            L10n.tr(
+                              context,
+                              'shipments.label_refresh_failed',
+                              fallback:
+                                  'Bordereau indisponible ou expiré. Réessayez dans quelques secondes.',
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+                    return;
+                  }
                   await launchUrl(uri);
                 },
                 icon: const Icon(Icons.link),

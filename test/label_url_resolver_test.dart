@@ -25,24 +25,43 @@ void main() {
     expect(normalizeLabelUrl(raw), raw);
   });
 
-  test('normalizeLabelUrl rewrites internal host when public base is known', () {
-    const raw = 'http://kong:8000/storage/v1/object/sign/labels/111.pdf';
+  test('normalizeLabelUrl upgrades api host to https when base is https', () {
+    const raw = 'http://api.dzmarket.pro/storage/v1/object/sign/labels/111.pdf';
     final configured = Uri.tryParse(SupabaseOptions.supabaseUrl);
     final normalized = normalizeLabelUrl(raw);
 
-    if (configured == null ||
-        !configured.hasScheme ||
-        configured.host.trim().isEmpty) {
-      // Local test environment may not provide SUPABASE_URL.
+    if (configured == null || configured.scheme != 'https') {
       expect(normalized, raw);
       return;
     }
 
     final resolved = Uri.parse(normalized);
-    expect(resolved.scheme, configured.scheme);
-    expect(resolved.host, configured.host);
+    expect(resolved.scheme, 'https');
+    expect(resolved.host, 'api.dzmarket.pro');
     expect(resolved.path, '/storage/v1/object/sign/labels/111.pdf');
   });
+
+  test(
+    'normalizeLabelUrl rewrites internal host when public base is known',
+    () {
+      const raw = 'http://kong:8000/storage/v1/object/sign/labels/111.pdf';
+      final configured = Uri.tryParse(SupabaseOptions.supabaseUrl);
+      final normalized = normalizeLabelUrl(raw);
+
+      if (configured == null ||
+          !configured.hasScheme ||
+          configured.host.trim().isEmpty) {
+        // Local test environment may not provide SUPABASE_URL.
+        expect(normalized, raw);
+        return;
+      }
+
+      final resolved = Uri.parse(normalized);
+      expect(resolved.scheme, configured.scheme);
+      expect(resolved.host, configured.host);
+      expect(resolved.path, '/storage/v1/object/sign/labels/111.pdf');
+    },
+  );
 
   test('resolveLabelUri returns null for empty and uri for valid links', () {
     expect(resolveLabelUri(''), isNull);

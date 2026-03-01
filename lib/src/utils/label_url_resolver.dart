@@ -10,10 +10,16 @@ const Set<String> _internalSupabaseHosts = {
   '::1',
 };
 const Set<String> _internalProxyPorts = {'8000', '8443'};
+const Set<String> _localHosts = {'localhost', '127.0.0.1', '0.0.0.0', '::1'};
 
 bool _isInternalHost(String host) {
   final normalized = host.trim().toLowerCase();
   return _internalSupabaseHosts.contains(normalized);
+}
+
+bool _isLocalHost(String host) {
+  final normalized = host.trim().toLowerCase();
+  return _localHosts.contains(normalized);
 }
 
 Uri? _parseAbsoluteHttpUri(String value) {
@@ -52,6 +58,15 @@ Uri _normalizePublicProxyPort(Uri uri, {Uri? preferredApiBase}) {
   return uri;
 }
 
+Uri _upgradeToHttpsIfNeeded(Uri uri, {Uri? preferredApiBase}) {
+  if (uri.scheme != 'http') return uri;
+  if (_isLocalHost(uri.host)) return uri;
+  if (preferredApiBase?.scheme == 'https') {
+    return uri.replace(scheme: 'https');
+  }
+  return uri;
+}
+
 String normalizeLabelUrl(String? rawUrl) {
   final trimmed = rawUrl?.trim() ?? '';
   if (trimmed.isEmpty) return '';
@@ -65,8 +80,14 @@ String normalizeLabelUrl(String? rawUrl) {
       _parseAbsoluteHttpUri(SupabaseOptions.supabaseUrl) ??
       _webApiBaseFallback();
   if (!_isInternalHost(uri.host)) {
-    return _normalizePublicProxyPort(uri, preferredApiBase: supabaseBase)
-        .toString();
+    final upgraded = _upgradeToHttpsIfNeeded(
+      uri,
+      preferredApiBase: supabaseBase,
+    );
+    return _normalizePublicProxyPort(
+      upgraded,
+      preferredApiBase: supabaseBase,
+    ).toString();
   }
   if (supabaseBase == null) return uri.toString();
 
@@ -75,8 +96,10 @@ String normalizeLabelUrl(String? rawUrl) {
     host: supabaseBase.host,
     port: supabaseBase.hasPort ? supabaseBase.port : null,
   );
-  return _normalizePublicProxyPort(rewritten, preferredApiBase: supabaseBase)
-      .toString();
+  return _normalizePublicProxyPort(
+    rewritten,
+    preferredApiBase: supabaseBase,
+  ).toString();
 }
 
 Uri? resolveLabelUri(String? rawUrl) {

@@ -2,9 +2,9 @@ import 'package:dzmarket/src/features/orders/fulfillment_page.dart';
 import 'package:dzmarket/src/models/buyer_return_stats.dart';
 import 'package:dzmarket/src/models/order.dart';
 import 'package:dzmarket/src/services/buyer_return_service.dart';
+import 'package:dzmarket/src/services/label_url_service.dart';
 import 'package:dzmarket/src/services/order_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
-import 'package:dzmarket/src/utils/label_url_resolver.dart';
 import 'package:dzmarket/src/utils/delivery_mode_utils.dart';
 import 'package:dzmarket/src/widgets/refresh_controller.dart';
 import 'package:dzmarket/src/services/i18n.dart';
@@ -25,6 +25,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
   final RefreshController _refreshController = RefreshController();
   final _orderService = OrderService();
   final _buyerReturnService = BuyerReturnService();
+  final _labelUrlService = LabelUrlService();
   Future<Map<String, BuyerReturnStats>>? _returnStatsFuture;
   int _refreshEpoch = 0;
   static const int _maxOrders = 30;
@@ -133,15 +134,11 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
                           await _triggerRefresh(userId);
                         }
                       },
-                      onOpenLabel: (labelUrl) async {
-                        final uri = resolveLabelUri(labelUrl);
-                        if (uri != null) {
-                          await launchUrl(
-                            uri,
-                            mode: LaunchMode.externalApplication,
-                          );
-                        }
-                      },
+                      onOpenLabel: (orderId, labelUrl) => _openLabel(
+                        context,
+                        orderId: orderId,
+                        labelUrl: labelUrl,
+                      ),
                       onDelete: () => _confirmDelete(context, order.id),
                       onManageArrangedDelivery: () =>
                           context.push('/order/${order.id}/chat'),
@@ -157,6 +154,40 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
         },
       ),
     );
+  }
+
+  Future<void> _openLabel(
+    BuildContext context, {
+    required String orderId,
+    required String labelUrl,
+  }) async {
+    final uri = await _labelUrlService.resolveFreshLabelUri(
+      labelUrl,
+      orderId: orderId,
+    );
+    if (uri == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              L10n.tr(
+                context,
+                'shipments.label_refresh_failed',
+                fallback:
+                    'Bordereau indisponible ou expiré. Réessayez dans quelques secondes.',
+              ),
+            ),
+          ),
+        );
+      }
+      return;
+    }
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(L10n.tr(context, 'common.error'))));
+    }
   }
 
   Future<void> _confirmDelete(BuildContext context, String orderId) async {
@@ -224,7 +255,7 @@ class _SellerOrderCard extends StatelessWidget {
   final NumberFormat currency;
   final BuyerReturnStats? buyerReturnStats;
   final VoidCallback onGenerateLabel;
-  final void Function(String labelUrl) onOpenLabel;
+  final void Function(String orderId, String labelUrl) onOpenLabel;
   final VoidCallback onDelete;
   final VoidCallback onManageArrangedDelivery;
   final bool canCancel;
@@ -345,7 +376,8 @@ class _SellerOrderCard extends StatelessWidget {
                         ),
                       if ((order.labelUrl ?? '').isNotEmpty)
                         TextButton.icon(
-                          onPressed: () => onOpenLabel(order.labelUrl!),
+                          onPressed: () =>
+                              onOpenLabel(order.id, order.labelUrl!),
                           icon: const Icon(Icons.picture_as_pdf_outlined),
                           label: Text(
                             L10n.tr(context, 'seller_orders.open_label'),

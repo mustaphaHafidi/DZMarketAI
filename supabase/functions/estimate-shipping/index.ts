@@ -666,9 +666,9 @@ serve(async (req) => {
     );
   }
 
-  // Guardrail for malformed carrier payloads (observed tiny values like 3 DZD).
+  // Guardrail for malformed carrier payloads (observed tiny values like 2-3 DZD).
   if (
-    carrierCode === "guepex" &&
+    (carrierCode === "guepex" || carrierCode === "yalidine" || carrierCode === "zrexpress") &&
     quote &&
     quote.fee > 0 &&
     quote.fee < 50

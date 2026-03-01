@@ -298,6 +298,12 @@ const parsePublicOriginCandidate = (candidate: string) => {
 };
 
 const publicSignedUrlOrigin = (req?: Request) => {
+  const shouldForceHttps = (host: string) => {
+    const normalized = host.trim().toLowerCase();
+    if (!normalized) return false;
+    return !isInternalSupabaseHost(normalized);
+  };
+
   const candidates = [
     Deno.env.get("SIGNED_URL_PUBLIC_BASE_URL") ?? "",
     Deno.env.get("API_EXTERNAL_URL") ?? "",
@@ -312,7 +318,9 @@ const publicSignedUrlOrigin = (req?: Request) => {
     const forwardedHost = firstCsvValue(req.headers.get("x-forwarded-host") ?? "");
     const host = forwardedHost || firstCsvValue(req.headers.get("host") ?? "");
     const protoRaw = firstCsvValue(req.headers.get("x-forwarded-proto") ?? "");
-    const proto = protoRaw === "http" ? "http" : "https";
+    const proto = protoRaw === "http" && !shouldForceHttps(host)
+      ? "http"
+      : "https";
     if (host) {
       const parsed = parsePublicOriginCandidate(`${proto}://${host}`);
       if (parsed) return parsed;
@@ -352,6 +360,84 @@ const rewriteSignedLabelUrl = (
   parsed.hostname = externalOrigin.hostname;
   parsed.port = externalOrigin.port;
   return parsed.toString();
+};
+
+type StorageObjectRef = {
+  bucket: string;
+  path: string;
+};
+
+const decodePathSegment = (value: string) => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
+const extractStorageObjectRef = (rawUrl: string): StorageObjectRef | null => {
+  const parsed = parseHttpUrl(textValue(rawUrl));
+  if (!parsed) return null;
+
+  const prefixes = [
+    "/storage/v1/object/sign/",
+    "/storage/v1/object/public/",
+    "/storage/v1/object/authenticated/",
+    "/storage/v1/object/",
+    "/object/sign/",
+    "/object/public/",
+    "/object/authenticated/",
+    "/object/",
+  ];
+
+  let suffix = "";
+  for (const prefix of prefixes) {
+    if (parsed.pathname.startsWith(prefix)) {
+      suffix = parsed.pathname.substring(prefix.length);
+      break;
+    }
+  }
+  if (!suffix) return null;
+
+  const firstSlash = suffix.indexOf("/");
+  if (firstSlash <= 0 || firstSlash >= suffix.length - 1) return null;
+
+  const bucket = decodePathSegment(suffix.substring(0, firstSlash)).trim();
+  const path = decodePathSegment(suffix.substring(firstSlash + 1)).trim();
+  if (!bucket || !path) return null;
+
+  return { bucket, path };
+};
+
+const refreshSignedLabelUrl = async ({
+  supabaseAdmin,
+  rawUrl,
+  preferredOrigin,
+  expiresInSeconds = 60 * 60 * 24,
+}: {
+  supabaseAdmin: ReturnType<typeof createClient>;
+  rawUrl: string;
+  preferredOrigin?: URL | null;
+  expiresInSeconds?: number;
+}) => {
+  const original = textValue(rawUrl);
+  if (!original) return original;
+  const objectRef = extractStorageObjectRef(original);
+  if (!objectRef) {
+    return rewriteSignedLabelUrl(original, { preferredOrigin });
+  }
+
+  try {
+    const { data, error } = await supabaseAdmin.storage
+      .from(objectRef.bucket)
+      .createSignedUrl(objectRef.path, expiresInSeconds);
+    if (error || !data?.signedUrl) {
+      return rewriteSignedLabelUrl(original, { preferredOrigin });
+    }
+    return rewriteSignedLabelUrl(data.signedUrl, { preferredOrigin });
+  } catch {
+    return rewriteSignedLabelUrl(original, { preferredOrigin });
+  }
 };
 
 const isPdfBytes = (bytes: Uint8Array) =>
@@ -647,10 +733,11 @@ serve(async (req) => {
     .eq("order_id", orderId)
     .maybeSingle();
   if (existingShipment?.label_url && existingShipment?.tracking_number) {
-    const safeLabelUrl = rewriteSignedLabelUrl(
-      textValue(existingShipment.label_url),
-      { preferredOrigin: requestPublicOrigin },
-    );
+    const safeLabelUrl = await refreshSignedLabelUrl({
+      supabaseAdmin,
+      rawUrl: textValue(existingShipment.label_url),
+      preferredOrigin: requestPublicOrigin,
+    });
     return jsonResponse({
       ok: true,
       tracking_number: existingShipment.tracking_number,
@@ -727,6 +814,19 @@ serve(async (req) => {
   let trackingNumber = textValue(order.tracking_number);
   let labelUrl = textValue(order.label_url);
   let summary: Record<string, unknown> | undefined;
+
+  if (trackingNumber && labelUrl) {
+    labelUrl = await refreshSignedLabelUrl({
+      supabaseAdmin,
+      rawUrl: labelUrl,
+      preferredOrigin: requestPublicOrigin,
+    });
+    return jsonResponse({
+      ok: true,
+      tracking_number: trackingNumber,
+      label_url: labelUrl,
+    });
+  }
 
   if (isYalidine) {
     if (!selection) {

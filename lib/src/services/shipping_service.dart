@@ -180,6 +180,7 @@ class ShippingService {
     'shipping.option.pickup': 'shipping.option.pickup',
     'shipping.option.local': 'shipping.option.local',
   };
+  static const double _minValidCarrierFeeDzd = 50;
 
   static String _courierWilayaCacheKey(String courierId, String? sellerId) {
     return '$courierId|${sellerId ?? ''}';
@@ -326,14 +327,79 @@ class ShippingService {
     if (fee == null || !fee.isFinite || fee < 0) return null;
     final source = (data['source']?.toString() ?? '').trim();
     final freeShipping = data['free_shipping'] == true;
+    var effectiveFee = fee;
+    var effectiveSource = source.isEmpty ? 'unknown' : source;
+
+    final suspiciousTinyCarrierQuote =
+        !freeShipping &&
+        fee > 0 &&
+        fee < _minValidCarrierFeeDzd &&
+        _isTinyQuoteGuardrailCourier(
+          courierId: safeCourierId,
+          courierName: safeCourierName,
+        );
+
+    if (suspiciousTinyCarrierQuote) {
+      effectiveFee = _fallbackFeeEstimate(
+        senderWilaya: safeSenderWilayaId ?? safeSenderWilayaName ?? '',
+        receiverWilaya: safeReceiverWilayaId ?? safeReceiverWilayaName ?? '',
+        weightKg: weightKg,
+        heightCm: heightCm,
+        widthCm: widthCm,
+        lengthCm: lengthCm,
+      );
+      effectiveSource = 'fallback_rule_guardrail';
+    }
+
     return ShippingFeeQuote(
-      fee: fee,
-      source: source.isEmpty ? 'unknown' : source,
+      fee: effectiveFee,
+      source: effectiveSource,
       freeShipping: freeShipping,
     );
   }
 
   Future<List<Map<String, String>>> fetchCouriers() async => couriers;
+
+  bool _isTinyQuoteGuardrailCourier({
+    required String courierId,
+    String? courierName,
+  }) {
+    return isGuepexCourier(courierId: courierId, courierName: courierName) ||
+        isZrExpressCourier(courierId: courierId, courierName: courierName) ||
+        (courierId.toLowerCase().contains('yalidine') ||
+            (courierName?.toLowerCase().contains('yalidine') ?? false));
+  }
+
+  double _fallbackFeeEstimate({
+    required String senderWilaya,
+    required String receiverWilaya,
+    required int weightKg,
+    required int heightCm,
+    required int widthCm,
+    required int lengthCm,
+  }) {
+    final normalizedSender = _normalizeToken(senderWilaya);
+    final normalizedReceiver = _normalizeToken(receiverWilaya);
+    final sameWilaya =
+        normalizedSender.isNotEmpty && normalizedSender == normalizedReceiver;
+    final baseFee = sameWilaya ? 300 : 700;
+    final extraWeight = (weightKg - 5).clamp(0, 9999);
+    final overweightFee = extraWeight * 70;
+    final volume = heightCm * widthCm * lengthCm;
+    final oversizeFee = volume > 500000 ? 250 : (volume > 200000 ? 120 : 0);
+    return (baseFee + overweightFee + oversizeFee).toDouble();
+  }
+
+  String _normalizeToken(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll(RegExp(r"[àâä]"), 'a')
+        .replaceAll(RegExp(r"[éèêë]"), 'e')
+        .replaceAll(RegExp(r"[îï]"), 'i')
+        .replaceAll(RegExp(r"[ôö]"), 'o')
+        .replaceAll(RegExp(r"[ùûü]"), 'u')
+        .replaceAll(RegExp(r"[^a-z0-9]+"), '');
+  }
 
   static String? _courierNameFromId(String? courierId) {
     if (courierId == null || courierId.isEmpty) return null;

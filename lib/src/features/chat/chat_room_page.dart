@@ -7,6 +7,7 @@ import 'package:dzmarket/src/services/chat_repository.dart';
 import 'package:dzmarket/src/services/connectivity_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
+import 'package:dzmarket/src/services/label_url_service.dart';
 import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:dzmarket/src/services/offer_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
@@ -35,6 +36,7 @@ class ChatRoomPage extends StatefulWidget {
 class _ChatRoomPageState extends State<ChatRoomPage> {
   final _repo = ChatRepository();
   final _offerService = OfferService();
+  final _labelUrlService = LabelUrlService();
   final _controller = TextEditingController();
   final Map<String, Future<Offer?>> _offerLookupFutures = {};
   bool _sending = false;
@@ -485,13 +487,29 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
               if (hasLabel)
                 TextButton.icon(
                   onPressed: () async {
-                    final uri = resolveLabelUri(labelUrl);
-                    if (uri != null) {
-                      await launchUrl(
-                        uri,
-                        mode: LaunchMode.externalApplication,
-                      );
+                    final uri = await _labelUrlService.resolveFreshLabelUri(
+                      labelUrl,
+                      orderId:
+                          payload['order_id']?.toString() ?? widget.orderId,
+                    );
+                    if (uri == null) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              L10n.tr(
+                                context,
+                                'shipments.label_refresh_failed',
+                                fallback:
+                                    'Bordereau indisponible ou expiré. Réessayez dans quelques secondes.',
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+                      return;
                     }
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
                   },
                   icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
                   label: Text(L10n.tr(context, 'chat.room.label_open')),

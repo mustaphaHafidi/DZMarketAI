@@ -1,9 +1,9 @@
 import 'package:dzmarket/src/features/orders/fulfillment_page.dart';
+import 'package:dzmarket/src/services/label_url_service.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/utils/delivery_mode_utils.dart';
 import 'package:dzmarket/src/services/i18n.dart';
-import 'package:dzmarket/src/utils/label_url_resolver.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -11,6 +11,8 @@ import 'package:url_launcher/url_launcher.dart';
 /// Seller dashboard for shipments with quick status change and label access.
 class ShipmentsDashboardPage extends StatelessWidget {
   const ShipmentsDashboardPage({super.key});
+
+  static final LabelUrlService _labelUrlService = LabelUrlService();
 
   String _statusLabel(BuildContext context, String status) {
     switch (status) {
@@ -188,7 +190,8 @@ class ShipmentsDashboardPage extends StatelessWidget {
                           ),
                         if (labelUrl != null)
                           TextButton.icon(
-                            onPressed: () => _openLabel(labelUrl),
+                            onPressed: () =>
+                                _openLabel(context, labelUrl, orderId: orderId),
                             icon: const Icon(
                               Icons.picture_as_pdf_outlined,
                               size: 18,
@@ -204,7 +207,8 @@ class ShipmentsDashboardPage extends StatelessWidget {
                 trailing: labelUrl != null
                     ? IconButton(
                         icon: const Icon(Icons.link),
-                        onPressed: () => _openLabel(labelUrl),
+                        onPressed: () =>
+                            _openLabel(context, labelUrl, orderId: orderId),
                       )
                     : null,
                 onTap: allowManualStatus
@@ -248,11 +252,39 @@ class ShipmentsDashboardPage extends StatelessWidget {
     );
   }
 
-  Future<void> _openLabel(String url) async {
-    final uri = resolveLabelUri(url);
-    if (uri == null) return;
+  Future<void> _openLabel(
+    BuildContext context,
+    String url, {
+    String? orderId,
+  }) async {
+    final uri = await _labelUrlService.resolveFreshLabelUri(
+      url,
+      orderId: orderId,
+    );
+    if (uri == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              L10n.tr(
+                context,
+                'shipments.label_refresh_failed',
+                fallback:
+                    'Bordereau indisponible ou expiré. Réessayez dans quelques secondes.',
+              ),
+            ),
+          ),
+        );
+      }
+      return;
+    }
     if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(L10n.tr(context, 'common.error'))),
+        );
+      }
     }
   }
 }

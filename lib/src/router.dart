@@ -167,6 +167,17 @@ GoRouter createRouter({List<NavigatorObserver> observers = const []}) {
         ),
       ),
       GoRoute(
+        path: '/legal/account-deletion',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: WebFrame(
+            child: LegalPage(
+              titleKey: 'legal.account_deletion.title',
+              bodyKey: 'legal.account_deletion.body',
+            ),
+          ),
+        ),
+      ),
+      GoRoute(
         path: '/legal/terms',
         pageBuilder: (context, state) => const NoTransitionPage(
           child: WebFrame(
