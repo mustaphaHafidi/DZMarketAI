@@ -761,6 +761,246 @@ const sendLabelReminders = async (
   return sent;
 };
 
+const isFinalShipmentStatus = (value: unknown) => {
+  const status = textValue(value).toLowerCase();
+  return status === "delivered" ||
+    status === "returned_to_sender" ||
+    status === "not_claimed" ||
+    status === "refused" ||
+    status === "cancelled";
+};
+
+const hasCarrierProgressEvent = (events: unknown) => {
+  if (!Array.isArray(events)) return false;
+  for (const event of events) {
+    const status = textValue(
+      typeof event === "object" && event !== null
+        ? (event as Record<string, unknown>).status
+        : "",
+    ).toLowerCase();
+    if (!status) continue;
+    if (isFinalShipmentStatus(status)) return true;
+    if (status !== "pending" && status !== "validated" && status !== "shipped") {
+      return true;
+    }
+  }
+  return false;
+};
+
+type CarrierScanReminderMetrics = {
+  scanned: number;
+  sent: number;
+  skipped_bad_order_id: number;
+  skipped_no_order: number;
+  skipped_arranged: number;
+  skipped_order_closed: number;
+  skipped_recent: number;
+  skipped_no_label: number;
+  skipped_final: number;
+  skipped_progress: number;
+};
+
+const emptyCarrierScanReminderMetrics = (): CarrierScanReminderMetrics => ({
+  scanned: 0,
+  sent: 0,
+  skipped_bad_order_id: 0,
+  skipped_no_order: 0,
+  skipped_arranged: 0,
+  skipped_order_closed: 0,
+  skipped_recent: 0,
+  skipped_no_label: 0,
+  skipped_final: 0,
+  skipped_progress: 0,
+});
+
+const sendCarrierScanReminders = async (
+  supabase: ReturnType<typeof createClient>,
+): Promise<CarrierScanReminderMetrics> => {
+  const metrics = emptyCarrierScanReminderMetrics();
+  const now = Date.now();
+  const olderThan = new Date(now - 4 * 24 * 60 * 60 * 1000).toISOString();
+  const maxOrders = parseEnvInt("CARRIER_SCAN_REMINDER_MAX_ORDERS", 500, 20, 5000);
+  const queries = [
+    {
+      select: "order_id,status,label_url,tracking_number,created_at,events",
+      useCreatedFilter: true,
+      orderByCreated: true,
+    },
+    {
+      select: "order_id,status,label_url,tracking_number,created_at",
+      useCreatedFilter: true,
+      orderByCreated: true,
+    },
+    {
+      select: "order_id,status,label_url,tracking_number",
+      useCreatedFilter: false,
+      orderByCreated: false,
+    },
+  ];
+
+  const isMissingColumnError = (
+    error: { code?: string; message?: string; details?: string; hint?: string } | null,
+  ) => {
+    if (!error) return false;
+    const blob = `${error.message ?? ""} ${error.details ?? ""} ${error.hint ?? ""}`.toLowerCase();
+    return blob.includes("column") &&
+      (blob.includes("events") || blob.includes("updated_at") || blob.includes("created_at"));
+  };
+
+  let shipments: Array<Record<string, unknown>> = [];
+  let lastError: { code?: string; message?: string } | null = null;
+  for (const query of queries) {
+    let builder = supabase
+      .from("shipments")
+      .select(query.select)
+      .in("status", ["pending", "validated", "shipped"])
+      .limit(maxOrders);
+    if (query.useCreatedFilter) {
+      builder = builder.lt("created_at", olderThan);
+    }
+    if (query.orderByCreated) {
+      builder = builder.order("created_at", { ascending: true });
+    } else {
+      builder = builder.order("order_id", { ascending: true });
+    }
+    const res = await builder;
+    if (!res.error) {
+      shipments = (res.data ?? []) as Array<Record<string, unknown>>;
+      lastError = null;
+      break;
+    }
+    lastError = res.error;
+    if (!isMissingColumnError(res.error)) {
+      throw res.error;
+    }
+  }
+  if (lastError) throw lastError;
+  if (shipments.length === 0) return metrics;
+  metrics.scanned = shipments.length;
+
+  const orderIds = Array.from(
+    new Set(
+      shipments
+        .map((shipment) => Number(shipment?.order_id))
+        .filter((id) => Number.isFinite(id)),
+    ),
+  ) as number[];
+  if (orderIds.length === 0) return metrics;
+
+  const orderSelects = [
+    "id,status,created_at,delivery_method,shipping_option,courier_id,courier_name",
+    "id,status,created_at,delivery_method,shipping_option,courier_id",
+    "id,status,created_at,delivery_method,shipping_option,courier_name",
+    "id,status,created_at,delivery_method,shipping_option",
+  ];
+  let ordersData: Array<Record<string, unknown>> = [];
+  let ordersError: { code?: string; message?: string; details?: string; hint?: string } | null = null;
+  for (const selectCols of orderSelects) {
+    const res = await supabase
+      .from("orders")
+      .select(selectCols)
+      .in("id", orderIds);
+    if (!res.error) {
+      ordersData = (res.data ?? []) as Array<Record<string, unknown>>;
+      ordersError = null;
+      break;
+    }
+    ordersError = res.error;
+    if (!isMissingColumnError(res.error)) {
+      throw res.error;
+    }
+  }
+  if (ordersError) throw ordersError;
+  const orderById = new Map<number, Record<string, unknown>>();
+  for (const orderRow of ordersData ?? []) {
+    const id = Number(orderRow?.id);
+    if (!Number.isFinite(id)) continue;
+    orderById.set(id, orderRow as Record<string, unknown>);
+  }
+
+  for (const shipment of shipments) {
+    const orderId = Number(shipment?.order_id);
+    if (!Number.isFinite(orderId)) {
+      metrics.skipped_bad_order_id += 1;
+      continue;
+    }
+
+    const order = orderById.get(orderId);
+    if (!order) {
+      metrics.skipped_no_order += 1;
+      continue;
+    }
+
+    if (
+      isArrangedDelivery(order?.delivery_method) ||
+      isArrangedDelivery(order?.shipping_option)
+    ) {
+      metrics.skipped_arranged += 1;
+      continue;
+    }
+
+    const orderStatus = textValue(order?.status).toLowerCase();
+    if (orderStatus === "cancelled" || orderStatus === "delivered") {
+      metrics.skipped_order_closed += 1;
+      continue;
+    }
+
+    const shipmentCreatedAt = textValue(shipment?.created_at);
+    const orderCreatedAt = textValue(order?.created_at);
+    const anchorAt = shipmentCreatedAt || orderCreatedAt;
+    if (!anchorAt) {
+      metrics.skipped_recent += 1;
+      continue;
+    }
+    const anchorMs = Date.parse(anchorAt);
+    if (!Number.isFinite(anchorMs) || anchorMs > now - 4 * 24 * 60 * 60 * 1000) {
+      metrics.skipped_recent += 1;
+      continue;
+    }
+
+    const hasLabelData = textValue(shipment?.label_url) !== "" ||
+      textValue(shipment?.tracking_number) !== "";
+    if (!hasLabelData) {
+      metrics.skipped_no_label += 1;
+      continue;
+    }
+    if (isFinalShipmentStatus(shipment?.status)) {
+      metrics.skipped_final += 1;
+      continue;
+    }
+    if (hasCarrierProgressEvent(shipment?.events)) {
+      metrics.skipped_progress += 1;
+      continue;
+    }
+
+    const currentStatus = textValue(shipment?.status).toLowerCase();
+    const safeStatus = /^[a-z0-9_]+$/.test(currentStatus) && currentStatus
+      ? currentStatus
+      : "shipped";
+
+    try {
+      await supabase.rpc("post_order_event", {
+        p_order_id: orderId,
+        p_event: "order_carrier_scan_reminder",
+        p_payload: {
+          i18n_key: "order.system.carrier_scan_reminder",
+          status: safeStatus,
+          status_i18n: `order.status.${safeStatus}`,
+          tracking_number: textValue(shipment?.tracking_number) || null,
+          courier_id: textValue(order?.courier_id) || null,
+          courier_name: textValue(order?.courier_name) || null,
+        },
+        p_dedupe_key: `order:${orderId}:carrier_scan_reminder_96h`,
+      });
+      metrics.sent += 1;
+    } catch (_) {
+      // Do not fail runner on one reminder event.
+    }
+  }
+
+  return metrics;
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") {
@@ -833,12 +1073,20 @@ serve(async (req) => {
 
   let cancelled = 0;
   let labelRemindersSent = 0;
+  let carrierScanRemindersSent = 0;
+  let carrierScanReminderDebug = emptyCarrierScanReminderMetrics();
   let returnsMetrics = emptyReturnsMetrics();
   let purgedErrors = 0;
   try {
     labelRemindersSent = await sendLabelReminders(supabase);
   } catch (_) {
     labelRemindersSent = 0;
+  }
+  try {
+    carrierScanReminderDebug = await sendCarrierScanReminders(supabase);
+    carrierScanRemindersSent = carrierScanReminderDebug.sent;
+  } catch (_) {
+    carrierScanRemindersSent = 0;
   }
   try {
     const { data: cancelledCount } = await supabase.rpc("cancel_stale_orders", {});
@@ -871,6 +1119,8 @@ serve(async (req) => {
     processed: results.length,
     create_shipment_failures: createShipmentFailures,
     label_reminders_sent: labelRemindersSent,
+    carrier_scan_reminders_sent: carrierScanRemindersSent,
+    carrier_scan_reminder_debug: carrierScanReminderDebug,
     cancelled,
     returns: returnsMetrics.returns_inserted,
     returns_metrics: returnsMetrics,

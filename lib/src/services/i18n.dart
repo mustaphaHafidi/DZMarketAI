@@ -697,6 +697,8 @@ class L10n {
         'Commande enregistree, en attente de validation vendeur.',
     'order.system.label_reminder':
         'Rappel vendeur: veuillez generer le bordereau avant annulation automatique.',
+    'order.system.carrier_scan_reminder':
+        'Retard transporteur: bordereau cree mais aucun scan colis. Merci de verifier la prise en charge.',
     'order.system.pickup_request':
         'Bonjour, je souhaite une livraison a convenir (remise locale ou transporteur externe). Merci de preciser la methode, le cout et le delai.',
     'order.system.returned': 'Retour colis detecte.',
@@ -1586,6 +1588,8 @@ class L10n {
     'order.system.created': 'تم تسجيل الطلب، في انتظار موافقة البائع.',
     'order.system.label_reminder':
         'تذكير للبائع: يرجى إنشاء البوليصة قبل الإلغاء التلقائي.',
+    'order.system.carrier_scan_reminder':
+        'تأخير من شركة النقل: تم إنشاء البوليصة لكن لا يوجد مسح طرد للآن. يرجى التحقق من التكفل.',
     'order.system.pickup_request':
         'مرحبًا، أرغب في توصيل باتفاق (تسليم محلي أو ناقل خارجي). يرجى تحديد الطريقة والتكلفة والموعد.',
     'order.system.returned': 'تم تسجيل إرجاع الشحنة.',
