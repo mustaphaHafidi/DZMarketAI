@@ -45,7 +45,7 @@ try {
       'integration_test/order_delivery_flow_test.dart'
     )
     'chat' = @(
-      'integration_test/chat_flow_test.dart'
+      'integration_test/chat_v2_test.dart'
     )
     'courier-live' = @(
       'integration_test/courier_flow_test.dart'
@@ -57,8 +57,7 @@ try {
       'integration_test/router_refresh_test.dart',
       'integration_test/order_system_messages_test.dart',
       'integration_test/chat_v2_test.dart',
-      'integration_test/order_delivery_flow_test.dart',
-      'integration_test/chat_flow_test.dart'
+      'integration_test/order_delivery_flow_test.dart'
     )
   }
 

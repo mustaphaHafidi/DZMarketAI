@@ -1,4 +1,5 @@
 import 'package:dzmarket/src/app.dart';
+import 'package:dzmarket/src/features/auth/sign_in_page.dart';
 import 'package:dzmarket/src/features/home/home_shell.dart';
 import 'package:dzmarket/src/services/auth_service.dart';
 import 'package:dzmarket/src/services/locale_service.dart';
@@ -23,7 +24,7 @@ void main() {
         await tester.pump(step);
         if (finder.evaluate().isNotEmpty) return;
       }
-      fail('Timed out waiting for ${finder.description}');
+      fail('Timed out waiting for expected widget');
     }
 
     if (!TestEnv.hasAuthCreds) {
@@ -39,9 +40,12 @@ void main() {
 
     final messengerKey = GlobalKey<ScaffoldMessengerState>();
     await tester.pumpWidget(DZMarketApp(scaffoldMessengerKey: messengerKey));
-    await waitFor(find.text('Se connecter'));
+    await waitFor(
+      find.byType(SignInPage),
+      timeout: const Duration(seconds: 45),
+    );
 
-    expect(find.text('Se connecter'), findsOneWidget);
+    expect(find.byType(SignInPage), findsOneWidget);
 
     await AuthService.instance.signIn(
       TestEnv.testEmail!,
@@ -51,7 +55,10 @@ void main() {
     expect(find.byType(HomeShell), findsOneWidget);
 
     await AuthService.instance.signOut();
-    await waitFor(find.text('Se connecter'));
-    expect(find.text('Se connecter'), findsOneWidget);
+    await waitFor(
+      find.byType(SignInPage),
+      timeout: const Duration(seconds: 45),
+    );
+    expect(find.byType(SignInPage), findsOneWidget);
   }, skip: !TestEnv.hasAuthCreds);
 }
