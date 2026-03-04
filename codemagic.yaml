@@ -19,10 +19,14 @@ workflows:
       - name: Flutter pub get
         script: |
           flutter pub get
+      - name: Configure iOS signing profiles
+        script: |
+          xcode-project use-profiles
       - name: Build IPA
         script: |
           flutter build ipa \
             --release \
+            --export-method=app-store \
             --build-name=1.0.1 \
             --build-number=$BUILD_NUMBER \
             --dart-define=APP_FLAVOR=$APP_FLAVOR \
