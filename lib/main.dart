@@ -19,6 +19,19 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await _bootstrapApp();
+  } catch (error, stackTrace) {
+    AppLogger.warn(
+      'Fatal bootstrap error',
+      error: error,
+      stackTrace: stackTrace,
+    );
+    runApp(_BootstrapErrorApp(error: error));
+  }
+}
+
+Future<void> _bootstrapApp() async {
   if (kIsWeb) {
     usePathUrlStrategy();
   }
@@ -97,4 +110,78 @@ class MyApp extends StatelessWidget {
       scaffoldMessengerKey: GlobalKey<ScaffoldMessengerState>(),
     );
   }
+}
+
+class _BootstrapErrorApp extends StatelessWidget {
+  const _BootstrapErrorApp({required this.error});
+
+  final Object error;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: const Color(0xFFF5F7F6),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFDCE7E1)),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'DZMarket',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'L’application n’a pas pu demarrer.',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        _bootstrapErrorMessage(error),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          height: 1.5,
+                          color: Color(0xFF41534B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _bootstrapErrorMessage(Object error) {
+  final raw = error.toString();
+  if (raw.contains('SUPABASE_URL') || raw.contains('SUPABASE_ANON_KEY')) {
+    return 'Configuration manquante: SUPABASE_URL / SUPABASE_ANON_KEY. '
+        'Regenerer le build avec les variables Codemagic de production.';
+  }
+  return 'Erreur de demarrage. Regenerer le build ou verifier la configuration '
+      'de production.';
 }
