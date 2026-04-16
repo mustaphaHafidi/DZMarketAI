@@ -13,7 +13,13 @@ class LocaleService {
   static const _supported = {'fr', 'ar'};
 
   String _normalizeCode(String code) {
-    final normalized = code.toLowerCase();
+    var normalized = code.trim();
+    if (normalized.length >= 2 &&
+        ((normalized.startsWith('"') && normalized.endsWith('"')) ||
+            (normalized.startsWith("'") && normalized.endsWith("'")))) {
+      normalized = normalized.substring(1, normalized.length - 1);
+    }
+    normalized = normalized.toLowerCase();
     if (normalized == 'ar' ||
         normalized.startsWith('ar_') ||
         normalized.startsWith('ar-')) {

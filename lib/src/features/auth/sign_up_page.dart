@@ -38,12 +38,12 @@ class _SignUpPageState extends State<SignUpPage> {
     required String fallback,
     Map<String, String>? params,
   }) {
-    return L10n.tr(context, key, fallback: fallback, params: params);
+    final locale = LocaleService.instance.locale.value?.languageCode ?? 'fr';
+    return L10n.trLocale(locale, key, fallback: fallback, params: params);
   }
 
   Future<void> _setLocale(String code) async {
     await LocaleService.instance.setLocale(code);
-    if (mounted) setState(() {});
   }
 
   Future<void> _signUp() async {
@@ -181,290 +181,318 @@ class _SignUpPageState extends State<SignUpPage> {
 
   @override
   Widget build(BuildContext context) {
-    final lang = LocaleService.instance.locale.value?.languageCode ?? 'fr';
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: Image.asset(
-                      'logos/logo_mark_ui.png',
-                      height: 124,
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'DZMarket',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _t(
-                      'auth.brand.tagline',
-                      fallback: 'Vendez, expediez, suivez - simplement.',
-                    ),
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      TextButton(
-                        onPressed: () => _setLocale('fr'),
-                        child: Text(
-                          _t('profile.lang_fr', fallback: 'Francais'),
-                          style: TextStyle(
-                            fontWeight: lang == 'fr'
-                                ? FontWeight.bold
-                                : FontWeight.normal,
+    return ValueListenableBuilder<Locale?>(
+      valueListenable: LocaleService.instance.locale,
+      builder: (context, locale, _) {
+        final lang = locale?.languageCode ?? 'fr';
+        final isRtl = lang == 'ar';
+        return Directionality(
+          textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
+          child: Scaffold(
+            body: SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Center(
+                          child: Image.asset(
+                            'logos/logo_mark_ui.png',
+                            height: 124,
+                            fit: BoxFit.contain,
                           ),
                         ),
-                      ),
-                      const Text('|'),
-                      TextButton(
-                        onPressed: () => _setLocale('ar'),
-                        child: Text(
-                          _t('profile.lang_ar', fallback: 'Arabe (Algerie)'),
-                          style: TextStyle(
-                            fontWeight: lang == 'ar'
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                          ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'DZMarket',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.headlineMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    _t(
-                      'auth.sign_up.subtitle',
-                      fallback: 'Cree ton compte pour acheter et vendre',
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _t(
-                      'auth.email_only_note',
-                      fallback: 'Connexion par email uniquement (SMS bientot)',
-                    ),
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 24),
-                  Card(
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          TextField(
-                            controller: _nameController,
-                            decoration: InputDecoration(
-                              labelText: _t(
-                                'auth.full_name',
-                                fallback: 'Nom complet',
-                              ),
-                              prefixIcon: const Icon(Icons.person_outline),
-                              helperText: _t(
-                                'common.optional',
-                                fallback: 'Optionnel',
-                              ),
-                            ),
+                        const SizedBox(height: 6),
+                        Text(
+                          _t(
+                            'auth.brand.tagline',
+                            fallback: 'Vendez, expediez, suivez - simplement.',
                           ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: _emailController,
-                            keyboardType: TextInputType.emailAddress,
-                            decoration: InputDecoration(
-                              labelText: _t('auth.email', fallback: 'Email'),
-                              prefixIcon: const Icon(Icons.email_outlined),
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            TextButton(
+                              onPressed: () => _setLocale('fr'),
+                              child: Text(
+                                _t('profile.lang_fr', fallback: 'Francais'),
+                                style: TextStyle(
+                                  fontWeight: lang == 'fr'
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                ),
+                              ),
                             ),
+                            const Text('|'),
+                            TextButton(
+                              onPressed: () => _setLocale('ar'),
+                              child: Text(
+                                _t(
+                                  'profile.lang_ar',
+                                  fallback: 'Arabe (Algerie)',
+                                ),
+                                style: TextStyle(
+                                  fontWeight: lang == 'ar'
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          _t(
+                            'auth.sign_up.subtitle',
+                            fallback: 'Cree ton compte pour acheter et vendre',
                           ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: _phoneController,
-                            keyboardType: TextInputType.phone,
-                            decoration: InputDecoration(
-                              labelText: _t(
-                                'auth.phone_optional',
-                                fallback: 'Telephone (optionnel)',
-                              ),
-                              helperText: _t(
-                                'auth.phone_helper',
-                                fallback:
-                                    'Utilise pour les notifications plus tard',
-                              ),
-                              prefixIcon: const Icon(Icons.phone_outlined),
-                            ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          _t(
+                            'auth.email_only_note',
+                            fallback:
+                                'Connexion par email uniquement (SMS bientot)',
                           ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: _passwordController,
-                            obscureText: true,
-                            decoration: InputDecoration(
-                              labelText: _t(
-                                'auth.password',
-                                fallback: 'Mot de passe',
-                              ),
-                              prefixIcon: const Icon(Icons.lock_outline),
-                            ),
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 24),
+                        Card(
+                          elevation: 4,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
                           ),
-                          const SizedBox(height: 12),
-                          if (_error != null)
-                            Text(
-                              _error!,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                            ),
-                          if (_existingAccountError)
-                            Wrap(
-                              spacing: 8,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                TextButton(
-                                  onPressed: _loading
-                                      ? null
-                                      : () => _goToSignInWithEmail(
-                                          _emailController.text.trim(),
-                                        ),
-                                  child: Text(
-                                    _t(
-                                      'auth.sign_in.cta',
-                                      fallback: 'Se connecter',
+                                TextField(
+                                  controller: _nameController,
+                                  decoration: InputDecoration(
+                                    labelText: _t(
+                                      'auth.full_name',
+                                      fallback: 'Nom complet',
+                                    ),
+                                    prefixIcon: const Icon(
+                                      Icons.person_outline,
+                                    ),
+                                    helperText: _t(
+                                      'common.optional',
+                                      fallback: 'Optionnel',
                                     ),
                                   ),
+                                ),
+                                const SizedBox(height: 12),
+                                TextField(
+                                  controller: _emailController,
+                                  keyboardType: TextInputType.emailAddress,
+                                  decoration: InputDecoration(
+                                    labelText: _t(
+                                      'auth.email',
+                                      fallback: 'Email',
+                                    ),
+                                    prefixIcon: const Icon(
+                                      Icons.email_outlined,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                TextField(
+                                  controller: _phoneController,
+                                  keyboardType: TextInputType.phone,
+                                  decoration: InputDecoration(
+                                    labelText: _t(
+                                      'auth.phone_optional',
+                                      fallback: 'Telephone (optionnel)',
+                                    ),
+                                    helperText: _t(
+                                      'auth.phone_helper',
+                                      fallback:
+                                          'Utilise pour les notifications plus tard',
+                                    ),
+                                    prefixIcon: const Icon(
+                                      Icons.phone_outlined,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                TextField(
+                                  controller: _passwordController,
+                                  obscureText: true,
+                                  decoration: InputDecoration(
+                                    labelText: _t(
+                                      'auth.password',
+                                      fallback: 'Mot de passe',
+                                    ),
+                                    prefixIcon: const Icon(Icons.lock_outline),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                if (_error != null)
+                                  Text(
+                                    _error!,
+                                    style: TextStyle(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.error,
+                                    ),
+                                  ),
+                                if (_existingAccountError)
+                                  Wrap(
+                                    spacing: 8,
+                                    children: [
+                                      TextButton(
+                                        onPressed: _loading
+                                            ? null
+                                            : () => _goToSignInWithEmail(
+                                                _emailController.text.trim(),
+                                              ),
+                                        child: Text(
+                                          _t(
+                                            'auth.sign_in.cta',
+                                            fallback: 'Se connecter',
+                                          ),
+                                        ),
+                                      ),
+                                      TextButton(
+                                        onPressed: _loading
+                                            ? null
+                                            : () =>
+                                                  context.go('/reset-password'),
+                                        child: Text(
+                                          _t(
+                                            'auth.forgot_password',
+                                            fallback: 'Mot de passe oublie ?',
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                if (_status != null)
+                                  Text(
+                                    _status!,
+                                    style: TextStyle(
+                                      color: Colors.green.shade700,
+                                    ),
+                                  ),
+                                const SizedBox(height: 12),
+                                ElevatedButton(
+                                  onPressed: _loading ? null : _signUp,
+                                  style: ElevatedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 14,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  child: _loading
+                                      ? const SizedBox(
+                                          height: 18,
+                                          width: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : Text(
+                                          _t(
+                                            'auth.sign_up.cta',
+                                            fallback: 'Creer un compte',
+                                          ),
+                                        ),
                                 ),
                                 TextButton(
                                   onPressed: _loading
                                       ? null
-                                      : () => context.go('/reset-password'),
+                                      : () {
+                                          final email = _signupEmail;
+                                          if (email == null || email.isEmpty) {
+                                            context.go('/sign-in');
+                                            return;
+                                          }
+                                          final query = Uri(
+                                            path: '/sign-in',
+                                            queryParameters: {
+                                              'email': email,
+                                              'check_email': '1',
+                                            },
+                                          );
+                                          context.go(query.toString());
+                                        },
                                   child: Text(
                                     _t(
-                                      'auth.forgot_password',
-                                      fallback: 'Mot de passe oublie ?',
+                                      'auth.sign_up.have_account',
+                                      fallback: 'Deja inscrit ? Se connecter',
                                     ),
                                   ),
                                 ),
                               ],
                             ),
-                          if (_status != null)
-                            Text(
-                              _status!,
-                              style: TextStyle(color: Colors.green.shade700),
-                            ),
-                          const SizedBox(height: 12),
-                          ElevatedButton(
-                            onPressed: _loading ? null : _signUp,
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            TextButton(
+                              onPressed: () => context.push('/legal/privacy'),
+                              child: Text(
+                                _t(
+                                  'legal.privacy.title',
+                                  fallback: 'Politique de confidentialite',
+                                ),
                               ),
                             ),
-                            child: _loading
-                                ? const SizedBox(
-                                    height: 18,
-                                    width: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : Text(
-                                    _t(
-                                      'auth.sign_up.cta',
-                                      fallback: 'Creer un compte',
-                                    ),
-                                  ),
-                          ),
-                          TextButton(
-                            onPressed: _loading
-                                ? null
-                                : () {
-                                    final email = _signupEmail;
-                                    if (email == null || email.isEmpty) {
-                                      context.go('/sign-in');
-                                      return;
-                                    }
-                                    final query = Uri(
-                                      path: '/sign-in',
-                                      queryParameters: {
-                                        'email': email,
-                                        'check_email': '1',
-                                      },
-                                    );
-                                    context.go(query.toString());
-                                  },
-                            child: Text(
-                              _t(
-                                'auth.sign_up.have_account',
-                                fallback: 'Deja inscrit ? Se connecter',
+                            const Text('|'),
+                            TextButton(
+                              onPressed: () => context.push('/legal/terms'),
+                              child: Text(
+                                _t(
+                                  'legal.terms.title',
+                                  fallback: "Conditions d'utilisation",
+                                ),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
+                            const Text('|'),
+                            TextButton(
+                              onPressed: () => context.push('/legal/imprint'),
+                              child: Text(
+                                _t(
+                                  'legal.imprint.title',
+                                  fallback: 'Mentions legales',
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      TextButton(
-                        onPressed: () => context.push('/legal/privacy'),
-                        child: Text(
-                          _t(
-                            'legal.privacy.title',
-                            fallback: 'Politique de confidentialite',
-                          ),
-                        ),
-                      ),
-                      const Text('|'),
-                      TextButton(
-                        onPressed: () => context.push('/legal/terms'),
-                        child: Text(
-                          _t(
-                            'legal.terms.title',
-                            fallback: "Conditions d'utilisation",
-                          ),
-                        ),
-                      ),
-                      const Text('|'),
-                      TextButton(
-                        onPressed: () => context.push('/legal/imprint'),
-                        child: Text(
-                          _t(
-                            'legal.imprint.title',
-                            fallback: 'Mentions legales',
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                ],
+                ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
