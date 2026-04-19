@@ -1,75 +1,51 @@
 # DZMarket - Public Launch Runbook (J0/J1)
 
-## Scope
-- Controlled public launch with progressive traffic ramp.
-- Goal: keep core flows stable while opening to all users.
+Last update: 2026-03-03
+
+## Objectif
+Piloter un rollout public sans degrader les parcours critiques.
 
 ## Preconditions
-- Latest release deployed on production.
-- SSH access available on production server.
-- `.\scripts\sli_quick_check.ps1` available locally.
+- Derniere version prod deployee.
+- Acces SSH actif (serveur app).
+- Cle SSH valide locale (`dzmarket_hetzner`).
 
-## J0 Timeline
+## J0 - Execution
 
-### T0 - Launch Start
-1. Health checks:
-```cmd
+### T0
+```powershell
 curl.exe -I https://app.dzmarket.pro
 curl.exe -I https://api.dzmarket.pro
+.\scripts\sli_quick_check.ps1 -WindowMinutes 10 -SampleCount 30 -SshKeyPath "$env:USERPROFILE\.ssh\dzmarket_hetzner"
 ```
-2. SLI check:
-```powershell
-.\scripts\sli_quick_check.ps1 -WindowMinutes 10 -SampleCount 30
-```
-3. If PASS: open to ~25% traffic.
 
 ### T+30 min
-1. Manual smoke:
-- login/logout
-- create listing
-- checkout/order
-- seller `Mes ventes` -> `Ouvrir label`
-- forgot/reset password
-2. Run SLI check again.
+- Smoke manuel P0 (auth, listing, achat, ventes, label, i18n).
+- Rejouer `sli_quick_check`.
 
 ### T+2h
-- If stable: open to ~50% traffic.
-- Run SLI check.
+- Nouvelle fenetre SLI.
+- Verifier DB/containers/logs caddy.
 
-### T+4h
-- If stable: open to 100% traffic.
-- Run SLI check.
+### T+4h puis T+6h/T+12h/T+24h
+- `sli_quick_check` toutes les 2h.
+- `auth_smoke_check` au moins 2 fois (debut + fin J0).
 
-### T+6h / T+12h / T+24h
-- Re-run SLI check each slot.
-- Verify:
-  - auth and mail flows
-  - listing creation
-  - order + shipment label flows
-  - DB active connections
-  - container health
+## J1 (24h -> 48h)
+- Continuer monitoring renforce toutes les 2-4h.
+- Ouvrir incident si:
+  - 5xx soutenus
+  - p95 hors seuil
+  - panne auth/label/checkout
 
-## J1 Timeline (24h-48h)
-- Run SLI check every 2-4h:
-```powershell
-.\scripts\sli_quick_check.ps1 -WindowMinutes 10 -SampleCount 30
-```
-- Keep incident channel active.
-- If stable for 48h: exit reinforced monitoring mode.
+## Rollback
+Declenchement immediat si parcours P0 casse:
+1. Revenir au bundle web precedent.
+2. Recharger services critiques (kong/auth/functions si necessaire).
+3. Rejouer `sli_quick_check` + smoke minimal.
 
-## Rollback Trigger (Immediate)
-Rollback if any of these persists:
-- repeated critical user failures
-- sustained high latency beyond SLO
-- core flow broken (auth/order/label)
-
-## Rollback Actions
-1. Reduce traffic exposure.
-2. Redeploy previous web bundle.
-3. Validate auth/kong/db services.
-4. Re-run `sli_quick_check.ps1`.
-5. Resume rollout only after PASS.
-
-## Go/No-Go Rule
-- GO: SLI PASS + smoke PASS + no P1/P2.
-- NO-GO: any critical flow unstable or SLI consistently failing.
+## Definition de stabilite post-lancement
+- 48h sans incident P1/P2.
+- SLI PASS sur toutes les fenetres.
+- Auth smoke PASS.
+- Flux `achat -> bordereau -> label` stable.

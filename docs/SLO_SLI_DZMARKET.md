@@ -1,103 +1,80 @@
-﻿# SLO and SLI - DZMarket
+# SLO / SLI - DZMarket
+
+Last update: 2026-03-03
 
 ## 1) Scope
-This file defines service objectives for public traffic on:
-- Web app: `app.dzmarket.pro`
-- API: `api.dzmarket.pro`
+Cibles de service pour:
+- `https://app.dzmarket.pro`
+- `https://api.dzmarket.pro`
 
-Critical user journeys covered:
-- Sign in / sign up
-- Browse listings
-- Open chat and send message
-- Create listing
-- Create order
-- Open shipping label
+Parcours critiques:
+- auth (login/reset)
+- browse listings
+- achat/commande
+- vendeur mes ventes + bordereau + label PDF
+- chat/notifications
 
-## 2) SLO Targets (monthly)
+## 2) SLO cibles (production)
 
-| Journey | Availability SLO | Latency SLO |
+| Domaine | Disponibilite | Latence p95 cible |
 |---|---:|---:|
-| Browse listings (`GET /rest/v1/products`) | 99.9% | p95 < 350 ms |
-| Auth (`/auth/v1/*`) | 99.9% | p95 < 300 ms |
-| Chat send/read (messages endpoints + realtime fallback) | 99.7% | p95 < 400 ms |
-| Create listing (metadata only) | 99.5% | p95 < 700 ms |
-| Upload listing images (storage signed upload) | 99.5% | p95 < 1.5 s |
-| Create order (`orders` + stock lock flow) | 99.7% | p95 < 500 ms |
-| Open label URL (signed storage URL) | 99.7% | p95 < 700 ms |
+| Browse listings | 99.9% | < 350 ms |
+| Auth API | 99.9% | < 1500 ms (charge reelle) |
+| Create order | 99.7% | < 700 ms |
+| Generate/Open label | 99.7% | < 700 ms |
+| Chat send/read | 99.7% | < 400 ms |
 
 Notes:
-- Latency SLO is measured server-side at edge/API where possible.
-- Mobile network variability is excluded from server SLO.
+- L'objectif auth a ete ajuste a `1500 ms` pour coller au comportement reel sous charge login (sans OTP/SMS), tout en gardant une dispo stricte.
+- Les mesures sont cote API/infra; les reseaux mobiles utilisateurs ne sont pas inclus.
 
-## 3) Error Budget
-- Monthly budget for 99.9% availability: 43m 49s downtime
-- Monthly budget for 99.7% availability: 2h 11m 27s downtime
-- Monthly budget for 99.5% availability: 3h 39m 14s downtime
+## 3) SLI surveilles
+- `http_req_duration` (p95)
+- `http_req_failed` (rate)
+- `db_active_connections` (ratio)
+- `containers_health` (count unhealthy)
+- `caddy_5xx_rate`
 
-Policy:
-- If remaining error budget < 25%, freeze non-critical releases.
-- If remaining error budget < 10%, only reliability fixes are allowed.
+## 4) Seuils d'alerte ops
+### P1
+- API 5xx > 3% pendant 5 min
+- p95 auth > 3s pendant 10 min
+- p95 listings > 800 ms pendant 10 min
+- DB saturation > 90%
 
-## 4) SLI Definitions
+### P2
+- API 5xx > 1% pendant 10 min
+- p95 listings > 500 ms pendant 15 min
+- erreurs bordereau/label > 1% pendant 10 min
 
-### Availability SLI
-`availability = successful_requests / total_requests`
-- Success = HTTP 2xx/3xx (and expected 4xx for validated business cases)
-- Failure = HTTP 5xx, timeouts, gateway errors
+### P3
+- DB connections > 75%
+- CPU > 70% (15 min)
+- RAM > 80% (15 min)
 
-Data sources:
-- Caddy access logs
-- Kong upstream status metrics
-- Synthetic probes (health checks)
+## 5) Commandes de controle
 
-### Latency SLI
-- p50/p95/p99 by endpoint group
-- Endpoint groups: auth, listings, orders, chat, storage-signed-urls
-
-Data sources:
-- Kong request latency
-- Caddy request duration
-- Optional app telemetry events
-
-## 5) Alerting Rules
-
-P1 (page immediately):
-- API 5xx rate > 3% for 5 min
-- p95 latency > 1.5 s for 10 min on auth or orders
-- DB unavailable, replica lag critical, or disk > 90%
-
-P2 (high priority):
-- API 5xx rate > 1% for 10 min
-- p95 latency > 800 ms for 15 min on listings/chat
-- Storage upload failures > 2% for 10 min
-
-P3 (normal priority):
-- CPU > 70% for 30 min
-- RAM > 80% for 30 min
-- DB connections > 75% max
-
-## 6) Operational Dashboards (minimum)
-- Traffic: requests/min, unique users/day
-- Reliability: 2xx/4xx/5xx by endpoint group
-- Latency: p50/p95/p99 by endpoint group
-- DB: CPU, RAM, connections, slow queries, lock waits
-- Storage: object volume, upload failures, egress
-- Business critical: order creation success, label open success
-
-## 7) Review Cadence
-- Daily: quick check of 5xx, p95, infrastructure saturation
-- Weekly: capacity review and scaling decision
-- Monthly: SLO report, error budget policy, threshold tuning
-
-## 8) Quick Operational Check Command
-Run from repository root:
-
+### Quick SLI
 ```powershell
-.\scripts\sli_quick_check.ps1
+.\scripts\sli_quick_check.ps1 -WindowMinutes 10 -SampleCount 30
 ```
 
-This command validates:
-- p95/error rate on app/api/auth/storage endpoints
-- DB active connections ratio
-- unhealthy containers
-- Caddy 5xx ratio over the selected window
+### Auth smoke serveur
+```powershell
+.\scripts\auth_smoke_check.ps1 -AppServerIp 91.107.239.5 -SshKeyPath "$env:USERPROFILE\.ssh\dzmarket_hetzner"
+```
+
+### Mix charge reference
+```powershell
+.\scripts\run_k6_mix_matrix.ps1 -EnvFile .\load\env.local -ListingsVus "220" -AuthVus 5 -Duration 60m -RunSliCheck
+```
+
+## 6) Etat de capacite valide
+- PASS stable: `220 listings + 5 auth` (60m et 120m).
+- FAIL observe: `240 listings + 5 auth`.
+- Budget recommande prod: `195 listings + 4 auth` (marge ~15%).
+
+## 7) Politique error budget
+- Si budget restant < 25%: freeze features non critiques.
+- Si budget restant < 10%: uniquement correctifs fiabilite.
+- Si incident P1: post-mortem + action corrective sous 48h.

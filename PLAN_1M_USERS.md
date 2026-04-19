@@ -1,98 +1,64 @@
-﻿# Plan 1M Utilisateurs/An - DZMarket
+# Plan 1M Utilisateurs/An - DZMarket
+
+Last update: 2026-03-03
 
 ## 1) Objectif
-- Cible business: 1M utilisateurs/an (trafic annuel, croissance progressive).
-- Cible technique: disponibilite > 99.5%, temps de reponse API p95 < 400 ms.
-- Contrainte budget: scale par paliers, sans surdimensionner trop tot.
+Atteindre 1M utilisateurs/an avec croissance progressive, SLO tenus, et couts maitrises.
 
 ## 2) Hypotheses de charge
-- 3 photos max/annonce, 4 MB max/photo (12 MB brut/annonce).
-- Forte saisonnalite (pics soir/weekend, promos, retours colis).
-- Flux critiques: auth, creation annonce, messagerie, commandes, bordereaux.
+- Parcours dominant: browse listings (lecture).
+- Flux critiques: auth, commande, bordereau/label, notifications.
+- Saisonnalite forte (soir/weekend + pics promotionnels).
 
-## 3) Architecture cible
-- Web/App: `app.dzmarket.pro`
-- API Supabase/Kong: `api.dzmarket.pro`
-- Stack: Supabase self-host (Auth, PostgREST, Realtime, Storage, Edge Functions)
-- DB: PostgreSQL (primary, puis replica lecture)
-- Objet: MinIO/S3 compatible + CDN
-- Reverse proxy/TLS: Caddy
-- Securite edge: Cloudflare (DNS, SSL, WAF, rate limit)
+## 3) Capacite validee aujourd'hui
+- Mix stable certifie: `220 listings + 5 auth`.
+- Echec constate: `240 listings + 5 auth` (p95 listings depasse).
+- Budget prod recommande (marge ~15%): `195 listings + 4 auth`.
 
-## 4) Phasage de montee en charge
-### Phase A - Lancement (jusqu'a ~100k utilisateurs/an)
-- 3 noeuds separes: app/api, db, storage.
-- Sauvegardes DB + tests de restauration mensuels.
-- Alerting minimal: CPU, RAM, disque, erreurs 5xx, latence p95.
+## 4) Lecture business du budget `195 + 4`
+Ordre de grandeur actuel:
+- ~185-200 parcours listings simultanes stables
+- ~4 logins simultanes stables
+- API sans erreur soutenue si trafic reste dans ce budget
 
-### Phase B - Croissance (~100k -> 500k/an)
-- Ajout Redis (cache + throttling + anti-spike).
-- Replica PostgreSQL pour lectures lourdes (dashboard, stats vendeur).
-- Jobs asynchrones dedies (notifications, transporteurs, recalcul stats).
-- Objectif: p95 API < 350 ms.
+## 5) Architecture cible
+- Front: Flutter web/mobile.
+- API: Supabase self-host (Kong/Auth/PostgREST/Realtime/Storage/Functions).
+- Infra: Hetzner + Caddy + MinIO + PostgreSQL.
+- Domains: `app.dzmarket.pro`, `api.dzmarket.pro`, `www.dzmarket.pro` -> redirect app.
 
-### Phase C - Acceleration (~500k -> 1M/an)
-- API horizontalisee derriere LB.
-- Realtime isole si saturation.
-- DB haute dispo (primary + replica + failover teste).
-- Stockage objet redondant + politique lifecycle.
-- Objectif: p95 API < 250 ms sur endpoints critiques.
+## 6) Phases de croissance
+### Phase A (actuelle)
+- Exploitation large avec budget `195 + 4`.
+- Monitoring renforce et runbooks actifs.
 
-## 5) Seuils d'upgrade (gating)
-- CPU > 70% soutenu 15 min.
-- RAM > 80% soutenu 15 min.
-- DB connexions > 75% du max.
-- p95 endpoint critique > 400 ms (3 fenetres de suite).
-- Erreurs 5xx > 1% sur 5 min.
-- Stockage > 75% capacite.
+### Phase B
+- Optimisation read-path browse (indexes, select, pagination stricte).
+- Cache court TTL sur browse anonyme.
+- Re-test `230+5`, puis `240+5`.
 
-## 6) Optimisations produit obligatoires
-- Pagination stricte sur annonces/messages.
-- Index DB revus trimestriellement (orders, messages, products, shipments).
-- Pre-calcul KPI vendeur (eviter agregats lourds en live).
-- Upload image: compression + miniatures + controle taille.
-- Rate-limit sur auth, reset password, creation offre/commande.
+### Phase C
+- Si `240+5` stable:
+  - recalcul budget prod
+  - plan scale infra (DB lectures/cache/LB) selon cout/impact.
 
-## 7) Securite et conformite
-- Secrets hors repo (`.env`, secret manager CI/CD).
-- RLS stricte + audit des policies.
-- Chiffrement des tokens transporteurs et journaux d'acces.
-- Backup off-site hebdo + test restore mensuel.
-- Journalisation des actions sensibles (auth, commandes, remboursements).
+## 7) Seuils d'upgrade
+- p95 listings > 350ms soutenu
+- auth p95 > 1500ms soutenu
+- API 5xx > 1%
+- DB connections > 75%
+- CPU ou RAM > 80% soutenu
 
-## 8) Budget indicatif
-- Phase A: 200-400 EUR/mois
-- Phase B: 400-900 EUR/mois
-- Phase C: 900-1800 EUR/mois
+## 8) Checklist operationnelle hebdo
+1. `sli_quick_check`
+2. `auth_smoke_check`
+3. echantillon smoke manuel P0
+4. revue couts + capacity tracker
+5. decision: keep / optimize / scale
 
-## 9) Roadmap operationnelle (prochaines actions)
-1. Finaliser observabilite (dashboards + alertes p95/5xx).
-2. Executer tests de charge realistes (auth, chat, annonce, commande, label).
-3. Definir runbook incident (DB saturee, queue bloquee, provider transport down).
-4. Mettre en place revue capacite hebdomadaire (SLO + couts + saturation).
-
-## 9.1) Capacite mesuree (etat actuel)
-- Mix valide 30 min: `230 listings + 5 auth`.
-- Mix valide 2h (soak): `220 listings + 5 auth`.
-- Echec observe a `240 listings + 5 auth` (depassement latence listings).
-- Budget d'exploitation recommande (marge 15%): `195 listings + 4 auth`.
-
-Implication:
-- La croissance utilisateurs est possible si la concurrence active reste dans ce budget.
-- Pour augmenter ce budget, prioriser optimisation read-path (listings) puis retester.
-
-## 9.2) Validation lancement large (25 Feb 2026)
-- Gate final PASS: mix `220 listings + 5 auth` (60m) + SLI PASS + auth smoke PASS.
-- Monitoring 24h + 48h: stable, pas d'incident critique.
-- Capacite prod validee actuelle: `220 + 5`.
-- Budget recommande (marge 15%): `195 listings + 4 auth`.
-- Prochaine montee planifiee: `230`, puis `240` (30m, avec SLI check).
-
-## 10) Checklist avant scale publique large
-- Test E2E complet (web + mobile) valide.
-- Test charge valide avec rapport chiffre.
-- Rollback DB + rollback web documentes et testes.
-- Support operationnel pret (retours, litiges, pannes transporteurs).
-
----
-Reference execution: `NEXT_UPDATES.md` (priorites) + `infra/HETZNER_MIGRATION_RUNBOOK.md` (runbook infra).
+## 9) Commandes de reference
+```powershell
+.\scripts\run_k6_mix_matrix.ps1 -EnvFile .\load\env.local -ListingsVus "220,230,240" -AuthVus 5 -Duration 30m -RunSliCheck
+.\scripts\run_k6_mix_matrix.ps1 -EnvFile .\load\env.local -ListingsVus "220" -AuthVus 5 -Duration 120m -RunSliCheck
+.\scripts\sli_quick_check.ps1 -WindowMinutes 10 -SampleCount 30 -SshKeyPath "$env:USERPROFILE\.ssh\dzmarket_hetzner"
+```

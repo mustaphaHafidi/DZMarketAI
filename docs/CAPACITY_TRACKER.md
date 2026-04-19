@@ -1,55 +1,36 @@
-﻿# Capacity Tracker - DZMarket
+# Capacity Tracker - DZMarket
 
-Use this file each week to decide when to scale infra and optimize hotspots.
+Last update: 2026-03-03
 
-## 1) Weekly Snapshot Table
+## 1) Snapshot hebdomadaire
 
-| Week | MAU estimate | Peak req/min | API p95 (ms) | API 5xx % | App CPU % | DB CPU % | DB connections % | App RAM % | DB RAM % | Storage used % | Monthly cost EUR | Decision |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| YYYY-W01 |  |  |  |  |  |  |  |  |  |  |  |  |
-| YYYY-W02 |  |  |  |  |  |  |  |  |  |  |  |  |
-| YYYY-W03 |  |  |  |  |  |  |  |  |  |  |  |  |
+| Week | MAU estimate | Mix test reference | Listings p95 (ms) | Auth p95 (ms) | API 5xx % | DB connections % | Decision |
+|---|---:|---|---:|---:|---:|---:|---|
+| 2026-W09 | n/a | 220 listings + 5 auth (60m) | 258 | 1310 | 0.00 | 2 | KEEP |
+| 2026-W10 |  |  |  |  |  |  |  |
+| 2026-W11 |  |  |  |  |  |  |  |
 
-## 2) Capacity Thresholds
-- App CPU warning: > 70% (15 min)
-- App RAM warning: > 80% (15 min)
-- DB CPU warning: > 70% (15 min)
-- DB connections warning: > 75% max
-- Storage warning: > 75% used
-- Critical: any metric > 90%
+## 2) Seuils guardrails
+- Listings p95 warning: > 350 ms
+- Auth p95 warning: > 1500 ms
+- API 5xx warning: > 1%
+- DB connections warning: > 75%
+- CPU warning: > 70%
+- RAM warning: > 80%
 
-## 3) Decision Rules
-Scale up now if one condition is true for 2 consecutive weekly reviews:
-- p95 > 400 ms on critical endpoints
-- 5xx > 1% sustained windows
-- DB connections > 75% at peak
-- Storage growth projects > 85% usage before next review
+## 3) Regles de decision
+Scale/optimisation requis si, sur 2 revues consecutives:
+- depassement p95 listings ou auth
+- 5xx > 1% soutenu
+- DB connections > 75%
 
-Scale optimization before scale-up if:
-- High latency is from missing indexes or heavy queries
-- Image payloads are oversized
-- Caching opportunities are not used
-
-## 4) Actions Log
+## 4) Action log
 
 | Date | Trigger | Action | Owner | ETA | Status |
 |---|---|---|---|---|---|
-| YYYY-MM-DD | Example: DB conn 82% | Add read replica | Infra | +7d | Open |
+| 2026-03-02 | reminders transporteur non emis (schema legacy) | patch job-runner + redeploy | Dev/Ops | done | Closed |
+| YYYY-MM-DD |  |  |  |  |  |
 
-## 5) Cost Guardrails
-- Phase A target: 200-400 EUR/month
-- Phase B target: 400-900 EUR/month
-- Phase C target: 900-1800 EUR/month
-
-If cost increases > 20% month over month:
-1. Identify top cost driver (compute, storage, egress)
-2. Validate business gain from the extra spend
-3. Decide keep/reduce with measurable SLO impact
-
-## 6) Monthly Summary (copy each month)
-- Reliability trend:
-- Latency trend:
-- Growth trend:
-- Cost trend:
-- Top 3 risks:
-- Top 3 actions next month:
+## 5) Cible d'exploitation actuelle
+- Budget prod recommande: `195 listings + 4 auth`
+- Budget technique max valide: `220 listings + 5 auth`

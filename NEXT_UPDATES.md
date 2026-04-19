@@ -1,45 +1,40 @@
 # NEXT_UPDATES
 
-Last update: 2026-02-13
+Last update: 2026-03-03
 
 ## Objectif
-Centraliser les priorites de delivery produit/technique avant le prochain release candidate.
+Suivre les updates produit/ops post-lancement avec priorisation claire.
 
-## Etat courant
-- Guepex integre dans le meme pipeline que Yalidine, EcoTrack, ZR Express.
-- Moderation image/texte active dans la creation annonce.
-- Politique moderation stricte active (`MODERATION_FAIL_OPEN=false`).
-- Chat UX modernise (hub plus lisible, badge discret hors ligne).
-- Offre en chat stabilisee avec dedupe des actions visibles.
+## Changements recents confirmes
+- Correctif `job-runner` de compatibilite schema `shipments` legacy (`updated_at/events` absents).
+- Ajout compteurs debug reminders (`carrier_scan_reminder_debug`) pour diagnostic rapide.
+- Correctif URL labels (suppression fuites d'hotes internes, ouverture PDF fiable).
+- Stabilisation PathUrlStrategy web et callback auth/reset.
+- Validation charge mixte et budget d'exploitation defini.
 
-## P0 - Blocants release
-- Valider E2E complet "offre -> reponse vendeur -> re-offre" dans une seule chat room.
-- Verifier "livraison a convenir" sans faux flux bordereau cote vendeur.
-- Rejouer `supabase.sql` sur base legacy et base neuve (zero erreur bloquante).
-- Verifier que `mes ventes` ne cree pas de ligne expedition sur simple proposition d'offre.
+## P0 - A faire maintenant
+- Validation finale i18n FR/AR des ecrans vendeur a fort impact:
+  - notifications
+  - mes ventes
+  - tableau de bord
+  - mes annonces
+  - parametres transporteur
+- Publication Android production apres validation internal track.
+- Validation reminder transporteur en conditions reelles sur les 4 carriers.
 
-## P1 - Qualite UX et fiabilite
-- Ajuster fiche produit (hierarchie visuelle, tags, prix, CTA) sans casser logique.
-- Finaliser textes FR/AR pour transport, moderation et offres.
-- Ajouter tableau de bord minimal pour echec API transporteur par run cron.
+## P1 - Prochain sprint
+- Optimisations read-path listings pour `230+5` stable.
+- Ajout auto-export des resultats k6 + SLI dans `k6-results` (rapport unifie).
+- Documentation de support utilisateur (FAQ incidents login/livraison/label).
 
-## P2 - Post RC
-- Dashboards conversion (vue produit -> offre -> commande).
-- Optimisation media reseau faible.
-- Nettoyage final Firebase config (google_app_id) par flavor.
+## P2 - Suivant
+- Pipeline iOS/TestFlight complet (quand Apple Developer actif).
+- Dashboard metier compact (conversion browse->achat, bordereaux, retours).
+- Reduction cout infra (cache + index + compression assets).
 
-## Actions recentes confirmees
-- `supabase functions deploy moderate-content` effectue.
-- Secret `MODERATION_FAIL_OPEN=false` configure.
-- Guards SQL offers ajoutes pour compatibilite des schemas existants.
-- Support Guepex ajoute dans:
-- `create_shipment`
-- `courier-locations`
-- `validate-courier`
-- `job-runner`
-
-## Definition of Done (release gate)
-- Tous les tests P0 passes.
-- Aucun bug bloquant ouvert sur Auth, Listing publish, Offer, Order, Shipment, Chat.
-- Functions critiques deployees et verifiees sur projet Supabase cible.
-- QA FR/AR validee sur device reel USB.
+## DoD release patch
+- Tests automatiques: PASS
+- Smoke manuel P0: PASS
+- SLI quick check: PASS
+- Auth smoke: PASS
+- Aucun bug bloquant ouvert sur Auth/Order/Shipment/Label/Chat.
