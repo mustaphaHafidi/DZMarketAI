@@ -45,6 +45,8 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>DZMarket utilise votre phototheque pour vous permettre d'ajouter des photos a vos annonces et messages.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
