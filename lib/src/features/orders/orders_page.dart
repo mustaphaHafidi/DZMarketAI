@@ -1,4 +1,4 @@
-﻿import 'package:dzmarket/src/models/order.dart';
+import 'package:dzmarket/src/models/order.dart';
 import 'package:dzmarket/src/services/order_service.dart';
 import 'package:dzmarket/src/services/payment_service.dart';
 import 'package:dzmarket/src/services/payment_labels.dart';
@@ -31,9 +31,7 @@ class _OrdersPageState extends State<OrdersPage> {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) {
       return Scaffold(
-        body: Center(
-          child: Text(L10n.tr(context, 'auth.signin_prompt')),
-        ),
+        body: Center(child: Text(L10n.tr(context, 'auth.signin_prompt'))),
       );
     }
 
@@ -55,13 +53,14 @@ class _OrdersPageState extends State<OrdersPage> {
           }
           final orders = snapshot.data ?? const [];
           final filtered = orders.where((o) => o.buyerId == userId).toList()
-            ..sort((a, b) => (b.createdAt ?? DateTime(0))
-                .compareTo(a.createdAt ?? DateTime(0)));
+            ..sort(
+              (a, b) => (b.createdAt ?? DateTime(0)).compareTo(
+                a.createdAt ?? DateTime(0),
+              ),
+            );
           final limited = filtered.take(_maxOrders).toList();
           if (limited.isEmpty) {
-            return Center(
-              child: Text(L10n.tr(context, 'orders.empty')),
-            );
+            return Center(child: Text(L10n.tr(context, 'orders.empty')));
           }
           return RefreshIndicator(
             onRefresh: () => _refreshController.run(
@@ -77,13 +76,15 @@ class _OrdersPageState extends State<OrdersPage> {
                   order: order,
                   currency: currency,
                   isPaying: _paying.contains(order.id),
-                  onPay: order.status == OrderStatus.pending && order.productPrice != null
+                  onPay:
+                      order.status == OrderStatus.pending &&
+                          order.productPrice != null
                       ? () => _payForOrder(
-                            context,
-                            order,
-                            service,
-                            paymentService,
-                          )
+                          context,
+                          order,
+                          service,
+                          paymentService,
+                        )
                       : null,
                 );
               },
@@ -107,9 +108,7 @@ class _OrdersPageState extends State<OrdersPage> {
       if (amount <= 0) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(L10n.tr(context, 'payment.invalid_amount')),
-            ),
+            SnackBar(content: Text(L10n.tr(context, 'payment.invalid_amount'))),
           );
         }
         return;
@@ -119,23 +118,16 @@ class _OrdersPageState extends State<OrdersPage> {
         orderId: order.id,
         amount: amount,
       );
-      await service.updateStatus(
-        orderId: order.id,
-        status: OrderStatus.paid,
-      );
+      await service.updateStatus(orderId: order.id, status: OrderStatus.paid);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(L10n.tr(context, 'payment.recorded_mock')),
-          ),
+          SnackBar(content: Text(L10n.tr(context, 'payment.recorded_mock'))),
         );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(L10n.tr(context, 'payment.error')),
-          ),
+          SnackBar(content: Text(L10n.tr(context, 'payment.error'))),
         );
       }
     } finally {
@@ -166,11 +158,7 @@ class _OrderCard extends StatelessWidget {
     final shippingService = ShippingService();
     final priceText = order.productPrice != null
         ? currency.format(order.productPrice)
-        : L10n.tr(
-            context,
-            'orders.order_fallback',
-            params: {'id': order.id},
-          );
+        : L10n.tr(context, 'orders.order_fallback', params: {'id': order.id});
     final paymentLabel = order.paymentMethod ?? 'cod';
     return Card(
       child: Padding(
@@ -221,18 +209,21 @@ class _OrderCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(bottom: 4),
               child: Chip(
-                label: Text(
-                  PaymentLabels.methodLabel(context, paymentLabel),
-                ),
+                label: Text(PaymentLabels.methodLabel(context, paymentLabel)),
                 visualDensity: VisualDensity.compact,
                 avatar: const Icon(Icons.payments_outlined, size: 16),
               ),
             ),
-            ShipmentInfo(orderId: order.id, service: shippingService),
+            ShipmentInfo(
+              orderId: order.id,
+              service: shippingService,
+              orderCreatedAt: order.createdAt,
+            ),
             const SizedBox(height: 8),
             Row(
               children: [
-                if (order.status == OrderStatus.pending && paymentLabel != 'cod')
+                if (order.status == OrderStatus.pending &&
+                    paymentLabel != 'cod')
                   ElevatedButton.icon(
                     onPressed: isPaying ? null : onPay,
                     icon: isPaying
@@ -259,7 +250,9 @@ class _OrderCard extends StatelessWidget {
                   onPressed: () => context.push('/order/${order.id}/track'),
                   icon: const Icon(Icons.map_outlined),
                 ),
-                if (userId != null && order.buyerId == userId && order.status == OrderStatus.delivered)
+                if (userId != null &&
+                    order.buyerId == userId &&
+                    order.status == OrderStatus.delivered)
                   FutureBuilder<bool>(
                     future: reviewService.hasReviewForOrder(order.id, userId),
                     builder: (context, snapshot) {
@@ -268,7 +261,11 @@ class _OrderCard extends StatelessWidget {
                       return IconButton(
                         tooltip: L10n.tr(context, 'orders.rate_seller'),
                         onPressed: () async {
-                          await _showReviewDialog(context, order, reviewService);
+                          await _showReviewDialog(
+                            context,
+                            order,
+                            reviewService,
+                          );
                         },
                         icon: const Icon(Icons.star_border),
                       );
@@ -295,9 +292,7 @@ Future<void> _showReviewDialog(
     context: context,
     builder: (context) {
       return AlertDialog(
-        title: Text(
-          L10n.tr(context, 'orders.review_title'),
-        ),
+        title: Text(L10n.tr(context, 'orders.review_title')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -337,16 +332,16 @@ Future<void> _showReviewDialog(
         actions: [
           TextButton(
             onPressed: () => navigator.pop(),
-            child: Text(
-              L10n.tr(context, 'orders.review_cancel'),
-            ),
+            child: Text(L10n.tr(context, 'orders.review_cancel')),
           ),
           TextButton(
             onPressed: () async {
               final reviewerId = supabase.auth.currentUser?.id;
               if (reviewerId == null) return;
-              final safeProductId =
-                  InputSanitizer.sanitizeId(order.productId.toString(), maxLength: 64);
+              final safeProductId = InputSanitizer.sanitizeId(
+                order.productId.toString(),
+                maxLength: 64,
+              );
               final sellerId = order.sellerId.isNotEmpty
                   ? order.sellerId
                   : await RateLimiter.instance.run(
@@ -374,16 +369,12 @@ Future<void> _showReviewDialog(
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(
-                      L10n.tr(context, 'orders.review_thanks'),
-                    ),
+                    content: Text(L10n.tr(context, 'orders.review_thanks')),
                   ),
                 );
               }
             },
-            child: Text(
-              L10n.tr(context, 'orders.review_submit'),
-            ),
+            child: Text(L10n.tr(context, 'orders.review_submit')),
           ),
         ],
       );
@@ -426,9 +417,3 @@ class _StatusChip extends StatelessWidget {
     );
   }
 }
-
-
-
-
-
-

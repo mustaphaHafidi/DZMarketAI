@@ -637,6 +637,7 @@ class L10n {
     'notifications.mark_all_read': 'Tout marquer comme lu',
     'notifications.mute_8h': 'Silence 8h',
     'notifications.muted_now': 'Notifications en pause',
+    'notifications.open_settings': 'Paramètres notifications',
     'notifications.offer.accepted': 'Offre acceptée: DA {amount}',
     'notifications.offer.counter': 'Contre-offre: DA {amount}',
     'notifications.offer.new': 'Nouvelle offre: DA {amount}',
@@ -685,6 +686,7 @@ class L10n {
     'order.status.cancelled': 'Annulee',
     'order.status.delivered': 'Livree',
     'order.status.not_claimed': 'Non reclame',
+    'order.status.out_for_delivery': 'En livraison',
     'order.status.pending': 'En attente',
     'order.status.refused': 'Refuse',
     'order.status.returned_to_sender': 'Retour expediteur',
@@ -872,10 +874,18 @@ class L10n {
     'seller_orders.empty': 'Aucune vente pour le moment.',
     'seller_orders.generate_label': 'Generer bordereau',
     'seller_orders.login_required': 'Connectez-vous pour voir vos ventes.',
-    'seller_orders.open_label': 'Ouvrir label',
+    'seller_orders.open_label': 'Ouvrir le bordereau',
     'seller_orders.order_label': 'Commande {id}',
     'seller_orders.product_label': 'Produit {id}',
     'seller_orders.return_warning': 'Historique retours : {count} (12 mois)',
+    'seller_orders.returns_dzmarket_counts':
+        'Retours DZMarket : {count6} sur 6 mois · {count12} sur 12 mois',
+    'seller_orders.returns_dzmarket_title': 'Historique retours DZMarket',
+    'seller_orders.returns_last_return': 'Dernier retour : {date}',
+    'seller_orders.returns_last_return_with_courier':
+        'Dernier retour : {date} via {courier}',
+    'seller_orders.returns_scope_note':
+        'Basé uniquement sur les commandes passées sur DZMarket.',
     'seller_orders.title': 'Mes ventes',
     'shipments.arranged_no_label':
         'Livraison a convenir: bordereau non requis.',
@@ -890,6 +900,8 @@ class L10n {
     'shipments.event_label_generated_title': 'Bordereau généré',
     'shipments.fee_label': 'Frais: {amount} DA',
     'shipments.generate_label': 'Générer le bordereau',
+    'shipments.label_retention_note':
+        'Le bordereau reste disponible pendant 6 mois après sa génération.',
     'shipments.label_ready': 'Bordereau disponible',
     'shipments.open_label': 'Ouvrir le bordereau',
     'shipments.order_label': 'Commande {id} · {carrier}',
@@ -917,6 +929,25 @@ class L10n {
     'track.no_carrier_scans': 'Aucun scan transporteur pour le moment.',
     'track.order_label': 'Commande {id}',
     'track.position': 'Position du livreur',
+    'tracking.alert.auto_cancel_soon':
+        'Aucune etiquette generee depuis 72h. La commande risque une annulation automatique.',
+    'tracking.alert.cancelled': 'Commande annulee. Le suivi est clos.',
+    'tracking.alert.dropoff_overdue':
+        'Le bordereau est genere mais aucun mouvement transporteur n\'a ete detecte. Verifiez le depot du colis.',
+    'tracking.alert.label_reminder':
+        'Rappel vendeur: genere le bordereau ou depose le colis pour eviter un blocage du suivi.',
+    'tracking.alert.not_claimed':
+        'Le colis n\'a pas ete reclame. Un retour expediteur peut suivre.',
+    'tracking.alert.refused': 'Le colis a ete refuse par le destinataire.',
+    'tracking.alert.returned_to_sender':
+        'Le colis est en retour vers le vendeur.',
+    'tracking.status.in_transit': 'En transit',
+    'tracking.status.label_ready': 'Bordereau genere',
+    'tracking.step.delivered': 'Livre',
+    'tracking.step.in_transit': 'En transit',
+    'tracking.step.label_ready': 'Bordereau',
+    'tracking.step.ordered': 'Commande',
+    'tracking.step.out_for_delivery': 'En livraison',
     'track.title': 'Suivi {id}',
     'track.waiting': 'En attente des mises à jour du livreur...',
   };
@@ -1534,6 +1565,7 @@ class L10n {
     'notifications.mark_all_read': 'تحديد الكل كمقروء',
     'notifications.mute_8h': 'كتم 8 ساعات',
     'notifications.muted_now': 'الإشعارات مكتومة مؤقتا',
+    'notifications.open_settings': 'إعدادات الإشعارات',
     'notifications.offer.accepted': 'تم قبول العرض: {amount} دج',
     'notifications.offer.counter': 'عرض مقابل: {amount} دج',
     'notifications.offer.new': 'عرض جديد: {amount} دج',
@@ -1581,6 +1613,7 @@ class L10n {
     'order.status.cancelled': 'ملغي',
     'order.status.delivered': 'تم التسليم',
     'order.status.not_claimed': 'غير مستلم',
+    'order.status.out_for_delivery': 'خرج للتسليم',
     'order.status.pending': 'قيد الانتظار',
     'order.status.refused': 'مرفوض',
     'order.status.returned_to_sender': 'مرتجع إلى المرسل',
@@ -1764,6 +1797,14 @@ class L10n {
     'seller_orders.order_label': 'طلب {id}',
     'seller_orders.product_label': 'منتج {id}',
     'seller_orders.return_warning': 'سجل المرتجعات: {count} (آخر 12 شهرًا)',
+    'seller_orders.returns_dzmarket_counts':
+        'مرتجعات DZMarket: {count6} خلال 6 أشهر · {count12} خلال 12 شهرًا',
+    'seller_orders.returns_dzmarket_title': 'سجل مرتجعات DZMarket',
+    'seller_orders.returns_last_return': 'آخر إرجاع: {date}',
+    'seller_orders.returns_last_return_with_courier':
+        'آخر إرجاع: {date} عبر {courier}',
+    'seller_orders.returns_scope_note':
+        'مبني فقط على الطلبات التي تمت عبر DZMarket.',
     'seller_orders.title': 'مبيعاتي',
     'shipments.arranged_no_label':
         'التوصيل يُتفق عليه: لا حاجة إلى بوليصة شحن.',
@@ -1776,6 +1817,8 @@ class L10n {
     'shipments.event_label_generated_title': 'تم إنشاء البوليصة',
     'shipments.fee_label': 'الرسوم: {amount} دج',
     'shipments.generate_label': 'إنشاء البوليصة',
+    'shipments.label_retention_note':
+        'يبقى البوليصة متاحًا لمدة 6 أشهر بعد إنشائه.',
     'shipments.label_ready': 'البوليصة جاهزة',
     'shipments.open_label': 'فتح البوليصة',
     'shipments.order_label': 'طلب {id} · {carrier}',
@@ -1801,6 +1844,24 @@ class L10n {
     'track.no_carrier_scans': 'لا توجد تحديثات للناقل حاليًا.',
     'track.order_label': 'طلب {id}',
     'track.position': 'موقع السائق',
+    'tracking.alert.auto_cancel_soon':
+        'لم يتم إنشاء البوليصة منذ 72 ساعة. الطلب معرّض للإلغاء التلقائي.',
+    'tracking.alert.cancelled': 'تم إلغاء الطلب. أُغلق مسار التتبع.',
+    'tracking.alert.dropoff_overdue':
+        'تم إنشاء البوليصة لكن لم يتم رصد أي حركة من الناقل. تحقّق من تسليم الطرد.',
+    'tracking.alert.label_reminder':
+        'تذكير للبائع: أنشئ البوليصة أو سلّم الطرد للناقل لتفادي تعطّل التتبع.',
+    'tracking.alert.not_claimed':
+        'لم يتم استلام الطرد. قد يتم إرجاعه إلى البائع.',
+    'tracking.alert.refused': 'تم رفض الطرد من طرف المستلم.',
+    'tracking.alert.returned_to_sender': 'الطرد في طريقه للعودة إلى البائع.',
+    'tracking.status.in_transit': 'في الطريق',
+    'tracking.status.label_ready': 'تم إنشاء البوليصة',
+    'tracking.step.delivered': 'تم التسليم',
+    'tracking.step.in_transit': 'في الطريق',
+    'tracking.step.label_ready': 'البوليصة',
+    'tracking.step.ordered': 'الطلب',
+    'tracking.step.out_for_delivery': 'خرج للتسليم',
     'track.title': 'تتبع {id}',
     'track.waiting': 'بانتظار تحديثات السائق...',
   };

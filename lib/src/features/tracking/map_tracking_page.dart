@@ -1,8 +1,10 @@
-﻿import 'package:dzmarket/src/models/driver_position.dart';
+import 'package:dzmarket/src/models/driver_position.dart';
 import 'package:dzmarket/src/models/shipment.dart';
+import 'package:dzmarket/src/models/tracking_progress.dart';
 import 'package:dzmarket/src/services/driver_service.dart';
-import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
+import 'package:dzmarket/src/services/shipping_service.dart';
+import 'package:dzmarket/src/widgets/tracking_stepper.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
@@ -32,10 +34,11 @@ class _MapTrackingPageState extends State<MapTrackingPage> {
       stream: ShippingService().streamShipment(widget.orderId),
       builder: (context, shipmentSnap) {
         final shipment = shipmentSnap.data;
+        final presentation = TrackingPresentation.fromShipment(shipment);
         final carrierLine = [
           if (shipment?.carrier?.isNotEmpty ?? false) shipment!.carrier!,
           if (shipment?.option?.isNotEmpty ?? false) shipment!.option!,
-        ].join(' Â· ');
+        ].join(' - ');
         final carrierEvents = shipment?.events ?? const <ShipmentEvent>[];
 
         return StreamBuilder<List<DriverPosition>>(
@@ -58,28 +61,34 @@ class _MapTrackingPageState extends State<MapTrackingPage> {
                   padding: const EdgeInsets.all(16),
                   children: [
                     Text(
-                      L10n.tr(context, 'track.order_label',
-                          params: {'id': widget.orderId}),
+                      L10n.tr(
+                        context,
+                        'track.order_label',
+                        params: {'id': widget.orderId},
+                      ),
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     if (carrierLine.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Text(
                         carrierLine,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyMedium
-                            ?.copyWith(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .primary),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
                       ),
                     ],
                     if ((shipment?.trackingNumber ?? '').isNotEmpty) ...[
                       const SizedBox(height: 8),
-                      Text(L10n.tr(context, 'shipments.tracking_label',
-                          params: {'tracking': shipment!.trackingNumber!})),
+                      Text(
+                        L10n.tr(
+                          context,
+                          'shipments.tracking_label',
+                          params: {'tracking': shipment!.trackingNumber!},
+                        ),
+                      ),
                     ],
+                    const SizedBox(height: 16),
+                    TrackingStepper(presentation: presentation),
                     const SizedBox(height: 16),
                     Text(
                       L10n.tr(context, 'track.carrier_timeline'),
@@ -95,14 +104,17 @@ class _MapTrackingPageState extends State<MapTrackingPage> {
                       )
                     else
                       ...carrierEvents.map(
-                        (e) => ListTile(
+                        (event) => ListTile(
                           leading: const Icon(Icons.local_shipping_outlined),
-                          title: Text(e.title),
-                          subtitle: Text([
-                            if (e.description?.isNotEmpty ?? false)
-                              e.description!,
-                            if (e.at != null) timeFormat.format(e.at!.toLocal()),
-                          ].join(' Â· ')),
+                          title: Text(_eventTitle(context, event)),
+                          subtitle: Text(
+                            [
+                              if (event.description?.isNotEmpty ?? false)
+                                event.description!,
+                              if (event.at != null)
+                                timeFormat.format(event.at!.toLocal()),
+                            ].join(' - '),
+                          ),
                         ),
                       ),
                   ],
@@ -173,32 +185,39 @@ class _MapTrackingPageState extends State<MapTrackingPage> {
                                   width: 40,
                                   height: 4,
                                   decoration: BoxDecoration(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .outlineVariant,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.outlineVariant,
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                 ),
                               ),
                               const SizedBox(height: 12),
                               Text(
-                                L10n.tr(context, 'track.order_label',
-                                    params: {'id': widget.orderId}),
+                                L10n.tr(
+                                  context,
+                                  'track.order_label',
+                                  params: {'id': widget.orderId},
+                                ),
                                 style: Theme.of(context).textTheme.titleMedium,
                               ),
                               if (carrierLine.isNotEmpty) ...[
                                 const SizedBox(height: 4),
                                 Text(
                                   carrierLine,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
+                                  style: Theme.of(context).textTheme.bodyMedium
                                       ?.copyWith(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .primary),
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primary,
+                                      ),
                                 ),
                               ],
+                              const SizedBox(height: 12),
+                              TrackingStepper(
+                                presentation: presentation,
+                                compact: true,
+                              ),
                               const SizedBox(height: 8),
                               Text(
                                 '${L10n.tr(context, 'track.last_update')}: ${latest.updatedAt?.toLocal()}',
@@ -218,24 +237,29 @@ class _MapTrackingPageState extends State<MapTrackingPage> {
                                 Text(
                                   L10n.tr(context, 'track.no_carrier_scans'),
                                   style: TextStyle(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .outline,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.outline,
                                   ),
                                 )
                               else
                                 ...carrierEvents.map(
-                                  (e) => ListTile(
+                                  (event) => ListTile(
                                     leading: const Icon(
                                       Icons.local_shipping_outlined,
                                     ),
-                                    title: Text(e.title),
-                                    subtitle: Text([
-                                      if (e.description?.isNotEmpty ?? false)
-                                        e.description!,
-                                      if (e.at != null)
-                                        timeFormat.format(e.at!.toLocal()),
-                                    ].join(' Â· ')),
+                                    title: Text(_eventTitle(context, event)),
+                                    subtitle: Text(
+                                      [
+                                        if (event.description?.isNotEmpty ??
+                                            false)
+                                          event.description!,
+                                        if (event.at != null)
+                                          timeFormat.format(
+                                            event.at!.toLocal(),
+                                          ),
+                                      ].join(' - '),
+                                    ),
                                   ),
                                 ),
                               const SizedBox(height: 12),
@@ -245,15 +269,16 @@ class _MapTrackingPageState extends State<MapTrackingPage> {
                               ),
                               const SizedBox(height: 8),
                               ...positions.map(
-                                (p) => ListTile(
+                                (position) => ListTile(
                                   leading: const Icon(
                                     Icons.navigation_outlined,
                                   ),
                                   title: Text(
-                                    '${p.lat.toStringAsFixed(4)}, ${p.lng.toStringAsFixed(4)}',
+                                    '${position.lat.toStringAsFixed(4)}, ${position.lng.toStringAsFixed(4)}',
                                   ),
                                   subtitle: Text(
-                                    p.updatedAt?.toLocal().toString() ?? '',
+                                    position.updatedAt?.toLocal().toString() ??
+                                        '',
                                   ),
                                 ),
                               ),
@@ -271,8 +296,16 @@ class _MapTrackingPageState extends State<MapTrackingPage> {
       },
     );
   }
+
+  String _eventTitle(BuildContext context, ShipmentEvent event) {
+    final i18nKey = event.i18nKey;
+    if (i18nKey != null && i18nKey.isNotEmpty) {
+      return L10n.tr(context, i18nKey, fallback: event.title);
+    }
+    final status = event.status;
+    if (status != null && status.isNotEmpty) {
+      return L10n.tr(context, 'order.status.$status', fallback: event.title);
+    }
+    return event.title;
+  }
 }
-
-
-
-

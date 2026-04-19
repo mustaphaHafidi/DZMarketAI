@@ -21,19 +21,28 @@ bool _looksCorruptText(String value) {
   return false;
 }
 
-void _expectLocalizedValue({
-  required String locale,
-  required String key,
-}) {
+void _expectLocalizedValue({required String locale, required String key}) {
   final value = L10n.trLocale(locale, key, fallback: '__missing__');
-  expect(value, isNot('__missing__'),
-      reason: 'Missing runtime translation for [$locale] $key');
-  expect(value, isNot(key),
-      reason: 'Raw key leaked for [$locale] $key => "$value"');
-  expect(_looksLikeRawKey(value), isFalse,
-      reason: 'Key-like placeholder leaked for [$locale] $key => "$value"');
-  expect(_looksCorruptText(value), isFalse,
-      reason: 'Corrupt text detected for [$locale] $key => "$value"');
+  expect(
+    value,
+    isNot('__missing__'),
+    reason: 'Missing runtime translation for [$locale] $key',
+  );
+  expect(
+    value,
+    isNot(key),
+    reason: 'Raw key leaked for [$locale] $key => "$value"',
+  );
+  expect(
+    _looksLikeRawKey(value),
+    isFalse,
+    reason: 'Key-like placeholder leaked for [$locale] $key => "$value"',
+  );
+  expect(
+    _looksCorruptText(value),
+    isFalse,
+    reason: 'Corrupt text detected for [$locale] $key => "$value"',
+  );
 }
 
 void main() {
@@ -64,6 +73,7 @@ void main() {
     'listing.add.delivery_toggle',
     'listing.add.step_preview',
     'notifications.title',
+    'notifications.open_settings',
     'notifications.preferences_title',
     'notifications.filter_all',
     'notifications.filter_unread',
@@ -77,10 +87,13 @@ void main() {
     'seller_orders.title',
     'seller_orders.generate_label',
     'seller_orders.open_label',
+    'seller_orders.returns_dzmarket_title',
+    'seller_orders.returns_scope_note',
     'seller_dashboard.title',
     'seller_dashboard.section_overview',
     'shipments.title',
     'shipments.open_label',
+    'shipments.label_retention_note',
     'profile.title',
     'profile.dashboard',
     'profile.my_listings',

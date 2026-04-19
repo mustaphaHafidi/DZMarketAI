@@ -63,6 +63,13 @@ class Order {
 
   factory Order.fromJson(Map<String, dynamic> json) {
     final statusString = (json['status'] as String?) ?? 'pending';
+    final deliveryCost = (json['delivery_cost'] as num?)?.toDouble();
+    final rawShippingCost = (json['shipping_cost'] as num?)?.toDouble();
+    final shippingCost =
+        (rawShippingCost != null && rawShippingCost > 0) ||
+            (deliveryCost == null || deliveryCost <= 0)
+        ? rawShippingCost
+        : deliveryCost;
     return Order(
       id: json['id']?.toString() ?? '',
       productId: json['product_id']?.toString() ?? '',
@@ -93,11 +100,11 @@ class Order {
       salePrice: (json['sale_price'] as num?)?.toDouble(),
       costPrice: (json['cost_price'] as num?)?.toDouble(),
       feeAmount: (json['fee_amount'] as num?)?.toDouble(),
-      deliveryCost: (json['delivery_cost'] as num?)?.toDouble(),
+      deliveryCost: deliveryCost,
       deliveryMethod: json['delivery_method'] as String?,
       courierId: json['courier_id']?.toString(),
       courierName: json['courier_name'] as String?,
-      shippingCost: (json['shipping_cost'] as num?)?.toDouble(),
+      shippingCost: shippingCost,
     );
   }
 

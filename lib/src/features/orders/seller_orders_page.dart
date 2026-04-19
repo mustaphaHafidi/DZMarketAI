@@ -15,7 +15,18 @@ import 'package:url_launcher/url_launcher.dart';
 
 /// Liste des ventes du vendeur avec action de génération de bordereau.
 class SellerOrdersPage extends StatefulWidget {
-  const SellerOrdersPage({super.key});
+  const SellerOrdersPage({
+    super.key,
+    this.orderService,
+    this.buyerReturnService,
+    this.labelUrlService,
+    this.userIdOverride,
+  });
+
+  final OrderService? orderService;
+  final BuyerReturnService? buyerReturnService;
+  final LabelUrlService? labelUrlService;
+  final String? userIdOverride;
 
   @override
   State<SellerOrdersPage> createState() => _SellerOrdersPageState();
@@ -23,9 +34,9 @@ class SellerOrdersPage extends StatefulWidget {
 
 class _SellerOrdersPageState extends State<SellerOrdersPage> {
   final RefreshController _refreshController = RefreshController();
-  final _orderService = OrderService();
-  final _buyerReturnService = BuyerReturnService();
-  final _labelUrlService = LabelUrlService();
+  late final OrderService _orderService;
+  late final BuyerReturnService _buyerReturnService;
+  late final LabelUrlService _labelUrlService;
   Future<Map<String, BuyerReturnStats>>? _returnStatsFuture;
   int _refreshEpoch = 0;
   static const int _maxOrders = 30;
@@ -33,6 +44,9 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
   @override
   void initState() {
     super.initState();
+    _orderService = widget.orderService ?? OrderService();
+    _buyerReturnService = widget.buyerReturnService ?? BuyerReturnService();
+    _labelUrlService = widget.labelUrlService ?? LabelUrlService();
     _returnStatsFuture = _buyerReturnService.fetchForSeller();
   }
 
@@ -66,7 +80,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
 
   @override
   Widget build(BuildContext context) {
-    final userId = supabase.auth.currentUser?.id;
+    final userId = widget.userIdOverride ?? supabase.auth.currentUser?.id;
     if (userId == null) {
       return Scaffold(
         body: Center(
@@ -302,37 +316,7 @@ class _SellerOrderCard extends StatelessWidget {
             Text(priceText),
             if ((buyerReturnStats?.returns12m ?? 0) > 0) ...[
               const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.warning_amber_rounded,
-                      size: 16,
-                      color: Colors.orange,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      L10n.tr(
-                        context,
-                        'seller_orders.return_warning',
-                        params: {
-                          'count': '${buyerReturnStats?.returns12m ?? 0}',
-                        },
-                      ),
-                      style: const TextStyle(color: Colors.orange),
-                    ),
-                  ],
-                ),
-              ),
+              _BuyerReturnSummary(stats: buyerReturnStats!),
             ],
             const SizedBox(height: 4),
             if (order.shippingOption != null)
@@ -375,13 +359,29 @@ class _SellerOrderCard extends StatelessWidget {
                           label: Text(L10n.tr(context, 'common.delete')),
                         ),
                       if ((order.labelUrl ?? '').isNotEmpty)
-                        TextButton.icon(
-                          onPressed: () =>
-                              onOpenLabel(order.id, order.labelUrl!),
-                          icon: const Icon(Icons.picture_as_pdf_outlined),
-                          label: Text(
-                            L10n.tr(context, 'seller_orders.open_label'),
-                          ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            TextButton.icon(
+                              onPressed: () =>
+                                  onOpenLabel(order.id, order.labelUrl!),
+                              icon: const Icon(Icons.picture_as_pdf_outlined),
+                              label: Text(
+                                L10n.tr(context, 'seller_orders.open_label'),
+                              ),
+                            ),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 280),
+                              child: Text(
+                                L10n.tr(
+                                  context,
+                                  'shipments.label_retention_note',
+                                ),
+                                textAlign: TextAlign.end,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                          ],
                         )
                       else if (!isArrangedOrder)
                         FilledButton.icon(
@@ -408,5 +408,96 @@ class _SellerOrderCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _BuyerReturnSummary extends StatelessWidget {
+  const _BuyerReturnSummary({required this.stats});
+
+  final BuyerReturnStats stats;
+
+  @override
+  Widget build(BuildContext context) {
+    final lastReturnAt = stats.lastReturnAt?.toLocal();
+    final dateLabel = lastReturnAt == null
+        ? null
+        : _formatLastReturnDate(context, lastReturnAt);
+    final courier = stats.lastReturnCourier?.trim();
+    final hasCourier = courier != null && courier.isNotEmpty;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.history_toggle_off_rounded,
+                size: 18,
+                color: Colors.orange,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  L10n.tr(context, 'seller_orders.returns_dzmarket_title'),
+                  style: const TextStyle(
+                    color: Colors.orange,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            L10n.tr(
+              context,
+              'seller_orders.returns_dzmarket_counts',
+              params: {
+                'count6': '${stats.returns6m}',
+                'count12': '${stats.returns12m}',
+              },
+            ),
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            L10n.tr(context, 'seller_orders.returns_scope_note'),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          if (dateLabel != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              L10n.tr(
+                context,
+                hasCourier
+                    ? 'seller_orders.returns_last_return_with_courier'
+                    : 'seller_orders.returns_last_return',
+                params: {'date': dateLabel, if (hasCourier) 'courier': courier},
+              ),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatLastReturnDate(BuildContext context, DateTime date) {
+    final localeCode = Localizations.localeOf(context).languageCode;
+    try {
+      return DateFormat.yMMMd(
+        localeCode == 'ar' ? 'ar_DZ' : 'fr_DZ',
+      ).format(date);
+    } catch (_) {
+      return DateFormat('dd/MM/yyyy').format(date);
+    }
   }
 }

@@ -23,6 +23,11 @@ class LabelUrlService {
     final parsed = Uri.tryParse(normalized);
     if (parsed == null) return null;
     final rawUrlExpired = _isSignedUrlExpired(parsed);
+    final objectRef = _extractStorageObjectRef(parsed);
+
+    if (!rawUrlExpired) {
+      return parsed;
+    }
 
     final fromOrder = await _resolveFromOrder(orderId);
     if (fromOrder != null) {
@@ -37,16 +42,15 @@ class LabelUrlService {
       }
     }
 
-    final objectRef = _extractStorageObjectRef(parsed);
     if (objectRef == null) {
-      return rawUrlExpired ? null : parsed;
+      return null;
     }
 
     final refreshed = await _tryCreateSignedUrl(objectRef, expiresInSeconds);
     if (refreshed != null) return refreshed;
 
     // Avoid opening a known-expired URL.
-    return rawUrlExpired ? null : parsed;
+    return null;
   }
 
   Future<Uri?> _resolveFromOrder(String? orderId) async {
@@ -118,20 +122,31 @@ class LabelUrlService {
 
   bool _isSignedUrlExpired(Uri uri) {
     final token = uri.queryParameters['token']?.trim() ?? '';
-    if (token.isEmpty) return false;
+    if (token.isNotEmpty) {
+      try {
+        final parts = token.split('.');
+        if (parts.length >= 2) {
+          final payload = parts[1];
+          final normalized = base64Url.normalize(payload);
+          final decoded = utf8.decode(base64Url.decode(normalized));
+          final map = jsonDecode(decoded);
+          if (map is Map<String, dynamic>) {
+            final exp = map['exp'];
+            if (exp is num) {
+              final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+              return exp.toInt() <= now;
+            }
+          }
+        }
+      } catch (_) {}
+    }
 
     try {
-      final parts = token.split('.');
-      if (parts.length < 2) return false;
-      final payload = parts[1];
-      final normalized = base64Url.normalize(payload);
-      final decoded = utf8.decode(base64Url.decode(normalized));
-      final map = jsonDecode(decoded);
-      if (map is! Map<String, dynamic>) return false;
-      final exp = map['exp'];
-      if (exp is! num) return false;
-      final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      return exp.toInt() <= now;
+      final sasExpiry = uri.queryParameters['se']?.trim() ?? '';
+      if (sasExpiry.isEmpty) return false;
+      final expiresAt = DateTime.tryParse(sasExpiry)?.toUtc();
+      if (expiresAt == null) return false;
+      return expiresAt.isBefore(DateTime.now().toUtc());
     } catch (_) {
       return false;
     }

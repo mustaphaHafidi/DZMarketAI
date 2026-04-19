@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dzmarket/src/features/listings/product_detail_page.dart';
 import 'package:dzmarket/src/models/chat_message.dart';
 import 'package:dzmarket/src/models/offer.dart';
+import 'package:dzmarket/src/models/tracking_progress.dart';
 import 'package:dzmarket/src/services/app_error_service.dart';
 import 'package:dzmarket/src/services/chat_repository.dart';
 import 'package:dzmarket/src/services/connectivity_service.dart';
@@ -12,6 +13,7 @@ import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:dzmarket/src/services/offer_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/utils/label_url_resolver.dart';
+import 'package:dzmarket/src/widgets/tracking_stepper.dart';
 import 'package:dzmarket/src/widgets/refresh_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -46,6 +48,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   String? _buyerId;
   String? _sellerId;
   String? _productId;
+  final Map<String, String?> _orderIdByTrackingCache = {};
   late Future<void> _conversationFuture;
   late Future<_ProductHeaderData?> _headerFuture;
   final RefreshController _refreshController = RefreshController();
@@ -122,6 +125,40 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         isNegotiable: isNegotiable,
       );
     } catch (e) {
+      return null;
+    }
+  }
+
+  Future<String?> _resolveOrderIdForLabelPayload(
+    Map<String, dynamic> payload,
+  ) async {
+    final directOrderId = InputSanitizer.sanitizeId(
+      payload['order_id']?.toString() ?? widget.orderId ?? '',
+      maxLength: 64,
+    );
+    if (directOrderId.isNotEmpty) return directOrderId;
+
+    final trackingNumber = InputSanitizer.sanitizeText(
+      payload['tracking_number']?.toString() ?? '',
+      maxLength: 120,
+    );
+    if (trackingNumber.isEmpty) return null;
+
+    if (_orderIdByTrackingCache.containsKey(trackingNumber)) {
+      return _orderIdByTrackingCache[trackingNumber];
+    }
+
+    try {
+      final row = await supabase
+          .from('orders')
+          .select('id')
+          .eq('tracking_number', trackingNumber)
+          .maybeSingle();
+      final resolved = row?['id']?.toString();
+      _orderIdByTrackingCache[trackingNumber] = resolved;
+      return resolved;
+    } catch (_) {
+      _orderIdByTrackingCache[trackingNumber] = null;
       return null;
     }
   }
@@ -419,6 +456,15 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     final messageText = i18nKey != null && i18nKey.isNotEmpty
         ? L10n.tr(context, i18nKey, fallback: msg.text)
         : msg.text;
+    final trackingPresentation = isShipmentLikeEvent
+        ? TrackingPresentation.fromData(
+            status: status,
+            trackingNumber: tracking,
+            labelUrl: labelUrl,
+            createdAt: msg.createdAt,
+            systemEventKey: i18nKey,
+          )
+        : null;
     final statusText = statusKey != null
         ? L10n.tr(context, statusKey, fallback: status ?? '')
         : status;
@@ -483,17 +529,27 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                   '${L10n.tr(context, 'chat.room.system_tracking')}: $tracking',
                 ),
               ),
+            if (trackingPresentation != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: TrackingStepper(
+                  presentation: trackingPresentation,
+                  compact: true,
+                ),
+              ),
             if (isShipmentLikeEvent && isSeller)
               if (hasLabel)
                 TextButton.icon(
                   onPressed: () async {
+                    final resolvedOrderId =
+                        await _resolveOrderIdForLabelPayload(payload);
                     final uri = await _labelUrlService.resolveFreshLabelUri(
                       labelUrl,
-                      orderId:
-                          payload['order_id']?.toString() ?? widget.orderId,
+                      orderId: resolvedOrderId,
                     );
+                    if (!mounted) return;
                     if (uri == null) {
-                      if (context.mounted) {
+                      {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
@@ -509,7 +565,26 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                       }
                       return;
                     }
-                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    if (await canLaunchUrl(uri)) {
+                      final opened = await launchUrl(
+                        uri,
+                        mode: LaunchMode.externalApplication,
+                      );
+                      if (!opened && mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(L10n.tr(context, 'common.error')),
+                          ),
+                        );
+                      }
+                    } else {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(L10n.tr(context, 'common.error')),
+                        ),
+                      );
+                    }
                   },
                   icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
                   label: Text(L10n.tr(context, 'chat.room.label_open')),

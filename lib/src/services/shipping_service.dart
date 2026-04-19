@@ -771,10 +771,20 @@ class ShippingService {
         return L10n.trLocale(locale, 'orders.status_pending');
       case 'paid':
         return L10n.trLocale(locale, 'orders.status_paid');
+      case 'validated':
+        return L10n.trLocale(locale, 'tracking.status.label_ready');
       case 'shipped':
-        return L10n.trLocale(locale, 'orders.status_shipped');
+        return L10n.trLocale(locale, 'tracking.status.in_transit');
+      case 'out_for_delivery':
+        return L10n.trLocale(locale, 'order.status.out_for_delivery');
       case 'delivered':
         return L10n.trLocale(locale, 'orders.status_delivered');
+      case 'returned_to_sender':
+        return L10n.trLocale(locale, 'order.status.returned_to_sender');
+      case 'not_claimed':
+        return L10n.trLocale(locale, 'order.status.not_claimed');
+      case 'refused':
+        return L10n.trLocale(locale, 'order.status.refused');
       case 'cancelled':
         return L10n.trLocale(locale, 'orders.status_cancelled');
       default:
@@ -1535,6 +1545,9 @@ class ShippingService {
         'shipping_cost': null,
         'events': [
           {
+            'key': 'status:validated',
+            'status': 'validated',
+            'i18n_key': 'order.status.validated',
             'title': _labelEventTitle(locale),
             'description': _labelEventDesc(locale, 'Yalidine Express'),
             'at': DateTime.now().toIso8601String(),
@@ -1614,6 +1627,9 @@ class ShippingService {
         'shipping_cost': null,
         'events': [
           {
+            'key': 'status:validated',
+            'status': 'validated',
+            'i18n_key': 'order.status.validated',
             'title': _labelEventTitle(locale),
             'description': _labelEventDesc(locale, 'Yalidine Express'),
             'at': DateTime.now().toIso8601String(),
@@ -1765,6 +1781,9 @@ class ShippingService {
         'shipping_cost': shippingCost,
         'events': [
           {
+            'key': 'status:validated',
+            'status': 'validated',
+            'i18n_key': 'order.status.validated',
             'title': _labelEventTitle(locale),
             'description': _labelEventDesc(locale, safeCarrier),
             'at': DateTime.now().toIso8601String(),
@@ -2617,6 +2636,9 @@ class ShippingService {
         'shipping_cost': selection['estimatedFee'],
         'events': [
           {
+            'key': 'status:validated',
+            'status': 'validated',
+            'i18n_key': 'order.status.validated',
             'title': _labelEventTitle(locale),
             'description': _labelEventDesc(locale, 'Ecotrack'),
             'at': DateTime.now().toIso8601String(),
@@ -2656,65 +2678,92 @@ class ShippingService {
   /// `ShipmentsDashboardPage` UI.
   Stream<List<Map<String, dynamic>>> streamSellerShipments(String sellerId) {
     final safeSellerId = InputSanitizer.sanitizeId(sellerId, maxLength: 64);
-    final shipmentsStream = RateLimiter.instance.stream(
+    final ordersStream = RateLimiter.instance.stream(
       'shipments.seller.stream',
       () => supabase
-          .from(SupabaseTables.shipments)
-          .stream(primaryKey: ['order_id']),
+          .from(SupabaseTables.orders)
+          .stream(primaryKey: ['id'])
+          .eq('seller_id', safeSellerId),
     );
 
-    return shipmentsStream.asyncMap((rows) async {
+    return ordersStream.asyncMap((rows) async {
       if (rows.isEmpty) return <Map<String, dynamic>>[];
 
-      final orderIds = rows
-          .map((r) => r['order_id']?.toString())
-          .where((e) => e != null)
-          .cast<String>()
-          .toList();
+      final ordersById = <String, Map<String, dynamic>>{};
+      for (final row in rows) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final id = map['id']?.toString();
+        if (id == null || id.isEmpty) continue;
+        ordersById[id] = map;
+      }
 
-      final ordersResponse = orderIds.isEmpty
+      final orderIds = ordersById.keys.toList(growable: false);
+      final shipmentRows = orderIds.isEmpty
           ? <Map<String, dynamic>>[]
           : await RateLimiter.instance.run(
-              'orders.shipments.select',
+              'shipments.seller.select',
               () => supabase
-                  .from(SupabaseTables.orders)
+                  .from(SupabaseTables.shipments)
                   .select(
-                    'id, seller_id, courier_name, courier_id, shipping_cost, shipping_option, delivery_method, created_at',
+                    // Production may still run an older `shipments` schema.
+                    // Keep this select to the stable columns and derive the rest
+                    // from `orders` so the dashboard still loads.
+                    'order_id, status, tracking_number, label_url, created_at',
                   )
-                  .filter('id', 'in', orderIds),
+                  .inFilter('order_id', orderIds),
             );
-      final ordersById = <String, Map<String, dynamic>>{};
-      for (final o in ordersResponse) {
-        final map = Map<String, dynamic>.from(o as Map);
-        final id = map['id']?.toString();
-        if (id != null) ordersById[id] = map;
+      final shipmentsByOrderId = <String, Map<String, dynamic>>{};
+      for (final row in shipmentRows) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final orderId = map['order_id']?.toString();
+        if (orderId != null && orderId.isNotEmpty) {
+          shipmentsByOrderId[orderId] = map;
+        }
       }
 
       final result = <Map<String, dynamic>>[];
-      for (final r in rows) {
-        final orderId = r['order_id']?.toString();
-        if (orderId == null) continue;
-        final order = ordersById[orderId];
-        if (order == null) continue;
-        if ((order['seller_id']?.toString() ?? '') != safeSellerId) continue;
+      for (final entry in ordersById.entries) {
+        final orderId = entry.key;
+        final order = entry.value;
+        final shipment = shipmentsByOrderId[orderId];
 
         final createdAt =
-            r['created_at'] as String? ?? order['created_at'] as String?;
+            shipment?['created_at'] as String? ??
+            order['created_at'] as String?;
+        final shipmentCost = (shipment?['shipping_cost'] as num?)?.toDouble();
+        final orderShippingCost = (order['shipping_cost'] as num?)?.toDouble();
+        final orderDeliveryCost = (order['delivery_cost'] as num?)?.toDouble();
+        final effectiveShippingCost = (shipmentCost ?? 0) > 0
+            ? shipmentCost
+            : ((orderShippingCost ?? 0) > 0
+                  ? orderShippingCost
+                  : ((orderDeliveryCost ?? 0) > 0
+                        ? orderDeliveryCost
+                        : orderShippingCost));
         result.add({
           'order_id': orderId,
-          'status': r['status'] as String? ?? 'pending',
+          'status':
+              shipment?['status'] as String? ??
+              order['status'] as String? ??
+              'pending',
           'carrier':
-              r['carrier'] as String? ??
-              r['courier_name'] as String? ??
+              shipment?['carrier'] as String? ??
               order['courier_name'] as String? ??
               '-',
           'courier_id': order['courier_id'] as String?,
           'shipping_option': order['shipping_option'] as String?,
           'delivery_method': order['delivery_method'] as String?,
-          'tracking_number': r['tracking_number'] as String?,
-          'shipping_cost': r['shipping_cost'] ?? order['shipping_cost'],
-          'label_url': normalizeLabelUrl(r['label_url'] as String?),
+          'tracking_number':
+              shipment?['tracking_number'] as String? ??
+              order['tracking_number'] as String?,
+          'shipping_cost': effectiveShippingCost,
+          'label_url': normalizeLabelUrl(
+            shipment?['label_url'] as String? ?? order['label_url'] as String?,
+          ),
           'created_at': createdAt,
+          'events': ((shipment?['events'] as List?) ?? const []).map((event) {
+            return Map<String, dynamic>.from(event as Map);
+          }).toList(),
         });
       }
 

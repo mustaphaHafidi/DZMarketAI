@@ -8,7 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class NotificationInboxService {
   NotificationInboxService();
 
-  final SupabaseClient _client = supabase;
+  SupabaseClient get _client => supabase;
 
   Stream<List<AppNotification>> watchNotifications({int limit = 150}) {
     final userId = _client.auth.currentUser?.id;

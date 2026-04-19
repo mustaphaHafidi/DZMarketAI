@@ -1,16 +1,24 @@
+import 'package:dzmarket/src/models/tracking_progress.dart';
 import 'package:dzmarket/src/models/shipment.dart';
 import 'package:dzmarket/src/services/label_url_service.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
+import 'package:dzmarket/src/widgets/tracking_stepper.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ShipmentInfo extends StatelessWidget {
-  const ShipmentInfo({super.key, required this.orderId, required this.service});
+  const ShipmentInfo({
+    super.key,
+    required this.orderId,
+    required this.service,
+    this.orderCreatedAt,
+  });
   static final LabelUrlService _labelUrlService = LabelUrlService();
 
   final String orderId;
   final ShippingService service;
+  final DateTime? orderCreatedAt;
 
   @override
   Widget build(BuildContext context) {
@@ -24,10 +32,26 @@ class ShipmentInfo extends StatelessWidget {
           );
         }
         final s = snapshot.data;
+        final presentation = TrackingPresentation.fromShipment(
+          s,
+          createdAt: orderCreatedAt,
+        );
+        final statusText = L10n.tr(
+          context,
+          presentation.displayStatusKey,
+          fallback: presentation.displayStatusFallback,
+        );
         if (s == null) {
-          return Text(
-            L10n.tr(context, 'shipments.pending'),
-            style: TextStyle(color: Theme.of(context).colorScheme.outline),
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                statusText,
+                style: TextStyle(color: Theme.of(context).colorScheme.outline),
+              ),
+              const SizedBox(height: 8),
+              TrackingStepper(presentation: presentation, compact: true),
+            ],
           );
         }
         return Column(
@@ -36,7 +60,7 @@ class ShipmentInfo extends StatelessWidget {
             Row(
               children: [
                 Chip(
-                  label: Text(s.status ?? 'pending'),
+                  label: Text(statusText),
                   visualDensity: VisualDensity.compact,
                 ),
                 const SizedBox(width: 8),
@@ -47,9 +71,11 @@ class ShipmentInfo extends StatelessWidget {
                   ),
               ],
             ),
+            const SizedBox(height: 8),
+            TrackingStepper(presentation: presentation, compact: true),
             if ((s.trackingNumber ?? '').isNotEmpty)
               Padding(
-                padding: const EdgeInsets.only(top: 4),
+                padding: const EdgeInsets.only(top: 8),
                 child: Text(
                   L10n.tr(
                     context,

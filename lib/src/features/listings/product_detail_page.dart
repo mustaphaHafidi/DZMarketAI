@@ -2756,12 +2756,14 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: Text(
-                      PhoneFormatter.normalizeDzE164(_phoneCtrl.text).isNotEmpty
+                      PhoneFormatter.normalizeDzE164ForZr(
+                            _phoneCtrl.text,
+                          ).isNotEmpty
                           ? L10n.tr(
                               context,
                               'checkout.zr_phone_preview',
                               params: {
-                                'value': PhoneFormatter.normalizeDzE164(
+                                'value': PhoneFormatter.normalizeDzE164ForZr(
                                   _phoneCtrl.text,
                                 ),
                               },

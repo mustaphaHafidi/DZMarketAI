@@ -6,16 +6,17 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 class NotificationsPage extends StatefulWidget {
-  const NotificationsPage({super.key});
+  const NotificationsPage({super.key, this.service});
+
+  final NotificationInboxService? service;
 
   @override
   State<NotificationsPage> createState() => _NotificationsPageState();
 }
 
 class _NotificationsPageState extends State<NotificationsPage> {
-  final NotificationInboxService _service = NotificationInboxService();
+  late final NotificationInboxService _service;
   bool _unreadOnly = false;
-  AppNotificationCategory? _categoryFilter;
   bool _busy = false;
   static const Map<String, Map<String, String>> _notificationFallbacks = {
     'fr': {
@@ -26,6 +27,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
           '{count} notifications marquees comme lues.',
       'notifications.filter_all': 'Toutes',
       'notifications.filter_unread': 'Non lues',
+      'notifications.open_settings': 'Parametres notifications',
       'notifications.preferences_title': 'Preferences notifications',
       'notifications.pref_chat': 'Messages',
       'notifications.pref_offer': 'Offres',
@@ -67,6 +69,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
       'notifications.filter_all': '\u0627\u0644\u0643\u0644',
       'notifications.filter_unread':
           '\u063a\u064a\u0631 \u0627\u0644\u0645\u0642\u0631\u0648\u0621\u0629',
+      'notifications.open_settings':
+          '\u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u0625\u0634\u0639\u0627\u0631\u0627\u062a',
       'notifications.preferences_title':
           '\u062a\u0641\u0636\u064a\u0644\u0627\u062a \u0627\u0644\u0625\u0634\u0639\u0627\u0631\u0627\u062a',
       'notifications.pref_chat': '\u0627\u0644\u0631\u0633\u0627\u0626\u0644',
@@ -166,6 +170,12 @@ class _NotificationsPageState extends State<NotificationsPage> {
     return _fallbackTranslation(key, params: params, fallback: fallback);
   }
 
+  @override
+  void initState() {
+    super.initState();
+    _service = widget.service ?? NotificationInboxService();
+  }
+
   Future<void> _markAllRead() async {
     if (_busy) return;
     setState(() => _busy = true);
@@ -200,12 +210,112 @@ class _NotificationsPageState extends State<NotificationsPage> {
     }
   }
 
+  Future<void> _openPreferencesSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) {
+        return SafeArea(
+          child: StreamBuilder<NotificationPreferences>(
+            stream: _service.watchPreferences(),
+            builder: (context, snap) {
+              final prefs =
+                  snap.data ?? const NotificationPreferences(userId: '');
+              final statusText = prefs.isMutedNow
+                  ? _tr('notifications.muted_now')
+                  : _tr('notifications.active_now');
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.tune_outlined),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _tr('notifications.preferences_title'),
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      statusText,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 12),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(_tr('notifications.pref_chat')),
+                      value: prefs.enableChat,
+                      onChanged: (v) =>
+                          _updatePrefs(prefs.copyWith(enableChat: v)),
+                    ),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(_tr('notifications.pref_offer')),
+                      value: prefs.enableOffer,
+                      onChanged: (v) =>
+                          _updatePrefs(prefs.copyWith(enableOffer: v)),
+                    ),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(_tr('notifications.pref_order')),
+                      value: prefs.enableOrder,
+                      onChanged: (v) =>
+                          _updatePrefs(prefs.copyWith(enableOrder: v)),
+                    ),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(_tr('notifications.pref_system')),
+                      value: prefs.enableSystem,
+                      onChanged: (v) =>
+                          _updatePrefs(prefs.copyWith(enableSystem: v)),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () =>
+                              _service.muteFor(const Duration(hours: 8)),
+                          icon: const Icon(Icons.bedtime_outlined),
+                          label: Text(_tr('notifications.mute_8h')),
+                        ),
+                        if (prefs.isMutedNow)
+                          TextButton(
+                            onPressed: _service.clearMute,
+                            child: Text(_tr('notifications.unmute_now')),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(_tr('notifications.title')),
         actions: [
+          IconButton(
+            onPressed: _openPreferencesSheet,
+            icon: const Icon(Icons.tune_outlined),
+            tooltip: _tr('notifications.open_settings'),
+          ),
           IconButton(
             onPressed: _busy ? null : _markAllRead,
             icon: const Icon(Icons.done_all_outlined),
@@ -215,71 +325,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
       ),
       body: Column(
         children: [
-          StreamBuilder<NotificationPreferences>(
-            stream: _service.watchPreferences(),
-            builder: (context, snap) {
-              final prefs =
-                  snap.data ?? const NotificationPreferences(userId: '');
-              return Card(
-                margin: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-                child: ExpansionTile(
-                  leading: const Icon(Icons.tune_outlined),
-                  title: Text(_tr('notifications.preferences_title')),
-                  subtitle: Text(
-                    prefs.isMutedNow
-                        ? _tr('notifications.muted_now')
-                        : _tr('notifications.active_now'),
-                  ),
-                  children: [
-                    SwitchListTile(
-                      title: Text(_tr('notifications.pref_chat')),
-                      value: prefs.enableChat,
-                      onChanged: (v) =>
-                          _updatePrefs(prefs.copyWith(enableChat: v)),
-                    ),
-                    SwitchListTile(
-                      title: Text(_tr('notifications.pref_offer')),
-                      value: prefs.enableOffer,
-                      onChanged: (v) =>
-                          _updatePrefs(prefs.copyWith(enableOffer: v)),
-                    ),
-                    SwitchListTile(
-                      title: Text(_tr('notifications.pref_order')),
-                      value: prefs.enableOrder,
-                      onChanged: (v) =>
-                          _updatePrefs(prefs.copyWith(enableOrder: v)),
-                    ),
-                    SwitchListTile(
-                      title: Text(_tr('notifications.pref_system')),
-                      value: prefs.enableSystem,
-                      onChanged: (v) =>
-                          _updatePrefs(prefs.copyWith(enableSystem: v)),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                      child: Row(
-                        children: [
-                          OutlinedButton.icon(
-                            onPressed: () =>
-                                _service.muteFor(const Duration(hours: 8)),
-                            icon: const Icon(Icons.bedtime_outlined),
-                            label: Text(_tr('notifications.mute_8h')),
-                          ),
-                          const SizedBox(width: 10),
-                          TextButton(
-                            onPressed: _service.clearMute,
-                            child: Text(_tr('notifications.unmute_now')),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -294,18 +341,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
                   selected: _unreadOnly,
                   onSelected: (_) => setState(() => _unreadOnly = true),
                 ),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: Text(_tr('notifications.cat_all')),
-                  selected: _categoryFilter == null,
-                  onSelected: (_) => setState(() => _categoryFilter = null),
-                ),
-                for (final cat in AppNotificationCategory.values)
-                  ChoiceChip(
-                    label: Text(_categoryLabel(context, cat)),
-                    selected: _categoryFilter == cat,
-                    onSelected: (_) => setState(() => _categoryFilter = cat),
-                  ),
               ],
             ),
           ),
@@ -316,10 +351,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 final all = snapshot.data ?? const <AppNotification>[];
                 final filtered = all.where((n) {
                   if (_unreadOnly && !n.isUnread) return false;
-                  if (_categoryFilter != null &&
-                      n.category != _categoryFilter) {
-                    return false;
-                  }
                   return true;
                 }).toList();
                 if (filtered.isEmpty) {
