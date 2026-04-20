@@ -737,6 +737,22 @@ class L10n {
     'payment.method_online': 'Paiement en ligne',
     'payment.recorded_mock': 'Paiement enregistré (mock)',
     'profile.bio': 'Bio',
+    'profile.delete_account': 'Supprimer mon compte',
+    'profile.delete_account_confirm_title': 'Supprimer mon compte',
+    'profile.delete_account_confirm_body':
+        'Cette demande supprimera votre compte DZMarket et initiera la suppression de vos donnees personnelles non obligatoires. Certaines donnees peuvent etre conservees temporairement pour des obligations legales, comptables, antifraude et de securite.',
+    'profile.delete_account_reason_label': 'Raison (optionnel)',
+    'profile.delete_account_cta': 'Confirmer la suppression',
+    'profile.delete_account_success':
+        'Demande de suppression envoyee. Votre compte sera traite sous 30 jours maximum.',
+    'profile.delete_account_failed':
+        'Impossible d envoyer la demande de suppression pour le moment.',
+    'profile.account_deletion': 'Suppression de compte',
+    'profile.account_deletion_hint':
+        'Initiation dans l app, traitement sous 30 jours maximum.',
+    'profile.privacy_policy': 'Politique de confidentialite',
+    'profile.terms': 'Conditions d utilisation',
+    'profile.contact_support': 'Contacter le support',
     'profile.courier_settings': 'Paramètres transporteurs',
     'profile.daira': 'Daïra',
     'profile.dashboard': 'Tableau de bord',
@@ -777,6 +793,8 @@ class L10n {
     'profile.public_profile_title': 'Profil public',
     'profile.member_since': 'Membre depuis {date}',
     'profile.section_account': 'Informations du compte',
+    'profile.section_security': 'Compte et sécurité',
+    'profile.section_help_legal': 'Aide et informations légales',
     'profile.section_tools': 'Outils et raccourcis',
     'profile.seller_mode': 'Mode vendeur',
     'profile.seller_mode_hint': 'Affiche les outils vendeur',
@@ -1669,6 +1687,21 @@ class L10n {
     'payment.method_online': 'الدفع عبر الإنترنت',
     'payment.recorded_mock': 'تم تسجيل الدفع (تجريبي)',
     'profile.bio': 'نبذة',
+    'profile.delete_account': 'حذف حسابي',
+    'profile.delete_account_confirm_title': 'حذف حسابي',
+    'profile.delete_account_confirm_body':
+        'سيؤدي هذا الطلب إلى حذف حسابك على DZMarket وبدء حذف بياناتك الشخصية غير الإلزامية. قد يتم الاحتفاظ ببعض البيانات مؤقتاً للالتزامات القانونية والمحاسبية ومكافحة الاحتيال والأمن.',
+    'profile.delete_account_reason_label': 'السبب (اختياري)',
+    'profile.delete_account_cta': 'تأكيد الحذف',
+    'profile.delete_account_success':
+        'تم إرسال طلب الحذف. ستتم معالجة حسابك خلال 30 يوماً كحد أقصى.',
+    'profile.delete_account_failed': 'تعذر إرسال طلب الحذف حالياً.',
+    'profile.account_deletion': 'حذف الحساب',
+    'profile.account_deletion_hint':
+        'يبدأ من داخل التطبيق، وتتم المعالجة خلال 30 يوماً كحد أقصى.',
+    'profile.privacy_policy': 'سياسة الخصوصية',
+    'profile.terms': 'شروط الاستخدام',
+    'profile.contact_support': 'التواصل مع الدعم',
     'profile.courier_settings': 'إعدادات النقل',
     'profile.daira': 'الدائرة',
     'profile.dashboard': 'لوحة التحكم',
@@ -1708,6 +1741,8 @@ class L10n {
     'profile.public_profile_title': 'الملف العام',
     'profile.member_since': 'عضو منذ {date}',
     'profile.section_account': 'معلومات الحساب',
+    'profile.section_security': 'الحساب والأمان',
+    'profile.section_help_legal': 'المساعدة والمعلومات القانونية',
     'profile.section_tools': 'الأدوات والاختصارات',
     'profile.seller_mode': 'تفعيل وضع البائع',
     'profile.seller_mode_hint': 'يعرض أدوات البائع',
@@ -1901,9 +1936,19 @@ class L10n {
     Map<String, String>? params,
   }) {
     final normalizedLocale = _normalizeLocale(locale);
+    final localizedServiceText = TranslationService.instance.translate(
+      normalizedLocale,
+      key,
+    );
+    final localizedHardFallback = _hardFallback(normalizedLocale, key);
+    final frenchServiceText = TranslationService.instance.translate('fr', key);
+    final frenchHardFallback = _hardFallback('fr', key);
+
     var text =
-        TranslationService.instance.translate(normalizedLocale, key) ??
-        TranslationService.instance.translate('fr', key) ??
+        localizedServiceText ??
+        localizedHardFallback ??
+        frenchServiceText ??
+        frenchHardFallback ??
         fallback ??
         key;
 

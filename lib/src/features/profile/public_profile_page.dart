@@ -8,6 +8,7 @@ import 'package:dzmarket/src/services/review_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/services/user_safety_service.dart';
 import 'package:dzmarket/src/utils/bool_utils.dart';
+import 'package:dzmarket/src/widgets/user_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -396,22 +397,10 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                 children: [
                   Row(
                     children: [
-                      CircleAvatar(
+                      UserAvatar(
                         radius: 28,
-                        backgroundColor: Theme.of(
-                          context,
-                        ).colorScheme.secondaryContainer,
-                        backgroundImage:
-                            (avatarUrl != null && avatarUrl.isNotEmpty)
-                            ? CachedNetworkImageProvider(
-                                avatarUrl,
-                                imageRenderMethodForWeb:
-                                    ImageRenderMethodForWeb.HtmlImage,
-                              )
-                            : null,
-                        child: (avatarUrl == null || avatarUrl.isEmpty)
-                            ? const Icon(Icons.person)
-                            : null,
+                        avatarUrl: avatarUrl,
+                        fullName: name,
                       ),
                       const SizedBox(width: 12),
                       Expanded(

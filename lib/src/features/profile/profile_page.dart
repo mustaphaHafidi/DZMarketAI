@@ -1,8 +1,5 @@
-// ignore_for_file: deprecated_member_use
 import 'dart:async';
 
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:cached_network_image_platform_interface/cached_network_image_platform_interface.dart';
 import 'package:dzmarket/src/models/profile.dart';
 import 'package:dzmarket/src/services/app_error_service.dart';
 import 'package:dzmarket/src/services/auth_service.dart';
@@ -16,6 +13,7 @@ import 'package:dzmarket/src/services/notification_inbox_service.dart';
 import 'package:dzmarket/src/services/storage_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/services/user_safety_service.dart';
+import 'package:dzmarket/src/widgets/user_avatar.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -782,7 +780,9 @@ class _ProfilePageState extends State<ProfilePage> {
       _error = null;
     });
     try {
-      await AuthService.instance.requestAccountDeletion(reason: reasonCtrl.text);
+      await AuthService.instance.requestAccountDeletion(
+        reason: reasonCtrl.text,
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -822,23 +822,6 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  String _initials() {
-    final raw = _nameCtrl.text.trim();
-    if (raw.isEmpty) return '?';
-    final parts = raw.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
-    if (parts.length >= 2) {
-      final first = parts.first;
-      final last = parts.last;
-      final a = first.isNotEmpty ? first[0] : '';
-      final b = last.isNotEmpty ? last[0] : '';
-      final combined = '$a$b'.toUpperCase();
-      return combined.isEmpty ? '?' : combined;
-    }
-    final single = parts.first;
-    final letters = single.length >= 2 ? single.substring(0, 2) : single;
-    return letters.toUpperCase();
-  }
-
   Widget _buildProfileHeader({
     required BuildContext context,
     required String? safeAvatar,
@@ -865,25 +848,11 @@ class _ProfilePageState extends State<ProfilePage> {
         children: [
           Row(
             children: [
-              CircleAvatar(
+              UserAvatar(
                 radius: 28,
-                backgroundColor: colors.secondaryContainer,
-                backgroundImage: safeAvatar != null
-                    ? CachedNetworkImageProvider(
-                        safeAvatar,
-                        imageRenderMethodForWeb:
-                            ImageRenderMethodForWeb.HtmlImage,
-                      )
-                    : null,
-                child: safeAvatar == null
-                    ? Text(
-                        _initials(),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      )
-                    : null,
+                avatarUrl: safeAvatar,
+                fullName: _nameCtrl.text.trim(),
+                email: _profile?.email,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -995,6 +964,39 @@ class _ProfilePageState extends State<ProfilePage> {
     final isSeller = _isSeller;
     final isSuperAdmin = _profile?.role == UserRole.superadmin;
     final colors = Theme.of(context).colorScheme;
+    Widget sectionCard({
+      required String title,
+      required List<Widget> children,
+    }) {
+      final content = <Widget>[];
+      for (var i = 0; i < children.length; i++) {
+        if (i > 0) content.add(const Divider(height: 1));
+        content.add(children[i]);
+      }
+      return Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: colors.outlineVariant.withValues(alpha: 0.45),
+          ),
+        ),
+        child: Column(
+          children: [
+            ListTile(
+              title: Text(
+                title,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            const Divider(height: 1),
+            ...content,
+          ],
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(title: Text(L10n.tr(context, 'profile.title'))),
@@ -1199,7 +1201,8 @@ class _ProfilePageState extends State<ProfilePage> {
                               ),
                             const SizedBox(height: 12),
                             DropdownButtonFormField<String>(
-                              value: _lang,
+                              key: ValueKey(_lang),
+                              initialValue: _lang,
                               decoration: InputDecoration(
                                 labelText: L10n.tr(context, 'profile.language'),
                                 prefixIcon: const Icon(Icons.language_outlined),
@@ -1266,7 +1269,9 @@ class _ProfilePageState extends State<ProfilePage> {
                             ),
                             const SizedBox(height: 12),
                             OutlinedButton.icon(
-                              onPressed: _saving ? null : _requestAccountDeletion,
+                              onPressed: _saving
+                                  ? null
+                                  : _requestAccountDeletion,
                               icon: const Icon(Icons.delete_forever_outlined),
                               label: Text(
                                 L10n.tr(
@@ -1315,229 +1320,204 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    Card(
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        side: BorderSide(
-                          color: colors.outlineVariant.withValues(alpha: 0.45),
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          ListTile(
-                            title: Text(
-                              L10n.tr(context, 'profile.section_tools'),
-                              style: Theme.of(context).textTheme.titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                          const Divider(height: 1),
-                          StreamBuilder<int>(
-                            stream: _notificationInboxService
-                                .watchUnreadCount(),
-                            builder: (context, snap) {
-                              final unread = snap.data ?? 0;
-                              return ListTile(
-                                leading: const Icon(
-                                  Icons.notifications_outlined,
-                                ),
-                                title: Text(
-                                  L10n.tr(context, 'notifications.title'),
-                                ),
-                                subtitle: Text(
-                                  unread > 0
-                                      ? L10n.tr(
+                    sectionCard(
+                      title: L10n.tr(context, 'profile.section_tools'),
+                      children: [
+                        StreamBuilder<int>(
+                          stream: _notificationInboxService.watchUnreadCount(),
+                          builder: (context, snap) {
+                            final unread = snap.data ?? 0;
+                            return ListTile(
+                              leading: const Icon(Icons.notifications_outlined),
+                              title: Text(
+                                L10n.tr(context, 'notifications.title'),
+                              ),
+                              subtitle: Text(
+                                unread > 0
+                                    ? L10n.tr(
+                                        context,
+                                        'notifications.unread_count',
+                                        params: {'count': '$unread'},
+                                      )
+                                    : L10n.tr(
+                                        context,
+                                        'notifications.all_caught_up',
+                                      ),
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (unread > 0)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 3,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(
                                           context,
-                                          'notifications.unread_count',
-                                          params: {'count': '$unread'},
-                                        )
-                                      : L10n.tr(
-                                          context,
-                                          'notifications.all_caught_up',
-                                        ),
-                                ),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (unread > 0)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 3,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.primaryContainer,
-                                          borderRadius: BorderRadius.circular(
-                                            999,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          unread > 99 ? '99+' : '$unread',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.onPrimaryContainer,
-                                          ),
+                                        ).colorScheme.primaryContainer,
+                                        borderRadius: BorderRadius.circular(
+                                          999,
                                         ),
                                       ),
-                                    const SizedBox(width: 6),
-                                    const Icon(Icons.chevron_right),
-                                  ],
-                                ),
-                                onTap: () => context.push('/notifications'),
-                              );
-                            },
-                          ),
-                          const Divider(height: 1),
-                          ListTile(
-                            leading: const Icon(Icons.privacy_tip_outlined),
-                            title: Text(
-                              L10n.tr(
-                                context,
-                                'profile.privacy_policy',
-                                fallback: 'Politique de confidentialite',
+                                      child: Text(
+                                        unread > 99 ? '99+' : '$unread',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onPrimaryContainer,
+                                        ),
+                                      ),
+                                    ),
+                                  const SizedBox(width: 6),
+                                  const Icon(Icons.chevron_right),
+                                ],
                               ),
+                              onTap: () => context.push('/notifications'),
+                            );
+                          },
+                        ),
+                        if (isSeller)
+                          ListTile(
+                            leading: const Icon(Icons.sell_outlined),
+                            title: Text(
+                              L10n.tr(context, 'seller_orders.title'),
                             ),
                             trailing: const Icon(Icons.chevron_right),
-                            onTap: () => context.push('/legal/privacy'),
+                            onTap: () => context.push('/seller/orders'),
                           ),
-                          const Divider(height: 1),
+                        if (isSeller)
                           ListTile(
-                            leading: const Icon(Icons.delete_sweep_outlined),
+                            leading: const Icon(Icons.analytics_outlined),
+                            title: Text(L10n.tr(context, 'profile.dashboard')),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () => context.push('/seller/dashboard'),
+                          ),
+                        if (isSeller)
+                          ListTile(
+                            leading: const Icon(Icons.inventory_2_outlined),
                             title: Text(
-                              L10n.tr(
-                                context,
-                                'profile.account_deletion',
-                                fallback: 'Suppression de compte',
-                              ),
+                              L10n.tr(context, 'profile.my_listings'),
+                            ),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () => context.push('/seller/listings'),
+                          ),
+                        if (isSeller)
+                          ListTile(
+                            leading: const Icon(Icons.local_shipping_outlined),
+                            title: Text(
+                              L10n.tr(context, 'profile.shipments_board'),
+                            ),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () => context.push('/seller/shipments'),
+                          ),
+                        if (isSeller)
+                          ListTile(
+                            leading: const Icon(
+                              Icons.settings_applications_outlined,
+                            ),
+                            title: Text(
+                              L10n.tr(context, 'profile.courier_settings'),
+                            ),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () => context.push('/seller/couriers'),
+                          ),
+                        if (isSuperAdmin)
+                          ListTile(
+                            leading: const Icon(
+                              Icons.admin_panel_settings_outlined,
+                            ),
+                            title: Text(L10n.tr(context, 'admin.errors_title')),
+                            subtitle: Text(
+                              L10n.tr(context, 'admin.errors_subtitle'),
+                            ),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () => context.push('/admin/errors'),
+                          ),
+                        if (isSuperAdmin)
+                          ListTile(
+                            leading: const Icon(Icons.gpp_good_outlined),
+                            title: Text(
+                              L10n.tr(context, 'admin.moderation.title'),
                             ),
                             subtitle: Text(
-                              L10n.tr(
-                                context,
-                                'profile.account_deletion_hint',
-                                fallback:
-                                    'Initiation dans l app, traitement sous 30 jours maximum.',
-                              ),
+                              L10n.tr(context, 'admin.moderation.subtitle'),
                             ),
                             trailing: const Icon(Icons.chevron_right),
-                            onTap: () => context.push('/legal/account-deletion'),
+                            onTap: () => context.push('/admin/moderation'),
                           ),
-                          const Divider(height: 1),
-                          ListTile(
-                            leading: const Icon(Icons.description_outlined),
-                            title: Text(
-                              L10n.tr(
-                                context,
-                                'profile.terms',
-                                fallback: 'Conditions d utilisation',
-                              ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    sectionCard(
+                      title: L10n.tr(context, 'profile.section_security'),
+                      children: [
+                        ListTile(
+                          leading: const Icon(Icons.delete_sweep_outlined),
+                          title: Text(
+                            L10n.tr(
+                              context,
+                              'profile.account_deletion',
+                              fallback: 'Suppression de compte',
                             ),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: () => context.push('/legal/terms'),
                           ),
-                          const Divider(height: 1),
-                          ListTile(
-                            leading: const Icon(Icons.support_agent_outlined),
-                            title: Text(
-                              L10n.tr(
-                                context,
-                                'profile.contact_support',
-                                fallback: 'Contacter le support',
-                              ),
+                          subtitle: Text(
+                            L10n.tr(
+                              context,
+                              'profile.account_deletion_hint',
+                              fallback:
+                                  'Initiation dans l app, traitement sous 30 jours maximum.',
                             ),
-                            subtitle: const Text(UserSafetyService.supportEmail),
-                            trailing: const Icon(Icons.open_in_new),
-                            onTap: _openSupportEmail,
                           ),
-                          const Divider(height: 1),
-                          if (isSuperAdmin) const Divider(height: 1),
-                          if (isSuperAdmin)
-                            ListTile(
-                              leading: const Icon(
-                                Icons.admin_panel_settings_outlined,
-                              ),
-                              title: Text(
-                                L10n.tr(context, 'admin.errors_title'),
-                              ),
-                              subtitle: Text(
-                                L10n.tr(context, 'admin.errors_subtitle'),
-                              ),
-                              trailing: const Icon(Icons.chevron_right),
-                              onTap: () => context.push('/admin/errors'),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => context.push('/legal/account-deletion'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    sectionCard(
+                      title: L10n.tr(context, 'profile.section_help_legal'),
+                      children: [
+                        ListTile(
+                          leading: const Icon(Icons.privacy_tip_outlined),
+                          title: Text(
+                            L10n.tr(
+                              context,
+                              'profile.privacy_policy',
+                              fallback: 'Politique de confidentialite',
                             ),
-                          if (isSuperAdmin) const Divider(height: 1),
-                          if (isSuperAdmin)
-                            ListTile(
-                              leading: const Icon(Icons.gpp_good_outlined),
-                              title: Text(
-                                L10n.tr(context, 'admin.moderation.title'),
-                              ),
-                              subtitle: Text(
-                                L10n.tr(context, 'admin.moderation.subtitle'),
-                              ),
-                              trailing: const Icon(Icons.chevron_right),
-                              onTap: () => context.push('/admin/moderation'),
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => context.push('/legal/privacy'),
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.description_outlined),
+                          title: Text(
+                            L10n.tr(
+                              context,
+                              'profile.terms',
+                              fallback: 'Conditions d utilisation',
                             ),
-                          if (isSeller) const Divider(height: 1),
-                          if (isSeller)
-                            ListTile(
-                              leading: const Icon(Icons.sell_outlined),
-                              title: Text(
-                                L10n.tr(context, 'seller_orders.title'),
-                              ),
-                              trailing: const Icon(Icons.chevron_right),
-                              onTap: () => context.push('/seller/orders'),
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => context.push('/legal/terms'),
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.support_agent_outlined),
+                          title: Text(
+                            L10n.tr(
+                              context,
+                              'profile.contact_support',
+                              fallback: 'Contacter le support',
                             ),
-                          if (isSeller) const Divider(height: 1),
-                          if (isSeller)
-                            ListTile(
-                              leading: const Icon(Icons.analytics_outlined),
-                              title: Text(
-                                L10n.tr(context, 'profile.dashboard'),
-                              ),
-                              trailing: const Icon(Icons.chevron_right),
-                              onTap: () => context.push('/seller/dashboard'),
-                            ),
-                          if (isSeller) const Divider(height: 1),
-                          if (isSeller)
-                            ListTile(
-                              leading: const Icon(Icons.inventory_2_outlined),
-                              title: Text(
-                                L10n.tr(context, 'profile.my_listings'),
-                              ),
-                              trailing: const Icon(Icons.chevron_right),
-                              onTap: () => context.push('/seller/listings'),
-                            ),
-                          if (isSeller) const Divider(height: 1),
-                          if (isSeller)
-                            ListTile(
-                              leading: const Icon(
-                                Icons.local_shipping_outlined,
-                              ),
-                              title: Text(
-                                L10n.tr(context, 'profile.shipments_board'),
-                              ),
-                              trailing: const Icon(Icons.chevron_right),
-                              onTap: () => context.push('/seller/shipments'),
-                            ),
-                          if (isSeller) const Divider(height: 1),
-                          if (isSeller)
-                            ListTile(
-                              leading: const Icon(
-                                Icons.settings_applications_outlined,
-                              ),
-                              title: Text(
-                                L10n.tr(context, 'profile.courier_settings'),
-                              ),
-                              trailing: const Icon(Icons.chevron_right),
-                              onTap: () => context.push('/seller/couriers'),
-                            ),
-                        ],
-                      ),
+                          ),
+                          subtitle: const Text(UserSafetyService.supportEmail),
+                          trailing: const Icon(Icons.open_in_new),
+                          onTap: _openSupportEmail,
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     Text(

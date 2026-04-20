@@ -25,6 +25,7 @@ import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/utils/bool_utils.dart';
 import 'package:dzmarket/src/utils/product_share_url.dart';
+import 'package:dzmarket/src/widgets/user_avatar.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1949,6 +1950,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             ownerId: _product!.ownerId,
             sellerName: _sellerProfile?['full_name']?.toString(),
             sellerEmail: _sellerProfile?['email']?.toString(),
+            sellerAvatar: _sellerProfile?['avatar_url']?.toString(),
             sellerIsPublic: sellerIsPublic,
             onContact: _contactSeller,
             onViewProfile: viewSellerProfile,
@@ -2032,6 +2034,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             ownerId: _product!.ownerId,
             sellerName: _sellerProfile?['full_name']?.toString(),
             sellerEmail: _sellerProfile?['email']?.toString(),
+            sellerAvatar: _sellerProfile?['avatar_url']?.toString(),
             sellerIsPublic: sellerIsPublic,
             onContact: _contactSeller,
             onViewProfile: viewSellerProfile,
@@ -2171,6 +2174,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             ownerId: _product!.ownerId,
             sellerName: _sellerProfile?['full_name']?.toString(),
             sellerEmail: _sellerProfile?['email']?.toString(),
+            sellerAvatar: _sellerProfile?['avatar_url']?.toString(),
             sellerIsPublic: sellerIsPublic,
             onContact: _contactSeller,
             onViewProfile: viewSellerProfile,
@@ -2330,6 +2334,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           ownerId: _product!.ownerId,
                           sellerName: _sellerProfile?['full_name']?.toString(),
                           sellerEmail: _sellerProfile?['email']?.toString(),
+                          sellerAvatar: _sellerProfile?['avatar_url']
+                              ?.toString(),
                           sellerIsPublic: sellerIsPublic,
                           onContact: _contactSeller,
                           onViewProfile: viewSellerProfile,
@@ -4158,6 +4164,7 @@ class _SellerRowFixed extends StatelessWidget {
     required this.ownerId,
     this.sellerName,
     this.sellerEmail,
+    this.sellerAvatar,
     this.sellerIsPublic = false,
     this.onContact,
     this.onViewProfile,
@@ -4166,6 +4173,7 @@ class _SellerRowFixed extends StatelessWidget {
   final String ownerId;
   final String? sellerName;
   final String? sellerEmail;
+  final String? sellerAvatar;
   final bool sellerIsPublic;
   final VoidCallback? onContact;
   final VoidCallback? onViewProfile;
@@ -4211,7 +4219,14 @@ class _SellerRowFixed extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const CircleAvatar(child: Icon(Icons.person)),
+                  UserAvatar(
+                    radius: 20,
+                    avatarUrl: sellerAvatar,
+                    fullName: sellerName,
+                    email: sellerEmail,
+                    fontSize: 12,
+                    iconSize: 18,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(

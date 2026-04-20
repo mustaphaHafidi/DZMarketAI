@@ -12,6 +12,7 @@ import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/widgets/refresh_controller.dart';
+import 'package:dzmarket/src/widgets/user_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -608,37 +609,24 @@ class _ConversationListItem extends StatelessWidget {
                       ),
                     ),
                   ),
-                if (participantAvatar != null && participantAvatar!.isNotEmpty)
-                  Positioned(
-                    right: -2,
-                    bottom: -2,
-                    child: CircleAvatar(
-                      radius: 10,
-                      backgroundColor: Theme.of(context).colorScheme.surface,
-                      child: ClipOval(
-                        child: CachedNetworkImage(
-                          imageUrl: participantAvatar!,
-                          width: 18,
-                          height: 18,
-                          fit: BoxFit.cover,
-                          memCacheWidth: NetworkPreferencesService
-                              .instance
-                              .listImageMemCacheWidth,
-                          memCacheHeight: NetworkPreferencesService
-                              .instance
-                              .listImageMemCacheHeight,
-                          fadeInDuration: NetworkPreferencesService
-                              .instance
-                              .imageFadeInDuration,
-                          fadeOutDuration: NetworkPreferencesService
-                              .instance
-                              .imageFadeOutDuration,
-                          errorWidget: (_, __, ___) =>
-                              const Icon(Icons.person, size: 12),
-                        ),
-                      ),
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(1.2),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
+                      shape: BoxShape.circle,
+                    ),
+                    child: UserAvatar(
+                      radius: 9,
+                      avatarUrl: participantAvatar,
+                      fullName: participantName,
+                      fontSize: 8.5,
+                      iconSize: 11,
                     ),
                   ),
+                ),
               ],
             ),
             const SizedBox(width: 12),
