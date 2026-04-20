@@ -1527,7 +1527,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   Future<void> _openSellerProfile() async {
     final product = _product;
-    if (product == null || !isTruthyFlag(_sellerProfile?['is_public'])) return;
+    if (product == null) return;
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => PublicProfilePage(userId: product.ownerId),
@@ -1597,10 +1597,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     final isNegotiable = _product!.isNegotiable;
     final primaryTags = _buildPrimaryTags(context);
     final allTags = _buildDetailTags(context);
-    final canViewSellerProfile = isTruthyFlag(_sellerProfile?['is_public']);
-    final viewSellerProfile = canViewSellerProfile
-        ? () => _openSellerProfile()
-        : null;
+    final sellerIsPublic = isTruthyFlag(_sellerProfile?['is_public']);
+    final viewSellerProfile = _isOwner ? null : () => _openSellerProfile();
 
     Widget buildFavoriteButton() {
       if (supabase.auth.currentUser?.id != null) {
@@ -1951,6 +1949,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             ownerId: _product!.ownerId,
             sellerName: _sellerProfile?['full_name']?.toString(),
             sellerEmail: _sellerProfile?['email']?.toString(),
+            sellerIsPublic: sellerIsPublic,
             onContact: _contactSeller,
             onViewProfile: viewSellerProfile,
           ),
@@ -2029,42 +2028,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             style: Theme.of(context).textTheme.bodyLarge,
           ),
           const SizedBox(height: 18),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Row(
-              children: [
-                const CircleAvatar(child: Icon(Icons.person)),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    (_sellerProfile?['full_name']
-                                ?.toString()
-                                .trim()
-                                .isNotEmpty ??
-                            false)
-                        ? _sellerProfile!['full_name'].toString().trim()
-                        : ((_sellerProfile?['email']
-                                      ?.toString()
-                                      .trim()
-                                      .isNotEmpty ??
-                                  false)
-                              ? _sellerProfile!['email'].toString().trim()
-                              : L10n.tr(context, 'seller.fallback')),
-                    style: Theme.of(context).textTheme.titleMedium,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: _contactSeller,
-                  icon: const Icon(Icons.chat_bubble_outline),
-                  label: Text(L10n.tr(context, 'cta.contact')),
-                ),
-              ],
-            ),
+          _SellerRowFixed(
+            ownerId: _product!.ownerId,
+            sellerName: _sellerProfile?['full_name']?.toString(),
+            sellerEmail: _sellerProfile?['email']?.toString(),
+            sellerIsPublic: sellerIsPublic,
+            onContact: _contactSeller,
+            onViewProfile: viewSellerProfile,
           ),
           const SizedBox(height: 100),
         ],
@@ -2197,13 +2167,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         ],
                       ),
                       const SizedBox(height: 12),
-                      _SellerRowFixed(
-                        ownerId: _product!.ownerId,
-                        sellerName: _sellerProfile?['full_name']?.toString(),
-                        sellerEmail: _sellerProfile?['email']?.toString(),
-                        onContact: _contactSeller,
-                        onViewProfile: viewSellerProfile,
-                      ),
+          _SellerRowFixed(
+            ownerId: _product!.ownerId,
+            sellerName: _sellerProfile?['full_name']?.toString(),
+            sellerEmail: _sellerProfile?['email']?.toString(),
+            sellerIsPublic: sellerIsPublic,
+            onContact: _contactSeller,
+            onViewProfile: viewSellerProfile,
+          ),
                       const SizedBox(height: 16),
                       Divider(
                         color: Theme.of(context)
@@ -2359,6 +2330,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           ownerId: _product!.ownerId,
                           sellerName: _sellerProfile?['full_name']?.toString(),
                           sellerEmail: _sellerProfile?['email']?.toString(),
+                          sellerIsPublic: sellerIsPublic,
                           onContact: _contactSeller,
                           onViewProfile: viewSellerProfile,
                         ),
@@ -4186,6 +4158,7 @@ class _SellerRowFixed extends StatelessWidget {
     required this.ownerId,
     this.sellerName,
     this.sellerEmail,
+    this.sellerIsPublic = false,
     this.onContact,
     this.onViewProfile,
   });
@@ -4193,18 +4166,29 @@ class _SellerRowFixed extends StatelessWidget {
   final String ownerId;
   final String? sellerName;
   final String? sellerEmail;
+  final bool sellerIsPublic;
   final VoidCallback? onContact;
   final VoidCallback? onViewProfile;
 
   @override
   Widget build(BuildContext context) {
     final reviewService = ReviewService();
-    return FutureBuilder<double?>(
-      future: reviewService.fetchAverageRating(ownerId),
+    return FutureBuilder<List<dynamic>>(
+      future: Future.wait<dynamic>([
+        reviewService.fetchAverageRating(ownerId),
+        supabase
+            .from('profiles')
+            .select('is_public')
+            .eq('id', ownerId)
+            .maybeSingle(),
+      ]),
       builder: (context, snapshot) {
-        final rating = snapshot.data;
+        final rating = snapshot.data?[0] as double?;
+        final profileRow = snapshot.data?[1] as Map<String, dynamic>?;
         final fallbackName = L10n.tr(context, 'seller.fallback');
-        final canViewProfile = onViewProfile != null;
+        final canViewProfile =
+            onViewProfile != null &&
+            (sellerIsPublic || isTruthyFlag(profileRow?['is_public']));
         final displayName = (sellerName?.trim().isNotEmpty ?? false)
             ? sellerName!.trim()
             : (sellerEmail?.trim().isNotEmpty ?? false)

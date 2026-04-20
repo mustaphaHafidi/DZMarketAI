@@ -335,7 +335,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       if (product == null) return null;
       final isNegotiable = product['is_negotiable'] as bool? ?? true;
       if (mounted && _isProductNegotiable != isNegotiable) {
-        setState(() => _isProductNegotiable = isNegotiable);
+        setState(() {
+          _isProductNegotiable = isNegotiable;
+        });
       }
 
       return _ProductHeaderData(
@@ -664,6 +666,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     required String? currentUserId,
     required Offer? relatedOffer,
     required String? latestOfferMessageId,
+    required bool conversationHasArrangedSignal,
     bool allowOfferLookup = true,
   }) {
     final payload = msg.payload ?? const {};
@@ -694,6 +697,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
             currentUserId: currentUserId,
             relatedOffer: relatedOffer ?? snapshot.data,
             latestOfferMessageId: latestOfferMessageId,
+            conversationHasArrangedSignal: conversationHasArrangedSignal,
             allowOfferLookup: false,
           );
         },
@@ -703,10 +707,12 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         payload['status_i18n']?.toString() ??
         (status == null ? null : 'order.status.$status');
     final hasLabel = labelUrl.isNotEmpty;
-    final arrangedOrderContext = isArrangedDelivery(
-      deliveryMethod: payloadDeliveryMethod ?? _orderDeliveryMethod,
-      shippingOption: payloadShippingOption ?? _orderShippingOption,
-    );
+    final arrangedOrderContext =
+        isArrangedDelivery(
+          deliveryMethod: payloadDeliveryMethod ?? _orderDeliveryMethod,
+          shippingOption: payloadShippingOption ?? _orderShippingOption,
+        ) ||
+        conversationHasArrangedSignal;
     final explicitArrangedDeliveryEvent = isArrangedOrderSystemEvent(
       i18nKey: i18nKey,
       isOfferEvent: isOfferEvent,
@@ -1349,6 +1355,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                   builder: (context, snapshot) {
                     final messages = snapshot.data ?? const [];
                     final latestOfferMessageByOfferId = <String, String>{};
+                    final conversationHasArrangedSignal = messages.any((m) {
+                      final key = m.payload?['i18n_key']?.toString();
+                      return key == 'order.system.pickup_request';
+                    });
                     for (final message in messages) {
                       final offerId = message.payload?['offer_id']?.toString();
                       if (offerId == null || offerId.isEmpty) continue;
@@ -1388,6 +1398,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                               currentUserId: currentUser,
                               relatedOffer: offer,
                               latestOfferMessageId: latestOfferMessageId,
+                              conversationHasArrangedSignal:
+                                  conversationHasArrangedSignal,
                             );
                           }
                           final isMine = msg.senderId == currentUser;
