@@ -47,6 +47,23 @@ class UserAvatar extends StatelessWidget {
     return _palette[index];
   }
 
+  Widget _fallbackChild({
+    required String initials,
+    required Color foregroundColor,
+  }) {
+    if (initials == '?') {
+      return Icon(Icons.person, size: iconSize ?? radius * 0.95);
+    }
+    return Text(
+      initials,
+      style: TextStyle(
+        fontWeight: FontWeight.w700,
+        fontSize: fontSize ?? radius * 0.72,
+        color: foregroundColor,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final normalizedAvatar = normalizePublicStorageUrl(
@@ -59,28 +76,33 @@ class UserAvatar extends StatelessWidget {
         ThemeData.estimateBrightnessForColor(backgroundColor) == Brightness.dark
         ? Colors.white
         : Colors.black87;
+    final fallback = Center(
+      child: _fallbackChild(
+        initials: initials,
+        foregroundColor: foregroundColor,
+      ),
+    );
 
     return CircleAvatar(
       radius: radius,
       backgroundColor: backgroundColor,
-      backgroundImage: safeAvatar != null
-          ? CachedNetworkImageProvider(
-              safeAvatar,
-              imageRenderMethodForWeb: imageRenderMethodForWeb,
-            )
-          : null,
-      child: safeAvatar == null
-          ? (initials == '?'
-                ? Icon(Icons.person, size: iconSize ?? radius * 0.95)
-                : Text(
-                    initials,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: fontSize ?? radius * 0.72,
-                      color: foregroundColor,
-                    ),
-                  ))
-          : null,
+      child: ClipOval(
+        child: SizedBox(
+          width: radius * 2,
+          height: radius * 2,
+          child: safeAvatar == null
+              ? fallback
+              : CachedNetworkImage(
+                  imageUrl: safeAvatar,
+                  fit: BoxFit.cover,
+                  width: radius * 2,
+                  height: radius * 2,
+                  imageRenderMethodForWeb: imageRenderMethodForWeb,
+                  placeholder: (_, _) => fallback,
+                  errorWidget: (_, _, _) => fallback,
+                ),
+        ),
+      ),
     );
   }
 }

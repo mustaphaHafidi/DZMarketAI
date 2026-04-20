@@ -44,10 +44,11 @@ void main() {
       ),
     );
 
-    final avatar = tester.widget<CircleAvatar>(find.byType(CircleAvatar));
-    final provider = avatar.backgroundImage! as CachedNetworkImageProvider;
+    final avatar = tester.widget<CachedNetworkImage>(
+      find.byType(CachedNetworkImage),
+    );
     expect(
-      provider.url,
+      avatar.imageUrl,
       'https://api.dzmarket.pro/storage/v1/object/public/avatars/u1/demo.webp',
     );
   });

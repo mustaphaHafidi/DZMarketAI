@@ -389,6 +389,7 @@ class AuthService {
     required String id,
     String? fullName,
     String? avatarUrl,
+    bool avatarTouched = false,
     String? phone,
     String? wilaya,
     String? daira,
@@ -429,7 +430,7 @@ class AuthService {
     final safeRole = InputSanitizer.sanitizeOptionalText(role, maxLength: 20);
     final safeLang = InputSanitizer.sanitizeOptionalText(lang, maxLength: 8);
     if (safeFullName != null) payload['full_name'] = safeFullName;
-    if (safeAvatar != null) payload['avatar_url'] = safeAvatar;
+    if (avatarTouched || safeAvatar != null) payload['avatar_url'] = safeAvatar;
     if (safePhone != null) payload['phone'] = safePhone;
     if (safeWilaya != null) payload['wilaya'] = safeWilaya;
     if (safeDaira != null) payload['daira'] = safeDaira;

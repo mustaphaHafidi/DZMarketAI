@@ -161,6 +161,7 @@ class _ProfilePageState extends State<ProfilePage> {
         id: user.id,
         fullName: fullName,
         avatarUrl: avatarUrl,
+        avatarTouched: true,
         phone: phone,
         wilaya: wilaya,
         daira: daira,
@@ -672,6 +673,7 @@ class _ProfilePageState extends State<ProfilePage> {
     );
     final file = result?.files.first;
     if (file?.bytes == null) return;
+    final previousAvatar = InputSanitizer.safeUrl(_avatarUrl);
     setState(() => _saving = true);
     try {
       final urls = await StorageService().uploadImages(
@@ -679,10 +681,11 @@ class _ProfilePageState extends State<ProfilePage> {
         fileNames: [file.name],
         bucket: 'avatars',
       );
-      if (!mounted) return;
-      setState(() {
-        _avatarUrl = urls.isNotEmpty ? urls.first : null;
-      });
+      final nextAvatar = urls.isNotEmpty ? urls.first : null;
+      await _persistAvatarChange(
+        nextAvatar: nextAvatar,
+        previousAvatar: previousAvatar,
+      );
     } catch (e, stackTrace) {
       _logProfileError(e, stackTrace, contextTag: 'profile.pick_avatar');
       if (!mounted) return;
@@ -695,10 +698,72 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  void _removeAvatar() {
-    setState(() {
-      _avatarUrl = null;
-    });
+  Future<void> _persistAvatarChange({
+    required String? nextAvatar,
+    String? previousAvatar,
+  }) async {
+    final user = supabase.auth.currentUser;
+    if (user == null) {
+      throw const FormatException('login_required');
+    }
+    final safeNextAvatar = InputSanitizer.safeUrl(nextAvatar);
+    final safePreviousAvatar = InputSanitizer.safeUrl(previousAvatar);
+    try {
+      await AuthService.instance.updateProfile(
+        id: user.id,
+        avatarUrl: safeNextAvatar,
+        avatarTouched: true,
+      );
+      if (!mounted) return;
+      setState(() {
+        _avatarUrl = safeNextAvatar;
+      });
+      if (safePreviousAvatar != null &&
+          safePreviousAvatar.isNotEmpty &&
+          safePreviousAvatar != safeNextAvatar) {
+        unawaited(
+          StorageService()
+              .deletePublicUrls([safePreviousAvatar], bucket: 'avatars')
+              .catchError((_) {}),
+        );
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(L10n.tr(context, 'profile.updated'))),
+      );
+    } catch (e, stackTrace) {
+      if (safeNextAvatar != null &&
+          safeNextAvatar.isNotEmpty &&
+          safeNextAvatar != safePreviousAvatar) {
+        unawaited(
+          StorageService()
+              .deletePublicUrls([safeNextAvatar], bucket: 'avatars')
+              .catchError((_) {}),
+        );
+      }
+      _logProfileError(e, stackTrace, contextTag: 'profile.persist_avatar');
+      rethrow;
+    }
+  }
+
+  Future<void> _removeAvatar() async {
+    final previousAvatar = InputSanitizer.safeUrl(_avatarUrl);
+    if (previousAvatar == null || previousAvatar.isEmpty) return;
+    setState(() => _saving = true);
+    try {
+      await _persistAvatarChange(
+        nextAvatar: null,
+        previousAvatar: previousAvatar,
+      );
+    } catch (e, stackTrace) {
+      _logProfileError(e, stackTrace, contextTag: 'profile.remove_avatar');
+      if (!mounted) return;
+      final localeCode = Localizations.localeOf(context).languageCode;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_friendlyProfileError(localeCode, e))),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   Future<void> _openSupportEmail() async {
