@@ -15,9 +15,11 @@ import 'package:dzmarket/src/services/location_service.dart';
 import 'package:dzmarket/src/services/notification_inbox_service.dart';
 import 'package:dzmarket/src/services/storage_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/services/user_safety_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Unified profile page (buyer/seller) with editable fields and seller tools.
 class ProfilePage extends StatefulWidget {
@@ -701,6 +703,125 @@ class _ProfilePageState extends State<ProfilePage> {
     });
   }
 
+  Future<void> _openSupportEmail() async {
+    final uri = Uri(
+      scheme: 'mailto',
+      path: UserSafetyService.supportEmail,
+      queryParameters: const {'subject': 'DZMarket Support'},
+    );
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _requestAccountDeletion() async {
+    final reasonCtrl = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          L10n.tr(
+            dialogContext,
+            'profile.delete_account_confirm_title',
+            fallback: 'Supprimer mon compte',
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              L10n.tr(
+                dialogContext,
+                'profile.delete_account_confirm_body',
+                fallback:
+                    'Cette demande supprimera votre compte DZMarket et initiera la suppression de vos donnees personnelles non obligatoires. Certaines donnees peuvent etre conservees temporairement pour des obligations legales, comptables, antifraude et de securite.',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonCtrl,
+              maxLines: 3,
+              decoration: InputDecoration(
+                labelText: L10n.tr(
+                  dialogContext,
+                  'profile.delete_account_reason_label',
+                  fallback: 'Raison (optionnel)',
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(L10n.tr(dialogContext, 'common.cancel')),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+              foregroundColor: Theme.of(dialogContext).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(
+              L10n.tr(
+                dialogContext,
+                'profile.delete_account_cta',
+                fallback: 'Confirmer la suppression',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await AuthService.instance.requestAccountDeletion(reason: reasonCtrl.text);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            L10n.tr(
+              context,
+              'profile.delete_account_success',
+              fallback:
+                  'Demande de suppression envoyee. Votre compte sera traite sous 30 jours maximum.',
+            ),
+          ),
+        ),
+      );
+      await AuthService.instance.signOut();
+      if (mounted) {
+        context.go('/sign-in');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            L10n.tr(
+              context,
+              'profile.delete_account_failed',
+              fallback:
+                  'Impossible d envoyer la demande de suppression pour le moment.',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      reasonCtrl.dispose();
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+
   String _initials() {
     final raw = _nameCtrl.text.trim();
     if (raw.isEmpty) return '?';
@@ -1144,6 +1265,26 @@ class _ProfilePageState extends State<ProfilePage> {
                               ),
                             ),
                             const SizedBox(height: 12),
+                            OutlinedButton.icon(
+                              onPressed: _saving ? null : _requestAccountDeletion,
+                              icon: const Icon(Icons.delete_forever_outlined),
+                              label: Text(
+                                L10n.tr(
+                                  context,
+                                  'profile.delete_account',
+                                  fallback: 'Supprimer mon compte',
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Theme.of(
+                                  context,
+                                ).colorScheme.error,
+                                side: BorderSide(
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
                             ElevatedButton.icon(
                               onPressed: _saving ? null : _save,
                               icon: _saving
@@ -1250,6 +1391,67 @@ class _ProfilePageState extends State<ProfilePage> {
                                 onTap: () => context.push('/notifications'),
                               );
                             },
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            leading: const Icon(Icons.privacy_tip_outlined),
+                            title: Text(
+                              L10n.tr(
+                                context,
+                                'profile.privacy_policy',
+                                fallback: 'Politique de confidentialite',
+                              ),
+                            ),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () => context.push('/legal/privacy'),
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            leading: const Icon(Icons.delete_sweep_outlined),
+                            title: Text(
+                              L10n.tr(
+                                context,
+                                'profile.account_deletion',
+                                fallback: 'Suppression de compte',
+                              ),
+                            ),
+                            subtitle: Text(
+                              L10n.tr(
+                                context,
+                                'profile.account_deletion_hint',
+                                fallback:
+                                    'Initiation dans l app, traitement sous 30 jours maximum.',
+                              ),
+                            ),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () => context.push('/legal/account-deletion'),
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            leading: const Icon(Icons.description_outlined),
+                            title: Text(
+                              L10n.tr(
+                                context,
+                                'profile.terms',
+                                fallback: 'Conditions d utilisation',
+                              ),
+                            ),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () => context.push('/legal/terms'),
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            leading: const Icon(Icons.support_agent_outlined),
+                            title: Text(
+                              L10n.tr(
+                                context,
+                                'profile.contact_support',
+                                fallback: 'Contacter le support',
+                              ),
+                            ),
+                            subtitle: const Text(UserSafetyService.supportEmail),
+                            trailing: const Icon(Icons.open_in_new),
+                            onTap: _openSupportEmail,
                           ),
                           const Divider(height: 1),
                           if (isSuperAdmin) const Divider(height: 1),

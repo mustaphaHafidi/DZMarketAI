@@ -269,6 +269,44 @@ class AuthService {
   Future<void> signOut() =>
       RateLimiter.instance.run('auth.signOut', () => supabase.auth.signOut());
 
+  Future<void> requestAccountDeletion({String? reason}) async {
+    final user = supabase.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('login_required');
+    }
+    final safeReason = InputSanitizer.sanitizeOptionalText(
+      reason,
+      maxLength: 500,
+      allowNewlines: true,
+    );
+    try {
+      await RateLimiter.instance.run(
+        'auth.requestAccountDeletion',
+        () => supabase.rpc(
+          'submit_account_deletion_request',
+          params: {if (safeReason != null) 'p_reason': safeReason},
+        ),
+      );
+      return;
+    } on PostgrestException catch (error) {
+      final missingRpc =
+          error.code == 'PGRST202' ||
+          error.code == '42883' ||
+          error.message.contains('submit_account_deletion_request');
+      if (!missingRpc) rethrow;
+    }
+
+    await RateLimiter.instance.run(
+      'auth.requestAccountDeletion.insert',
+      () => supabase.from('account_deletion_requests').insert({
+        'user_id': user.id,
+        'email': user.email ?? '',
+        if (safeReason != null) 'reason': safeReason,
+        'status': 'pending',
+      }),
+    );
+  }
+
   Future<Profile?> fetchProfile() async {
     final user = supabase.auth.currentUser;
     if (user == null) return null;

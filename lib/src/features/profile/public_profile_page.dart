@@ -5,6 +5,7 @@ import 'package:dzmarket/src/models/product.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/services/user_safety_service.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -23,6 +24,8 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
   String? _error;
   Map<String, dynamic>? _profile;
   List<Product> _products = const [];
+  final _safetyService = UserSafetyService();
+  bool _isBlocked = false;
 
   @override
   void initState() {
@@ -56,12 +59,261 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
             .map((e) => Product.fromJson(e as Map<String, dynamic>))
             .toList();
       }
+      await _refreshBlockState();
     } catch (e) {
       if (!mounted) return;
       _error = e.toString();
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  String? get _currentUserId => supabase.auth.currentUser?.id;
+
+  bool get _canModerateSeller =>
+      _currentUserId != null && _currentUserId != widget.sellerId;
+
+  Future<void> _refreshBlockState() async {
+    if (!_canModerateSeller) {
+      if (mounted) setState(() => _isBlocked = false);
+      return;
+    }
+    final blocked = await _safetyService.isBlocked(widget.sellerId);
+    if (mounted) setState(() => _isBlocked = blocked);
+  }
+
+  Future<void> _toggleBlockUser() async {
+    final title = _isBlocked
+        ? L10n.tr(
+            context,
+            'safety.unblock_user',
+            fallback: 'Debloquer cet utilisateur',
+          )
+        : L10n.tr(
+            context,
+            'safety.block_user',
+            fallback: 'Bloquer cet utilisateur',
+          );
+    final body = _isBlocked
+        ? L10n.tr(
+            context,
+            'safety.unblock_user_body',
+            fallback:
+                'Vous pourrez de nouveau echanger avec ce vendeur apres le deblocage.',
+          )
+        : L10n.tr(
+            context,
+            'safety.block_user_body',
+            fallback:
+                'Vous ne pourrez plus envoyer ni recevoir de messages avec ce vendeur apres le blocage.',
+          );
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(L10n.tr(dialogContext, 'common.cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(title),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (_isBlocked) {
+      await _safetyService.unblockUser(widget.sellerId);
+    } else {
+      await _safetyService.blockUser(widget.sellerId);
+    }
+    final wasBlocked = _isBlocked;
+    await _refreshBlockState();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          wasBlocked
+              ? L10n.tr(
+                  context,
+                  'safety.unblock_user_success',
+                  fallback: 'Utilisateur debloque.',
+                )
+              : L10n.tr(
+                  context,
+                  'safety.block_user_success',
+                  fallback: 'Utilisateur bloque.',
+                ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _reportUser() async {
+    String? selectedReason;
+    final detailsCtrl = TextEditingController();
+    const reasonLabels = {
+      'safety.reason.harassment': 'Harcelement',
+      'report.reason.scam': 'Arnaque',
+      'report.reason.prohibited': 'Contenu interdit',
+      'safety.reason.spam': 'Spam',
+      'safety.reason.other': 'Autre',
+    };
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setModalState) => AlertDialog(
+          title: Text(
+            L10n.tr(
+              dialogContext,
+              'safety.report_user_title',
+              fallback: 'Signaler cet utilisateur',
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final key in reasonLabels.keys)
+                    ChoiceChip(
+                      label: Text(
+                        L10n.tr(
+                          dialogContext,
+                          key,
+                          fallback: reasonLabels[key],
+                        ),
+                      ),
+                      selected: selectedReason == key,
+                      onSelected: (selected) {
+                        setModalState(() {
+                          selectedReason = selected ? key : null;
+                        });
+                      },
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: detailsCtrl,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: L10n.tr(
+                    dialogContext,
+                    'report.details',
+                    fallback: 'Details',
+                  ),
+                  hintText: L10n.tr(
+                    dialogContext,
+                    'report.details_hint',
+                    fallback: 'Ajoutez des details (optionnel)',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(L10n.tr(dialogContext, 'common.cancel')),
+            ),
+            FilledButton(
+              onPressed: selectedReason == null
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(true),
+              child: Text(L10n.tr(dialogContext, 'common.send')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || selectedReason == null) {
+      detailsCtrl.dispose();
+      return;
+    }
+    if (!mounted) {
+      detailsCtrl.dispose();
+      return;
+    }
+    final reasonLabel = L10n.tr(context, selectedReason!, fallback: selectedReason!);
+    final details = detailsCtrl.text.trim();
+    detailsCtrl.dispose();
+    final reason = details.isEmpty ? reasonLabel : '[$reasonLabel] $details';
+    await _safetyService.reportUser(
+      reportedUserId: widget.sellerId,
+      reason: reason,
+      source: 'profile',
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          L10n.tr(
+            context,
+            'safety.report_user_success',
+            fallback: 'Signalement envoye. Merci.',
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildActions(BuildContext context) {
+    if (!_canModerateSeller) return const [];
+    final messenger = ScaffoldMessenger.of(this.context);
+    final genericError = L10n.tr(this.context, 'common.error');
+    return [
+      PopupMenuButton<String>(
+        onSelected: (value) async {
+          try {
+            switch (value) {
+              case 'report':
+                await _reportUser();
+                break;
+              case 'block':
+                await _toggleBlockUser();
+                break;
+            }
+          } catch (_) {
+            messenger.showSnackBar(SnackBar(content: Text(genericError)));
+          }
+        },
+        itemBuilder: (context) => [
+          PopupMenuItem<String>(
+            value: 'report',
+            child: Text(
+              L10n.tr(
+                context,
+                'safety.report_user',
+                fallback: 'Signaler cet utilisateur',
+              ),
+            ),
+          ),
+          PopupMenuItem<String>(
+            value: 'block',
+            child: Text(
+              _isBlocked
+                  ? L10n.tr(
+                      context,
+                      'safety.unblock_user',
+                      fallback: 'Debloquer cet utilisateur',
+                    )
+                  : L10n.tr(
+                      context,
+                      'safety.block_user',
+                      fallback: 'Bloquer cet utilisateur',
+                    ),
+            ),
+          ),
+        ],
+      ),
+    ];
   }
 
   @override
@@ -74,13 +326,19 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
 
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: Text(L10n.tr(context, 'profile.public'))),
+        appBar: AppBar(
+          title: Text(L10n.tr(context, 'profile.public')),
+          actions: _buildActions(context),
+        ),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
     if (_error != null) {
       return Scaffold(
-        appBar: AppBar(title: Text(L10n.tr(context, 'profile.public'))),
+        appBar: AppBar(
+          title: Text(L10n.tr(context, 'profile.public')),
+          actions: _buildActions(context),
+        ),
         body: Center(child: Text(_error!)),
       );
     }
@@ -93,7 +351,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
         : L10n.tr(context, 'profile.public_profile_title');
 
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
+      appBar: AppBar(title: Text(title), actions: _buildActions(context)),
       body: isPublic
           ? RefreshIndicator(
               onRefresh: _load,

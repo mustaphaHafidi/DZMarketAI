@@ -53,5 +53,7 @@
 	<string>DZMarket peut enregistrer des images generees ou telechargees lors de la gestion de vos annonces.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>DZMarket utilise l'appareil photo pour prendre des photos de produits a publier.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>DZMarket utilise votre position pour detecter automatiquement votre wilaya et votre daira lors de la configuration du profil et de la livraison.</string>
 </dict>
 </plist>
