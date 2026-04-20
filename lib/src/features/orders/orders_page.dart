@@ -218,6 +218,8 @@ class _OrderCard extends StatelessWidget {
               orderId: order.id,
               service: shippingService,
               orderCreatedAt: order.createdAt,
+              deliveryMethod: order.deliveryMethod,
+              shippingOption: order.shippingOption,
             ),
             const SizedBox(height: 8),
             Row(

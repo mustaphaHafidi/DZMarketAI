@@ -1,3 +1,4 @@
+import 'package:dzmarket/src/features/chat/order_chat_gate_page.dart';
 import 'package:dzmarket/src/features/orders/fulfillment_page.dart';
 import 'package:dzmarket/src/models/shipment.dart';
 import 'package:dzmarket/src/models/tracking_progress.dart';
@@ -6,6 +7,7 @@ import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/utils/delivery_mode_utils.dart';
 import 'package:dzmarket/src/services/i18n.dart';
+import 'package:dzmarket/src/widgets/arranged_delivery_card.dart';
 import 'package:dzmarket/src/widgets/tracking_stepper.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -112,6 +114,10 @@ class ShipmentsDashboardPage extends StatelessWidget {
                   )
                   .toList();
               final orderId = r['order_id']?.toString() ?? '?';
+              final isArrangedOrder = isArrangedDelivery(
+                deliveryMethod: deliveryMethod,
+                shippingOption: shippingOption,
+              );
               final presentation = TrackingPresentation.fromData(
                 status: status,
                 trackingNumber: tracking == '-' ? null : tracking,
@@ -119,11 +125,13 @@ class ShipmentsDashboardPage extends StatelessWidget {
                 createdAt: createdAt,
                 events: events,
               );
-              final statusLabel = L10n.tr(
-                context,
-                presentation.displayStatusKey,
-                fallback: presentation.displayStatusFallback,
-              );
+              final statusLabel = isArrangedOrder
+                  ? _statusLabel(context, status)
+                  : L10n.tr(
+                      context,
+                      presentation.displayStatusKey,
+                      fallback: presentation.displayStatusFallback,
+                    );
               final isCancelled = status == 'cancelled';
               final carrierKey = (courierId.isNotEmpty ? courierId : carrier)
                   .toLowerCase();
@@ -133,18 +141,17 @@ class ShipmentsDashboardPage extends StatelessWidget {
                   carrierKey.contains('zrexpress') ||
                   carrierKey.contains('guepex');
               final allowManualStatus = !isIntegratedCarrier && !isCancelled;
-              final isArrangedOrder = isArrangedDelivery(
-                deliveryMethod: deliveryMethod,
-                shippingOption: shippingOption,
-              );
               final canGenerateLabel =
                   !hasLabel && !isCancelled && !isArrangedOrder;
+              final carrierLabel = isArrangedOrder
+                  ? L10n.tr(context, 'seller_orders.arranged_delivery')
+                  : carrier;
               return ListTile(
                 title: Text(
                   L10n.tr(
                     context,
                     'shipments.order_label',
-                    params: {'id': orderId, 'carrier': carrier},
+                    params: {'id': orderId, 'carrier': carrierLabel},
                   ),
                 ),
                 subtitle: Column(
@@ -158,15 +165,33 @@ class ShipmentsDashboardPage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    TrackingStepper(presentation: presentation, compact: true),
-                    const SizedBox(height: 8),
-                    Text(
-                      L10n.tr(
-                        context,
-                        'shipments.tracking_label',
-                        params: {'tracking': tracking},
-                      ),
-                    ),
+                    if (isArrangedOrder)
+                      ArrangedDeliveryCard(
+                        title: L10n.tr(
+                          context,
+                          'seller_orders.arranged_delivery',
+                        ),
+                        description: L10n.tr(
+                          context,
+                          'checkout.arranged_summary_note',
+                        ),
+                        statusLabel: statusLabel,
+                        compact: true,
+                      )
+                    else ...[
+                      TrackingStepper(presentation: presentation, compact: true),
+                      if (tracking != '-')
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            L10n.tr(
+                              context,
+                              'shipments.tracking_label',
+                              params: {'tracking': tracking},
+                            ),
+                          ),
+                        ),
+                    ],
                     if (cost != null)
                       Text(
                         L10n.tr(
@@ -232,6 +257,19 @@ class ShipmentsDashboardPage extends StatelessWidget {
                               L10n.tr(context, 'shipments.change_status'),
                             ),
                           ),
+                        if (isArrangedOrder)
+                          TextButton.icon(
+                            onPressed: () async {
+                              await Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      OrderChatGatePage(orderId: orderId),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                            label: Text(L10n.tr(context, 'common.chat')),
+                          ),
                         if (canGenerateLabel)
                           TextButton.icon(
                             onPressed: () async {
@@ -264,21 +302,27 @@ class ShipmentsDashboardPage extends StatelessWidget {
                             label: Text(
                               L10n.tr(context, 'shipments.open_label'),
                             ),
-                          ),
+                        ),
                       ],
                     ),
                   ],
                 ),
-                trailing: hasLabel
+                trailing: hasLabel && !isArrangedOrder
                     ? IconButton(
                         icon: const Icon(Icons.link),
                         onPressed: () =>
                             _openLabel(context, labelUrl!, orderId: orderId),
                       )
                     : null,
-                onTap: allowManualStatus
-                    ? () => _showStatusSheet(context, orderId, status)
-                    : null,
+                onTap: isArrangedOrder
+                    ? () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => OrderChatGatePage(orderId: orderId),
+                          ),
+                        )
+                    : allowManualStatus
+                        ? () => _showStatusSheet(context, orderId, status)
+                        : null,
               );
             },
           );

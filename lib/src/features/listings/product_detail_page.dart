@@ -1428,6 +1428,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   @override
   Widget build(BuildContext context) {
     final formatter = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA');
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final wideWebLayout = screenWidth >= 1100;
+    final centeredContent = BoxConstraints(
+      maxWidth: wideWebLayout ? 1080 : 760,
+    );
+    final heroExpandedHeight = wideWebLayout ? 320.0 : 390.0;
 
     if (!_loaded) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -1474,7 +1480,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         slivers: [
           SliverAppBar(
             pinned: true,
-            expandedHeight: 390,
+            expandedHeight: heroExpandedHeight,
             leading: _topOverlayIconButton(
               icon: Icons.arrow_back,
               onPressed: () => Navigator.of(context).maybePop(),
@@ -1527,16 +1533,39 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               ),
             ],
             flexibleSpace: FlexibleSpaceBar(
-              background: _ImageCarousel(
-                controller: _pageController,
-                images: heroImages,
+              background: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: wideWebLayout ? 24 : 0,
+                ),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: centeredContent,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.vertical(
+                        bottom: Radius.circular(wideWebLayout ? 24 : 0),
+                      ),
+                      child: _ImageCarousel(
+                        controller: _pageController,
+                        images: heroImages,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
           SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: centeredContent,
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    wideWebLayout ? 24 : 16,
+                    16,
+                    wideWebLayout ? 24 : 16,
+                    0,
+                  ),
+                  child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
@@ -1676,6 +1705,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 ],
               ),
             ),
+              ),
+            ),
           ),
         ],
       ),
@@ -1691,9 +1722,17 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               ),
             ),
           ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-            child: Column(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: centeredContent,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  wideWebLayout ? 24 : 16,
+                  10,
+                  wideWebLayout ? 24 : 16,
+                  12,
+                ),
+                child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
@@ -1738,6 +1777,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   ],
                 ),
               ],
+            ),
+              ),
             ),
           ),
         ),

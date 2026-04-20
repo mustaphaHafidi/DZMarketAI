@@ -14,6 +14,7 @@ import 'package:dzmarket/src/services/offer_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/services/user_safety_service.dart';
 import 'package:dzmarket/src/utils/label_url_resolver.dart';
+import 'package:dzmarket/src/widgets/arranged_delivery_card.dart';
 import 'package:dzmarket/src/widgets/tracking_stepper.dart';
 import 'package:dzmarket/src/widgets/refresh_controller.dart';
 import 'package:flutter/material.dart';
@@ -646,6 +647,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         payload['status_i18n']?.toString() ??
         (status == null ? null : 'order.status.$status');
     final hasLabel = labelUrl.isNotEmpty;
+    final isArrangedDeliveryEvent = i18nKey == 'order.system.pickup_request';
     final isShipmentLikeEvent =
         !isOfferEvent &&
         (hasLabel ||
@@ -656,7 +658,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     final messageText = i18nKey != null && i18nKey.isNotEmpty
         ? L10n.tr(context, i18nKey, fallback: msg.text)
         : msg.text;
-    final trackingPresentation = isShipmentLikeEvent
+    final trackingPresentation = isShipmentLikeEvent && !isArrangedDeliveryEvent
         ? TrackingPresentation.fromData(
             status: status,
             trackingNumber: tracking,
@@ -727,6 +729,21 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   '${L10n.tr(context, 'chat.room.system_tracking')}: $tracking',
+                ),
+              ),
+            if (isArrangedDeliveryEvent)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: ArrangedDeliveryCard(
+                  title: L10n.tr(
+                    context,
+                    'seller_orders.arranged_delivery',
+                  ),
+                  description: L10n.tr(
+                    context,
+                    'shipments.arranged_no_label',
+                  ),
+                  compact: true,
                 ),
               ),
             if (trackingPresentation != null)

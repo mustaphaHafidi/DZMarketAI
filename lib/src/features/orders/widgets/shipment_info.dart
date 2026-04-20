@@ -3,6 +3,8 @@ import 'package:dzmarket/src/models/shipment.dart';
 import 'package:dzmarket/src/services/label_url_service.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
+import 'package:dzmarket/src/utils/delivery_mode_utils.dart';
+import 'package:dzmarket/src/widgets/arranged_delivery_card.dart';
 import 'package:dzmarket/src/widgets/tracking_stepper.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -13,15 +15,30 @@ class ShipmentInfo extends StatelessWidget {
     required this.orderId,
     required this.service,
     this.orderCreatedAt,
+    this.deliveryMethod,
+    this.shippingOption,
   });
   static final LabelUrlService _labelUrlService = LabelUrlService();
 
   final String orderId;
   final ShippingService service;
   final DateTime? orderCreatedAt;
+  final String? deliveryMethod;
+  final String? shippingOption;
 
   @override
   Widget build(BuildContext context) {
+    final isArrangedOrder = isArrangedDelivery(
+      deliveryMethod: deliveryMethod,
+      shippingOption: shippingOption,
+    );
+    if (isArrangedOrder) {
+      return ArrangedDeliveryCard(
+        title: L10n.tr(context, 'seller_orders.arranged_delivery'),
+        description: L10n.tr(context, 'checkout.arranged_summary_note'),
+        compact: true,
+      );
+    }
     return StreamBuilder<Shipment?>(
       stream: service.streamShipment(orderId),
       builder: (context, snapshot) {
