@@ -299,21 +299,17 @@ class _SignUpPageState extends State<SignUpPage> {
                                   ),
                                 ),
                                 const SizedBox(height: 12),
-                                Directionality(
-                                  textDirection: TextDirection.ltr,
-                                  child: TextField(
-                                    controller: _emailController,
-                                    keyboardType: TextInputType.emailAddress,
-                                    textAlign: TextAlign.left,
-                                    textDirection: TextDirection.ltr,
-                                    decoration: InputDecoration(
-                                      labelText: _t(
-                                        'auth.email',
-                                        fallback: 'Email',
-                                      ),
-                                      prefixIcon: const Icon(
-                                        Icons.email_outlined,
-                                      ),
+                                TextField(
+                                  controller: _emailController,
+                                  keyboardType: TextInputType.emailAddress,
+                                  textAlign: TextAlign.left,
+                                  decoration: InputDecoration(
+                                    labelText: _t(
+                                      'auth.email',
+                                      fallback: 'Email',
+                                    ),
+                                    prefixIcon: const Icon(
+                                      Icons.email_outlined,
                                     ),
                                   ),
                                 ),
