@@ -5,6 +5,7 @@ import 'package:dzmarket/src/models/profile.dart';
 import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:dzmarket/src/services/rate_limiter.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/utils/public_storage_url_resolver.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -410,7 +411,10 @@ class AuthService {
       fullName,
       maxLength: 80,
     );
-    final safeAvatar = InputSanitizer.sanitizeUrl(avatarUrl);
+    final rawAvatar = InputSanitizer.sanitizeUrl(avatarUrl);
+    final safeAvatar = rawAvatar == null
+        ? null
+        : normalizePublicStorageUrl(rawAvatar);
     final safePhone = InputSanitizer.sanitizePhone(phone);
     final safeWilaya = InputSanitizer.sanitizeOptionalText(
       wilaya,
@@ -438,12 +442,34 @@ class AuthService {
     if (isSeller != null) payload['is_seller'] = isSeller;
     if (preferences != null) payload['preferences'] = preferences;
     if (payload.length == 1) return; // only id present
-    Future<void> attempt(Map<String, dynamic> data) async {
+    Future<bool> attemptUpdate(Map<String, dynamic> data) async {
+      if (data.length <= 1) return true; // only id
+      final updatePayload = Map<String, dynamic>.from(data)..remove('id');
+      if (updatePayload.isEmpty) return true;
+      final response = await RateLimiter.instance.run(
+        'profiles.update',
+        () => supabase
+            .from('profiles')
+            .update(updatePayload)
+            .eq('id', safeId)
+            .select('id')
+            .maybeSingle(),
+      );
+      return response != null;
+    }
+
+    Future<void> attemptInsert(Map<String, dynamic> data) async {
       if (data.length <= 1) return; // only id
       await RateLimiter.instance.run(
-        'profiles.upsert',
-        () => supabase.from('profiles').upsert(data),
+        'profiles.insert',
+        () => supabase.from('profiles').insert(data),
       );
+    }
+
+    Future<void> attempt(Map<String, dynamic> data) async {
+      final updated = await attemptUpdate(data);
+      if (updated) return;
+      await attemptInsert(data);
     }
 
     try {

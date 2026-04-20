@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cached_network_image_platform_interface/cached_network_image_platform_interface.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/utils/avatar_initials.dart';
+import 'package:dzmarket/src/utils/public_storage_url_resolver.dart';
 import 'package:flutter/material.dart';
 
 class UserAvatar extends StatelessWidget {
@@ -48,7 +49,10 @@ class UserAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final safeAvatar = InputSanitizer.safeUrl(avatarUrl);
+    final normalizedAvatar = normalizePublicStorageUrl(
+      InputSanitizer.safeUrl(avatarUrl),
+    );
+    final safeAvatar = normalizedAvatar.isEmpty ? null : normalizedAvatar;
     final initials = userInitials(fullName: fullName, email: email);
     final backgroundColor = _backgroundColor();
     final foregroundColor =

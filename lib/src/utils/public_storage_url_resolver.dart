@@ -11,6 +11,7 @@ const Set<String> _internalStorageHosts = {
   '::1',
 };
 const Set<String> _internalProxyPorts = {'8000', '8443'};
+const String _knownApiFallback = 'https://api.dzmarket.pro';
 
 Uri? _parseAbsoluteHttpUri(String value) {
   final uri = Uri.tryParse(value.trim());
@@ -33,7 +34,8 @@ Uri? _webApiBaseFallback() {
 Uri? _preferredPublicStorageBase() {
   return _parseAbsoluteHttpUri(AppConfig.current?.supabaseUrl ?? '') ??
       _parseAbsoluteHttpUri(SupabaseOptions.supabaseUrl) ??
-      _webApiBaseFallback();
+      _webApiBaseFallback() ??
+      _parseAbsoluteHttpUri(_knownApiFallback);
 }
 
 bool _isInternalHost(String host) =>
@@ -47,7 +49,8 @@ Uri _stripDefaultPort(Uri uri) {
 
 Uri _normalizeProxyPort(Uri uri, {Uri? preferredBase}) {
   final preferredHost = preferredBase?.host.toLowerCase();
-  final isPreferredHost = preferredHost != null &&
+  final isPreferredHost =
+      preferredHost != null &&
       preferredHost.isNotEmpty &&
       uri.host.toLowerCase() == preferredHost;
   final hasInternalPort =

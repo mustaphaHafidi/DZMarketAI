@@ -721,7 +721,7 @@ class _ProfilePageState extends State<ProfilePage> {
           L10n.tr(
             dialogContext,
             'profile.delete_account_confirm_title',
-            fallback: 'Supprimer mon compte',
+            fallback: 'Demander la suppression du compte',
           ),
         ),
         content: Column(
@@ -733,7 +733,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 dialogContext,
                 'profile.delete_account_confirm_body',
                 fallback:
-                    'Cette demande supprimera votre compte DZMarket et initiera la suppression de vos donnees personnelles non obligatoires. Certaines donnees peuvent etre conservees temporairement pour des obligations legales, comptables, antifraude et de securite.',
+                    'Cette action envoie une demande de suppression de votre compte DZMarket. Le traitement est effectue manuellement sous 30 jours maximum. Certaines donnees peuvent etre conservees temporairement pour des obligations legales, comptables, antifraude et de securite.',
               ),
             ),
             const SizedBox(height: 12),
@@ -765,7 +765,7 @@ class _ProfilePageState extends State<ProfilePage> {
               L10n.tr(
                 dialogContext,
                 'profile.delete_account_cta',
-                fallback: 'Confirmer la suppression',
+                fallback: 'Envoyer la demande',
               ),
             ),
           ),
@@ -1268,28 +1268,6 @@ class _ProfilePageState extends State<ProfilePage> {
                               ),
                             ),
                             const SizedBox(height: 12),
-                            OutlinedButton.icon(
-                              onPressed: _saving
-                                  ? null
-                                  : _requestAccountDeletion,
-                              icon: const Icon(Icons.delete_forever_outlined),
-                              label: Text(
-                                L10n.tr(
-                                  context,
-                                  'profile.delete_account',
-                                  fallback: 'Supprimer mon compte',
-                                ),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Theme.of(
-                                  context,
-                                ).colorScheme.error,
-                                side: BorderSide(
-                                  color: Theme.of(context).colorScheme.error,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
                             ElevatedButton.icon(
                               onPressed: _saving ? null : _save,
                               icon: _saving
@@ -1460,7 +1438,7 @@ class _ProfilePageState extends State<ProfilePage> {
                             L10n.tr(
                               context,
                               'profile.account_deletion',
-                              fallback: 'Suppression de compte',
+                              fallback: 'Demander la suppression du compte',
                             ),
                           ),
                           subtitle: Text(
@@ -1468,11 +1446,11 @@ class _ProfilePageState extends State<ProfilePage> {
                               context,
                               'profile.account_deletion_hint',
                               fallback:
-                                  'Initiation dans l app, traitement sous 30 jours maximum.',
+                                  'Demande initiee dans l app, traitement sous 30 jours maximum.',
                             ),
                           ),
                           trailing: const Icon(Icons.chevron_right),
-                          onTap: () => context.push('/legal/account-deletion'),
+                          onTap: _saving ? null : _requestAccountDeletion,
                         ),
                       ],
                     ),

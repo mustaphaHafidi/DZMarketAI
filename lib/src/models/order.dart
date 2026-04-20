@@ -1,5 +1,6 @@
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/utils/label_url_resolver.dart';
+import 'package:dzmarket/src/utils/public_storage_url_resolver.dart';
 import 'package:flutter/widgets.dart';
 
 enum OrderStatus { pending, paid, shipped, delivered, cancelled }
@@ -85,9 +86,10 @@ class Order {
       productTitle:
           json['product']?['title'] as String? ??
           json['product_title'] as String?,
-      productImage:
-          json['product']?['image_url'] as String? ??
-          json['product_image'] as String?,
+      productImage: normalizePublicStorageUrl(
+        json['product']?['image_url'] as String? ??
+            json['product_image'] as String?,
+      ),
       productPrice:
           (json['product']?['price'] as num?)?.toDouble() ??
           (json['product_price'] as num?)?.toDouble(),

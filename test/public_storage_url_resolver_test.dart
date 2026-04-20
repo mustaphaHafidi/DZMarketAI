@@ -9,27 +9,30 @@ void main() {
     expect(normalizePublicStorageUrl('not-a-url'), 'not-a-url');
   });
 
-  test('normalizePublicStorageUrl rewrites legacy supabase public storage host', () {
-    const raw =
-        'https://maumwzbvzbcamvlivqpe.supabase.co/storage/v1/object/public/products/u1/demo.jpg';
-    final normalized = normalizePublicStorageUrl(raw);
-    final configured = Uri.tryParse(SupabaseOptions.supabaseUrl);
+  test(
+    'normalizePublicStorageUrl rewrites legacy supabase public storage host',
+    () {
+      const raw =
+          'https://maumwzbvzbcamvlivqpe.supabase.co/storage/v1/object/public/products/u1/demo.jpg';
+      final normalized = normalizePublicStorageUrl(raw);
+      final configured = Uri.tryParse(SupabaseOptions.supabaseUrl);
 
-    if (configured == null ||
-        !configured.hasScheme ||
-        configured.host.trim().isEmpty) {
-      expect(normalized, raw);
-      return;
-    }
+      if (configured == null ||
+          !configured.hasScheme ||
+          configured.host.trim().isEmpty) {
+        expect(
+          normalized,
+          'https://api.dzmarket.pro/storage/v1/object/public/products/u1/demo.jpg',
+        );
+        return;
+      }
 
-    final resolved = Uri.parse(normalized);
-    expect(resolved.scheme, configured.scheme);
-    expect(resolved.host, configured.host);
-    expect(
-      resolved.path,
-      '/storage/v1/object/public/products/u1/demo.jpg',
-    );
-  });
+      final resolved = Uri.parse(normalized);
+      expect(resolved.scheme, configured.scheme);
+      expect(resolved.host, configured.host);
+      expect(resolved.path, '/storage/v1/object/public/products/u1/demo.jpg');
+    },
+  );
 
   test('normalizePublicStorageUrl rewrites internal public storage host', () {
     const raw =
@@ -40,16 +43,16 @@ void main() {
     if (configured == null ||
         !configured.hasScheme ||
         configured.host.trim().isEmpty) {
-      expect(normalized, raw);
+      expect(
+        normalized,
+        'https://api.dzmarket.pro/storage/v1/object/public/avatars/u1/avatar.png',
+      );
       return;
     }
 
     final resolved = Uri.parse(normalized);
     expect(resolved.scheme, configured.scheme);
     expect(resolved.host, configured.host);
-    expect(
-      resolved.path,
-      '/storage/v1/object/public/avatars/u1/avatar.png',
-    );
+    expect(resolved.path, '/storage/v1/object/public/avatars/u1/avatar.png');
   });
 }

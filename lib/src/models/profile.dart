@@ -1,3 +1,5 @@
+import 'package:dzmarket/src/utils/public_storage_url_resolver.dart';
+
 enum UserRole { buyer, seller, superadmin }
 
 enum UserStatus { active, suspended, banned }
@@ -45,7 +47,7 @@ class Profile {
       id: json['id'] as String,
       email: json['email'] as String? ?? '',
       fullName: json['full_name'] as String?,
-      avatarUrl: json['avatar_url'] as String?,
+      avatarUrl: normalizePublicStorageUrl(json['avatar_url'] as String?),
       phone: json['phone'] as String?,
       wilaya: json['wilaya'] as String?,
       daira: json['daira'] as String?,

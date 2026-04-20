@@ -428,7 +428,7 @@ class L10n {
     'legal.imprint.title': 'Mentions l\xe9gales',
     'legal.account_deletion.title': 'Suppression de compte',
     'legal.account_deletion.body':
-        'Pour demander la suppression de votre compte DZMarket et des donnees associees, envoyez un email a support@dzmarket.pro avec l\'adresse email du compte concerne et l\'objet "Suppression de compte".\n\nNous supprimons ou anonymisons les donnees de profil (nom, email, telephone), les annonces, les messages et les preferences non obligatoires.\n\nCertaines donnees peuvent etre conservees temporairement pour des obligations legales, comptables, antifraude et de securite (maximum 36 mois sauf obligation legale plus longue).\n\nDelai de traitement: sous 30 jours maximum.',
+        'Pour demander la suppression de votre compte DZMarket et des donnees associees, utilisez l\'option dediee depuis votre profil dans l\'application.\n\nSi vous ne pouvez plus acceder a votre compte, vous pouvez contacter support@dzmarket.pro.\n\nNous supprimons ou anonymisons les donnees de profil (nom, email, telephone), les annonces, les messages et les preferences non obligatoires.\n\nCertaines donnees peuvent etre conservees temporairement pour des obligations legales, comptables, antifraude et de securite (maximum 36 mois sauf obligation legale plus longue).\n\nDelai de traitement: sous 30 jours maximum.',
     'legal.privacy.body':
         'Nous collectons les donn\xe9es n\xe9cessaires au fonctionnement de DZMarket : email, t\xe9l\xe9phone, adresse, annonces, messages et commandes.\n\nFinalit\xe9s : cr\xe9ation de compte, ex\xe9cution des commandes, livraison, support et pr\xe9vention des abus.\n\nBase l\xe9gale : consentement explicite et obligations l\xe9gales (loi 18-07, loi 18-05).\n\nConservation : 36 mois ou jusqu\u2019\xe0 suppression du compte, sauf obligations l\xe9gales.\n\nVos droits : acc\xe8s, rectification, suppression et opposition. Contact : support@dzmarket.pro.\n\nResponsable du traitement : Master Codes.',
     'legal.privacy.title': 'Politique de confidentialit\xe9',
@@ -737,21 +737,21 @@ class L10n {
     'payment.method_online': 'Paiement en ligne',
     'payment.recorded_mock': 'Paiement enregistré (mock)',
     'profile.bio': 'Bio',
-    'profile.delete_account': 'Supprimer mon compte',
-    'profile.delete_account_confirm_title': 'Supprimer mon compte',
+    'profile.delete_account': 'Demander la suppression du compte',
+    'profile.delete_account_confirm_title': 'Demander la suppression du compte',
     'profile.delete_account_confirm_body':
-        'Cette demande supprimera votre compte DZMarket et initiera la suppression de vos donnees personnelles non obligatoires. Certaines donnees peuvent etre conservees temporairement pour des obligations legales, comptables, antifraude et de securite.',
+        'Cette action envoie une demande de suppression de votre compte DZMarket. Le traitement est effectue manuellement sous 30 jours maximum. Certaines donnees peuvent etre conservees temporairement pour des obligations legales, comptables, antifraude et de securite.',
     'profile.delete_account_reason_label': 'Raison (optionnel)',
-    'profile.delete_account_cta': 'Confirmer la suppression',
+    'profile.delete_account_cta': 'Envoyer la demande',
     'profile.delete_account_success':
         'Demande de suppression envoyee. Votre compte sera traite sous 30 jours maximum.',
     'profile.delete_account_failed':
         'Impossible d envoyer la demande de suppression pour le moment.',
-    'profile.account_deletion': 'Suppression de compte',
+    'profile.account_deletion': 'Demander la suppression du compte',
     'profile.account_deletion_hint':
-        'Initiation dans l app, traitement sous 30 jours maximum.',
+        'Demande initiee dans l app, traitement sous 30 jours maximum.',
     'profile.privacy_policy': 'Politique de confidentialite',
-    'profile.terms': 'Conditions d utilisation',
+    'profile.terms': 'Conditions d\'utilisation',
     'profile.contact_support': 'Contacter le support',
     'profile.courier_settings': 'Paramètres transporteurs',
     'profile.daira': 'Daïra',

@@ -11,6 +11,7 @@ import 'package:dzmarket/src/services/conversation_meta_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/utils/public_storage_url_resolver.dart';
 import 'package:dzmarket/src/widgets/refresh_controller.dart';
 import 'package:dzmarket/src/widgets/user_avatar.dart';
 import 'package:flutter/material.dart';
@@ -727,9 +728,10 @@ class _ConversationThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (productImage != null && productImage!.isNotEmpty) {
+    final normalizedProductImage = normalizePublicStorageUrl(productImage);
+    if (normalizedProductImage.isNotEmpty) {
       return CachedNetworkImage(
-        imageUrl: productImage!,
+        imageUrl: normalizedProductImage,
         width: 56,
         height: 56,
         fit: BoxFit.cover,

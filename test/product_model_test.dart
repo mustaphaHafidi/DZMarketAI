@@ -22,7 +22,7 @@ void main() {
     if (configured == null ||
         !configured.hasScheme ||
         configured.host.trim().isEmpty) {
-      expect(urls, [legacyUrl, currentUrl]);
+      expect(urls, [currentUrl]);
       return;
     }
 
