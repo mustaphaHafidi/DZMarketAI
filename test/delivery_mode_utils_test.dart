@@ -4,10 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('isArrangedDelivery recognizes arranged delivery aliases', () {
     expect(
-      isArrangedDelivery(
-        deliveryMethod: 'pickup',
-        shippingOption: null,
-      ),
+      isArrangedDelivery(deliveryMethod: 'pickup', shippingOption: null),
       isTrue,
     );
     expect(
@@ -25,50 +22,69 @@ void main() {
       isTrue,
     );
     expect(
-      isArrangedDelivery(
-        deliveryMethod: 'cod',
-        shippingOption: 'home',
-      ),
+      isArrangedDelivery(deliveryMethod: 'cod', shippingOption: 'home'),
       isFalse,
     );
   });
 
-  test('isArrangedOrderSystemEvent recognizes arranged order lifecycle events', () {
+  test(
+    'isArrangedOrderSystemEvent recognizes arranged order lifecycle events',
+    () {
+      expect(
+        isArrangedOrderSystemEvent(
+          i18nKey: 'order.system.created',
+          isOfferEvent: false,
+          deliveryMethod: 'pickup',
+          shippingOption: null,
+        ),
+        isTrue,
+      );
+      expect(
+        isArrangedOrderSystemEvent(
+          i18nKey: 'order.system.pickup_request',
+          isOfferEvent: false,
+          deliveryMethod: null,
+          shippingOption: null,
+        ),
+        isTrue,
+      );
+      expect(
+        isArrangedOrderSystemEvent(
+          i18nKey: 'order.system.created',
+          isOfferEvent: false,
+          deliveryMethod: 'cod',
+          shippingOption: 'home',
+        ),
+        isFalse,
+      );
+      expect(
+        isArrangedOrderSystemEvent(
+          i18nKey: 'offer.system.accepted',
+          isOfferEvent: true,
+          deliveryMethod: 'pickup',
+          shippingOption: null,
+        ),
+        isFalse,
+      );
+    },
+  );
+
+  test('arrangedDeliverySystemMessageKey remaps legacy carrier wording', () {
     expect(
-      isArrangedOrderSystemEvent(
-        i18nKey: 'order.system.created',
-        isOfferEvent: false,
-        deliveryMethod: 'pickup',
-        shippingOption: null,
-      ),
-      isTrue,
+      arrangedDeliverySystemMessageKey('order.system.validated'),
+      'order.system.arranged_validated',
     );
     expect(
-      isArrangedOrderSystemEvent(
-        i18nKey: 'order.system.pickup_request',
-        isOfferEvent: false,
-        deliveryMethod: null,
-        shippingOption: null,
-      ),
-      isTrue,
+      arrangedDeliverySystemMessageKey('order.system.shipped'),
+      'order.system.arranged_confirmed',
     );
     expect(
-      isArrangedOrderSystemEvent(
-        i18nKey: 'order.system.created',
-        isOfferEvent: false,
-        deliveryMethod: 'cod',
-        shippingOption: 'home',
-      ),
-      isFalse,
+      arrangedDeliverySystemMessageKey('order.system.label_reminder'),
+      'order.system.arranged_no_label',
     );
     expect(
-      isArrangedOrderSystemEvent(
-        i18nKey: 'offer.system.accepted',
-        isOfferEvent: true,
-        deliveryMethod: 'pickup',
-        shippingOption: null,
-      ),
-      isFalse,
+      arrangedDeliverySystemMessageKey('order.system.created'),
+      'order.system.created',
     );
   });
 }

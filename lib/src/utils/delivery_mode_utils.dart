@@ -14,10 +14,7 @@ bool isArrangedDeliveryValue(String? value) {
       token == 'mainpropre';
 }
 
-bool isArrangedDelivery({
-  String? deliveryMethod,
-  String? shippingOption,
-}) {
+bool isArrangedDelivery({String? deliveryMethod, String? shippingOption}) {
   return isArrangedDeliveryValue(deliveryMethod) ||
       isArrangedDeliveryValue(shippingOption);
 }
@@ -38,4 +35,19 @@ bool isArrangedOrderSystemEvent({
     deliveryMethod: deliveryMethod,
     shippingOption: shippingOption,
   );
+}
+
+String? arrangedDeliverySystemMessageKey(String? i18nKey) {
+  switch (i18nKey) {
+    case 'order.system.validated':
+      return 'order.system.arranged_validated';
+    case 'order.system.shipped':
+    case 'order.system.tracking':
+      return 'order.system.arranged_confirmed';
+    case 'order.system.label_reminder':
+    case 'order.system.carrier_scan_reminder':
+      return 'order.system.arranged_no_label';
+    default:
+      return i18nKey;
+  }
 }

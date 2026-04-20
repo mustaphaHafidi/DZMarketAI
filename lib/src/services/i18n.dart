@@ -723,6 +723,12 @@ class L10n {
         'Retard transporteur: bordereau cree mais aucun scan colis. Merci de verifier la prise en charge.',
     'order.system.pickup_request':
         'Bonjour, je souhaite une livraison a convenir (remise locale ou transporteur externe). Merci de preciser la methode, le cout et le delai.',
+    'order.system.arranged_validated':
+        'Commande validee. Les details de remise seront confirmes via le chat.',
+    'order.system.arranged_confirmed':
+        'Livraison a convenir confirmee. Merci de suivre les details dans le chat.',
+    'order.system.arranged_no_label':
+        'Livraison a convenir: aucun bordereau transporteur n\'est requis.',
     'order.system.returned': 'Retour colis detecte.',
     'order.system.shipped': 'Commande expediee.',
     'order.system.tracking': 'Mise a jour du suivi.',
@@ -1688,6 +1694,12 @@ class L10n {
         'تأخير من شركة النقل: تم إنشاء البوليصة لكن لا يوجد مسح طرد للآن. يرجى التحقق من التكفل.',
     'order.system.pickup_request':
         'مرحبًا، أرغب في توصيل باتفاق (تسليم محلي أو ناقل خارجي). يرجى تحديد الطريقة والتكلفة والموعد.',
+    'order.system.arranged_validated':
+        'تم تأكيد الطلب. سيتم تأكيد تفاصيل التسليم عبر المحادثة.',
+    'order.system.arranged_confirmed':
+        'تم تأكيد التوصيل بالاتفاق. يرجى متابعة التفاصيل في المحادثة.',
+    'order.system.arranged_no_label':
+        'التوصيل بالاتفاق: لا توجد بوليصة ناقل مطلوبة.',
     'order.system.returned': 'تم تسجيل إرجاع الشحنة.',
     'order.system.shipped': 'تم شحن الطلب.',
     'order.system.tracking': 'تم تحديث حالة التتبع.',

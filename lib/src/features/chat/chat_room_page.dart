@@ -729,8 +729,11 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     final isArrangedDeliveryEvent =
         explicitArrangedDeliveryEvent ||
         (arrangedOrderContext && isShipmentLikeEvent);
-    final messageText = i18nKey != null && i18nKey.isNotEmpty
-        ? L10n.tr(context, i18nKey, fallback: msg.text)
+    final effectiveI18nKey = isArrangedDeliveryEvent
+        ? arrangedDeliverySystemMessageKey(i18nKey)
+        : i18nKey;
+    final messageText = effectiveI18nKey != null && effectiveI18nKey.isNotEmpty
+        ? L10n.tr(context, effectiveI18nKey, fallback: msg.text)
         : msg.text;
     final trackingPresentation = isShipmentLikeEvent && !isArrangedDeliveryEvent
         ? TrackingPresentation.fromData(
