@@ -316,16 +316,21 @@ class _SignInPageState extends State<SignInPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                TextField(
-                                  controller: _emailController,
-                                  keyboardType: TextInputType.emailAddress,
-                                  decoration: InputDecoration(
-                                    labelText: _t(
-                                      'auth.email',
-                                      fallback: 'Email',
-                                    ),
-                                    prefixIcon: const Icon(
-                                      Icons.email_outlined,
+                                Directionality(
+                                  textDirection: TextDirection.ltr,
+                                  child: TextField(
+                                    controller: _emailController,
+                                    keyboardType: TextInputType.emailAddress,
+                                    textAlign: TextAlign.left,
+                                    textDirection: TextDirection.ltr,
+                                    decoration: InputDecoration(
+                                      labelText: _t(
+                                        'auth.email',
+                                        fallback: 'Email',
+                                      ),
+                                      prefixIcon: const Icon(
+                                        Icons.email_outlined,
+                                      ),
                                     ),
                                   ),
                                 ),

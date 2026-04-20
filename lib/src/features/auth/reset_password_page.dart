@@ -247,12 +247,17 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                   ),
                   const SizedBox(height: 16),
                   if (!hasSession) ...[
-                    TextField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: InputDecoration(
-                        labelText: _t('auth.email', fallback: 'Email'),
-                        prefixIcon: const Icon(Icons.email_outlined),
+                    Directionality(
+                      textDirection: TextDirection.ltr,
+                      child: TextField(
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        textAlign: TextAlign.left,
+                        textDirection: TextDirection.ltr,
+                        decoration: InputDecoration(
+                          labelText: _t('auth.email', fallback: 'Email'),
+                          prefixIcon: const Icon(Icons.email_outlined),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
