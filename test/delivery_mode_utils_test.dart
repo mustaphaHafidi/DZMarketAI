@@ -32,4 +32,43 @@ void main() {
       isFalse,
     );
   });
+
+  test('isArrangedOrderSystemEvent recognizes arranged order lifecycle events', () {
+    expect(
+      isArrangedOrderSystemEvent(
+        i18nKey: 'order.system.created',
+        isOfferEvent: false,
+        deliveryMethod: 'pickup',
+        shippingOption: null,
+      ),
+      isTrue,
+    );
+    expect(
+      isArrangedOrderSystemEvent(
+        i18nKey: 'order.system.pickup_request',
+        isOfferEvent: false,
+        deliveryMethod: null,
+        shippingOption: null,
+      ),
+      isTrue,
+    );
+    expect(
+      isArrangedOrderSystemEvent(
+        i18nKey: 'order.system.created',
+        isOfferEvent: false,
+        deliveryMethod: 'cod',
+        shippingOption: 'home',
+      ),
+      isFalse,
+    );
+    expect(
+      isArrangedOrderSystemEvent(
+        i18nKey: 'offer.system.accepted',
+        isOfferEvent: true,
+        deliveryMethod: 'pickup',
+        shippingOption: null,
+      ),
+      isFalse,
+    );
+  });
 }

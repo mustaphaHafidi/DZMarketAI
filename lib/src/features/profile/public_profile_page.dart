@@ -4,16 +4,18 @@ import 'package:cached_network_image_platform_interface/cached_network_image_pla
 import 'package:dzmarket/src/models/product.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/network_preferences_service.dart';
+import 'package:dzmarket/src/services/review_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/services/user_safety_service.dart';
+import 'package:dzmarket/src/utils/bool_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 class PublicProfilePage extends StatefulWidget {
-  const PublicProfilePage({super.key, required this.sellerId});
+  const PublicProfilePage({super.key, required this.userId});
 
-  final String sellerId;
+  final String userId;
 
   @override
   State<PublicProfilePage> createState() => _PublicProfilePageState();
@@ -24,7 +26,9 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
   String? _error;
   Map<String, dynamic>? _profile;
   List<Product> _products = const [];
+  double? _averageRating;
   final _safetyService = UserSafetyService();
+  final _reviewService = ReviewService();
   bool _isBlocked = false;
 
   @override
@@ -37,20 +41,24 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
     setState(() {
       _loading = true;
       _error = null;
+      _products = const [];
+      _averageRating = null;
     });
     try {
       final profile = await supabase
           .from('profiles')
-          .select('id, full_name, avatar_url, is_public, wilaya')
-          .eq('id', widget.sellerId)
+          .select(
+            'id, full_name, avatar_url, is_public, wilaya, bio, role, is_seller, created_at',
+          )
+          .eq('id', widget.userId)
           .maybeSingle();
       if (!mounted) return;
       _profile = profile;
-      if (profile?['is_public'] == true) {
+      if (isTruthyFlag(profile?['is_public'])) {
         final rows = await supabase
             .from('products')
             .select()
-            .eq('owner_id', widget.sellerId)
+            .eq('owner_id', widget.userId)
             .eq('is_archived', false)
             .order('created_at', ascending: false)
             .limit(60);
@@ -58,6 +66,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
         _products = (rows as List)
             .map((e) => Product.fromJson(e as Map<String, dynamic>))
             .toList();
+        _averageRating = await _reviewService.fetchAverageRating(widget.userId);
       }
       await _refreshBlockState();
     } catch (e) {
@@ -70,15 +79,22 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
 
   String? get _currentUserId => supabase.auth.currentUser?.id;
 
-  bool get _canModerateSeller =>
-      _currentUserId != null && _currentUserId != widget.sellerId;
+  bool get _canModerateUser =>
+      _currentUserId != null && _currentUserId != widget.userId;
+
+  bool get _isSellerProfile {
+    final role = (_profile?['role'] as String?)?.toLowerCase();
+    return isTruthyFlag(_profile?['is_seller']) ||
+        role == 'seller' ||
+        _products.isNotEmpty;
+  }
 
   Future<void> _refreshBlockState() async {
-    if (!_canModerateSeller) {
+    if (!_canModerateUser) {
       if (mounted) setState(() => _isBlocked = false);
       return;
     }
-    final blocked = await _safetyService.isBlocked(widget.sellerId);
+    final blocked = await _safetyService.isBlocked(widget.userId);
     if (mounted) setState(() => _isBlocked = blocked);
   }
 
@@ -99,13 +115,13 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
             context,
             'safety.unblock_user_body',
             fallback:
-                'Vous pourrez de nouveau echanger avec ce vendeur apres le deblocage.',
+                'Vous pourrez de nouveau echanger avec cet utilisateur apres le deblocage.',
           )
         : L10n.tr(
             context,
             'safety.block_user_body',
             fallback:
-                'Vous ne pourrez plus envoyer ni recevoir de messages avec ce vendeur apres le blocage.',
+                'Vous ne pourrez plus envoyer ni recevoir de messages avec cet utilisateur apres le blocage.',
           );
     final confirmed = await showDialog<bool>(
       context: context,
@@ -126,9 +142,9 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
     );
     if (confirmed != true) return;
     if (_isBlocked) {
-      await _safetyService.unblockUser(widget.sellerId);
+      await _safetyService.unblockUser(widget.userId);
     } else {
-      await _safetyService.blockUser(widget.sellerId);
+      await _safetyService.blockUser(widget.userId);
     }
     final wasBlocked = _isBlocked;
     await _refreshBlockState();
@@ -241,12 +257,16 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
       detailsCtrl.dispose();
       return;
     }
-    final reasonLabel = L10n.tr(context, selectedReason!, fallback: selectedReason!);
+    final reasonLabel = L10n.tr(
+      context,
+      selectedReason!,
+      fallback: selectedReason!,
+    );
     final details = detailsCtrl.text.trim();
     detailsCtrl.dispose();
     final reason = details.isEmpty ? reasonLabel : '[$reasonLabel] $details';
     await _safetyService.reportUser(
-      reportedUserId: widget.sellerId,
+      reportedUserId: widget.userId,
       reason: reason,
       source: 'profile',
     );
@@ -265,7 +285,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
   }
 
   List<Widget> _buildActions(BuildContext context) {
-    if (!_canModerateSeller) return const [];
+    if (!_canModerateUser) return const [];
     final messenger = ScaffoldMessenger.of(this.context);
     final genericError = L10n.tr(this.context, 'common.error');
     return [
@@ -323,6 +343,21 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
       locale: localeCode == 'ar' ? 'ar_DZ' : 'fr_DZ',
       symbol: 'DA',
     );
+    final memberSinceDate = DateTime.tryParse(
+      _profile?['created_at']?.toString() ?? '',
+    );
+    final memberSinceLabel = memberSinceDate == null
+        ? null
+        : L10n.tr(
+            context,
+            'profile.member_since',
+            fallback: 'Membre depuis {date}',
+            params: {
+              'date': DateFormat.yMMMd(
+                localeCode == 'ar' ? 'ar_DZ' : 'fr_DZ',
+              ).format(memberSinceDate),
+            },
+          );
 
     if (_loading) {
       return Scaffold(
@@ -343,9 +378,10 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
       );
     }
 
-    final isPublic = _profile?['is_public'] == true;
+    final isPublic = isTruthyFlag(_profile?['is_public']);
     final name = (_profile?['full_name'] as String?)?.trim();
     final avatarUrl = (_profile?['avatar_url'] as String?)?.trim();
+    final bio = (_profile?['bio'] as String?)?.trim();
     final title = name?.isNotEmpty == true
         ? name!
         : L10n.tr(context, 'profile.public_profile_title');
@@ -390,39 +426,92 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                             if ((_profile?['wilaya'] as String?)?.isNotEmpty ==
                                 true)
                               Text(_profile!['wilaya'].toString()),
+                            if (memberSinceLabel != null &&
+                                memberSinceLabel.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                memberSinceLabel,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
                           ],
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    L10n.tr(context, 'profile.public_profile_products'),
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  if (_products.isEmpty)
-                    Text(L10n.tr(context, 'profile.public_profile_empty'))
-                  else
-                    ..._products.map(
-                      (p) => Card(
-                        child: ListTile(
-                          leading: _ProductThumb(
-                            url: p.imageUrls.isNotEmpty
-                                ? p.imageUrls.first
-                                : p.imageUrl,
+                  if (_averageRating != null) ...[
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        Chip(
+                          avatar: const Icon(Icons.star, size: 18),
+                          label: Text(_averageRating!.toStringAsFixed(1)),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (bio?.isNotEmpty ?? false) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(bio!),
+                    ),
+                  ],
+                  if (_isSellerProfile || _products.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      L10n.tr(
+                        context,
+                        'profile.public_profile_listings',
+                        fallback: 'Annonces publiques',
+                      ),
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 8),
+                    if (_products.isEmpty)
+                      Text(
+                        L10n.tr(
+                          context,
+                          'profile.public_profile_no_listings',
+                          fallback: 'Aucune annonce publique pour le moment.',
+                        ),
+                      )
+                    else
+                      ..._products.map(
+                        (p) => Card(
+                          child: ListTile(
+                            leading: _ProductThumb(
+                              url: p.imageUrls.isNotEmpty
+                                  ? p.imageUrls.first
+                                  : p.imageUrl,
+                            ),
+                            title: Text(p.title),
+                            subtitle: Text(currency.format(p.price)),
+                            onTap: () => context.go('/product/${p.id}'),
                           ),
-                          title: Text(p.title),
-                          subtitle: Text(currency.format(p.price)),
-                          onTap: () => context.push('/product/${p.id}'),
                         ),
                       ),
-                    ),
+                  ],
                 ],
               ),
             )
           : Center(
-              child: Text(L10n.tr(context, 'profile.public_profile_hidden')),
+              child: Text(
+                L10n.tr(
+                  context,
+                  'profile.public_profile_hidden_user',
+                  fallback: 'Profil masque par l\'utilisateur.',
+                ),
+              ),
             ),
     );
   }

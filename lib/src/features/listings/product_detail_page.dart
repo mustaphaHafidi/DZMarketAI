@@ -23,8 +23,12 @@ import 'package:dzmarket/src/services/location_data_service.dart';
 import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/utils/bool_utils.dart';
+import 'package:dzmarket/src/utils/product_share_url.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -41,6 +45,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   bool _loaded = false;
   Product? _product;
   final _pageController = PageController();
+  final _detailScrollController = ScrollController();
   final _offerService = OfferService();
   Offer? _acceptedOffer;
   String? _buyerWilaya;
@@ -48,6 +53,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   Map<String, dynamic>? _buyerProfile;
   Map<String, dynamic>? _sellerProfile;
   bool _isOwner = false;
+  int _webHeroIndex = 0;
+  bool? _favoriteOverride;
+  bool _favoriteBusy = false;
 
   @override
   void initState() {
@@ -170,6 +178,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   @override
   void dispose() {
     _pageController.dispose();
+    _detailScrollController.dispose();
     super.dispose();
   }
 
@@ -288,6 +297,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       _loaded = true;
       _acceptedOffer = acceptedOffer;
       _isOwner = userId != null && data != null && data['owner_id'] == userId;
+      _favoriteOverride = null;
+      _favoriteBusy = false;
     });
   }
 
@@ -494,18 +505,21 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   bool _looksMojibake(String value) {
-    return value.contains('Ã') || value.contains('Â') || value.contains('�');
+    return value.contains('Ãƒ') ||
+        value.contains('Ã‚') ||
+        value.contains('ï¿½');
   }
 
   Widget _topOverlayIconButton({
     required IconData icon,
     required VoidCallback? onPressed,
     Color iconColor = Colors.white,
+    Color? backgroundColor,
   }) {
     return Container(
       margin: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.46),
+        color: backgroundColor ?? Colors.black.withValues(alpha: 0.46),
         shape: BoxShape.circle,
       ),
       child: IconButton(
@@ -1425,15 +1439,123 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     }
   }
 
+  void _showInfoSnack(String message) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _promptLoginForFavorites() {
+    _showInfoSnack(
+      L10n.tr(
+        context,
+        'listing.favorite_login_required',
+        fallback: 'Connectez-vous pour ajouter aux favoris.',
+      ),
+    );
+  }
+
+  Future<void> _toggleFavoriteWithFeedback(bool currentIsFavorite) async {
+    final product = _product;
+    if (product == null || _favoriteBusy) return;
+    final nextIsFavorite = !currentIsFavorite;
+    setState(() {
+      _favoriteBusy = true;
+      _favoriteOverride = nextIsFavorite;
+    });
+    try {
+      await FavoriteService().toggleFavorite(
+        productId: product.id,
+        isFav: currentIsFavorite,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _favoriteOverride = currentIsFavorite;
+      });
+      _showInfoSnack(
+        L10n.tr(context, 'common.error', fallback: 'Une erreur est survenue.'),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _favoriteBusy = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _shareCurrentProduct() async {
+    final product = _product;
+    if (product == null) return;
+    final uri = buildProductShareUri(
+      productId: product.id,
+      currentUri: Uri.base,
+    );
+    await Clipboard.setData(ClipboardData(text: uri.toString()));
+    if (!mounted) return;
+    _showInfoSnack(
+      L10n.tr(
+        context,
+        'listing.share_link_copied',
+        fallback: 'Lien du produit copiÃ©.',
+      ),
+    );
+  }
+
+  Future<void> _handleBackNavigation() async {
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+      return;
+    }
+    if (!mounted) return;
+    context.go('/?tab=listings');
+  }
+
+  Future<void> _openFullscreenGallery(
+    List<String> images, {
+    int initialIndex = 0,
+  }) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            _FullscreenGallery(images: images, initialIndex: initialIndex),
+      ),
+    );
+  }
+
+  Future<void> _openSellerProfile() async {
+    final product = _product;
+    if (product == null || !isTruthyFlag(_sellerProfile?['is_public'])) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PublicProfilePage(userId: product.ownerId),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final formatter = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA');
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final wideWebLayout = screenWidth >= 1100;
-    final centeredContent = BoxConstraints(
-      maxWidth: wideWebLayout ? 1080 : 760,
-    );
-    final heroExpandedHeight = wideWebLayout ? 320.0 : 390.0;
+    final wideDesktopLayout = screenWidth >= 1200;
+    final useWebSafeDetailLayout = kIsWeb;
+    final centeredContentWidth = wideDesktopLayout ? 1080.0 : double.infinity;
+    final heroExpandedHeight = wideDesktopLayout ? 320.0 : 390.0;
+
+    Widget contentShell(Widget child, {required EdgeInsetsGeometry padding}) {
+      final paddedChild = Padding(padding: padding, child: child);
+      if (!wideDesktopLayout) {
+        return paddedChild;
+      }
+      return Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: centeredContentWidth),
+          child: paddedChild,
+        ),
+      );
+    }
 
     if (!_loaded) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -1447,6 +1569,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     const fallbackImage =
         'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80';
     final heroImages = _product!.displayableImageUrls(fallback: fallbackImage);
+    final selectedHeroIndex = _webHeroIndex.clamp(0, heroImages.length - 1);
     final agreedPrice =
         _acceptedOffer?.agreedAmount ??
         _acceptedOffer?.amount ??
@@ -1474,315 +1597,862 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     final isNegotiable = _product!.isNegotiable;
     final primaryTags = _buildPrimaryTags(context);
     final allTags = _buildDetailTags(context);
+    final canViewSellerProfile = isTruthyFlag(_sellerProfile?['is_public']);
+    final viewSellerProfile = canViewSellerProfile
+        ? () => _openSellerProfile()
+        : null;
 
-    return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            pinned: true,
-            expandedHeight: heroExpandedHeight,
-            leading: _topOverlayIconButton(
-              icon: Icons.arrow_back,
-              onPressed: () => Navigator.of(context).maybePop(),
+    Widget buildFavoriteButton() {
+      if (supabase.auth.currentUser?.id != null) {
+        return StreamBuilder<Set<String>>(
+          stream: FavoriteService().streamFavorites(
+            supabase.auth.currentUser!.id,
+          ),
+          builder: (context, snapshot) {
+            final streamIsFav =
+                snapshot.data?.contains(_product?.id ?? '') ?? false;
+            final isFav = _favoriteOverride ?? streamIsFav;
+            return _topOverlayIconButton(
+              icon: isFav ? Icons.favorite : Icons.favorite_border,
+              iconColor: Colors.white,
+              backgroundColor: isFav
+                  ? Colors.redAccent.withValues(alpha: 0.95)
+                  : null,
+              onPressed: _product == null || _favoriteBusy
+                  ? null
+                  : () => _toggleFavoriteWithFeedback(isFav),
+            );
+          },
+        );
+      }
+      return _topOverlayIconButton(
+        icon: Icons.favorite_border,
+        onPressed: _promptLoginForFavorites,
+      );
+    }
+
+    Widget buildReportMenuButton() {
+      return Container(
+        margin: const EdgeInsets.only(right: 6),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.46),
+          shape: BoxShape.circle,
+        ),
+        child: PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert, color: Colors.white),
+          onSelected: (v) {
+            if (v == 'report') _reportListing(context, _product!);
+          },
+          itemBuilder: (context) => [
+            PopupMenuItem(
+              value: 'report',
+              child: Text(L10n.tr(context, 'report.menu')),
             ),
-            actions: [
-              _topOverlayIconButton(icon: Icons.share, onPressed: () {}),
-              if (supabase.auth.currentUser?.id != null)
-                StreamBuilder<Set<String>>(
-                  stream: FavoriteService().streamFavorites(
-                    supabase.auth.currentUser!.id,
-                  ),
-                  builder: (context, snapshot) {
-                    final isFav =
-                        snapshot.data?.contains(_product?.id ?? '') ?? false;
-                    return _topOverlayIconButton(
-                      icon: isFav ? Icons.favorite : Icons.favorite_border,
-                      iconColor: isFav ? Colors.redAccent : Colors.white,
-                      onPressed: _product == null
-                          ? null
-                          : () => FavoriteService().toggleFavorite(
-                              productId: _product!.id,
-                              isFav: isFav,
-                            ),
-                    );
-                  },
-                )
-              else
-                _topOverlayIconButton(
-                  icon: Icons.favorite_border,
-                  onPressed: null,
-                ),
-              Container(
-                margin: const EdgeInsets.only(right: 6),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.46),
-                  shape: BoxShape.circle,
-                ),
-                child: PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert, color: Colors.white),
-                  onSelected: (v) {
-                    if (v == 'report') _reportListing(context, _product!);
-                  },
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      value: 'report',
-                      child: Text(L10n.tr(context, 'report.menu')),
+          ],
+        ),
+      );
+    }
+
+    Widget buildHeroCounter() {
+      return Container(
+        margin: const EdgeInsets.only(right: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.46),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          '${selectedHeroIndex + 1}/${heroImages.length}',
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+    }
+
+    List<Widget> buildHeroActions() {
+      return [
+        if (useWebSafeDetailLayout && heroImages.length > 1) buildHeroCounter(),
+        _topOverlayIconButton(
+          icon: Icons.share,
+          onPressed: _shareCurrentProduct,
+        ),
+        buildFavoriteButton(),
+        buildReportMenuButton(),
+      ];
+    }
+
+    Widget buildHeroSection() {
+      final imagePrefs = NetworkPreferencesService.instance;
+      final heroChild = useWebSafeDetailLayout
+          ? Stack(
+              fit: StackFit.expand,
+              children: [
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: () => _openFullscreenGallery(
+                      heroImages,
+                      initialIndex: selectedHeroIndex,
                     ),
-                  ],
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      child: CachedNetworkImage(
+                        key: ValueKey(heroImages[selectedHeroIndex]),
+                        imageUrl: heroImages[selectedHeroIndex],
+                        fit: BoxFit.cover,
+                        memCacheWidth: imagePrefs.detailImageMemCacheWidth,
+                        fadeInDuration: imagePrefs.imageFadeInDuration,
+                        fadeOutDuration: imagePrefs.imageFadeOutDuration,
+                        imageRenderMethodForWeb:
+                            ImageRenderMethodForWeb.HttpGet,
+                        errorWidget: (_, __, ___) => const ColoredBox(
+                          color: Colors.black12,
+                          child: Center(child: Icon(Icons.image_not_supported)),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.black.withValues(alpha: 0.10),
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.24),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                if (heroImages.length > 1)
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    bottom: 16,
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 420),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.32),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.18),
+                            ),
+                          ),
+                          child: SizedBox(
+                            height: 56,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: heroImages.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(width: 8),
+                              itemBuilder: (context, index) {
+                                final active = index == selectedHeroIndex;
+                                return InkWell(
+                                  onTap: () =>
+                                      setState(() => _webHeroIndex = index),
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 180),
+                                    width: 56,
+                                    height: 56,
+                                    padding: const EdgeInsets.all(2),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: active
+                                            ? Colors.white
+                                            : Colors.white.withValues(
+                                                alpha: 0.45,
+                                              ),
+                                        width: active ? 2 : 1,
+                                      ),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.18,
+                                      ),
+                                    ),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: CachedNetworkImage(
+                                        imageUrl: heroImages[index],
+                                        fit: BoxFit.cover,
+                                        memCacheWidth: 160,
+                                        fadeInDuration:
+                                            imagePrefs.imageFadeInDuration,
+                                        fadeOutDuration:
+                                            imagePrefs.imageFadeOutDuration,
+                                        imageRenderMethodForWeb:
+                                            ImageRenderMethodForWeb.HttpGet,
+                                        errorWidget: (_, __, ___) =>
+                                            const ColoredBox(
+                                              color: Colors.black12,
+                                              child: Icon(
+                                                Icons.image_not_supported,
+                                                size: 18,
+                                              ),
+                                            ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            )
+          : _ImageCarousel(controller: _pageController, images: heroImages);
+      return SizedBox(
+        height: heroExpandedHeight,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            heroChild,
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 10,
+              left: 8,
+              child: _topOverlayIconButton(
+                icon: Icons.arrow_back,
+                onPressed: _handleBackNavigation,
+              ),
+            ),
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 8,
+              right: 0,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: buildHeroActions(),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // ignore: unused_local_variable
+    final detailBodyContent = contentShell(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _product!.title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                formatter.format(agreedPrice),
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  statusLabel,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: statusColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (_acceptedOffer != null)
+                Chip(
+                  label: Text(L10n.tr(context, 'offer.agreed')),
+                  visualDensity: VisualDensity.compact,
+                ),
+              if (isNegotiable)
+                Chip(
+                  label: Text(
+                    L10n.tr(
+                      context,
+                      'listing.negotiable',
+                      fallback: 'Prix nÃƒÆ’Ã‚Â©gociable',
+                    ),
+                  ),
+                  visualDensity: VisualDensity.compact,
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (primaryTags.isNotEmpty)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [for (final tag in primaryTags) Chip(label: Text(tag))],
+            ),
+          if (allTags.length > primaryTags.length)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: ActionChip(
+                avatar: const Icon(Icons.tune, size: 16),
+                label: Text(
+                  L10n.tr(context, 'listing.details', fallback: 'Details'),
+                ),
+                onPressed: () => _showAllTagsSheet(context, allTags),
+              ),
+            ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              Chip(
+                label: Text(
+                  L10n.tr(
+                    context,
+                    'listing.detail.stock',
+                    params: {'value': _product!.stockQuantity.toString()},
+                  ),
+                ),
+              ),
+              if (_product!.soldCount > 0)
+                Chip(
+                  label: Text(
+                    L10n.tr(
+                      context,
+                      'listing.detail.sold',
+                      params: {'value': _product!.soldCount.toString()},
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _SellerRowFixed(
+            ownerId: _product!.ownerId,
+            sellerName: _sellerProfile?['full_name']?.toString(),
+            sellerEmail: _sellerProfile?['email']?.toString(),
+            onContact: _contactSeller,
+            onViewProfile: viewSellerProfile,
+          ),
+          const SizedBox(height: 16),
+          Divider(
+            color: Theme.of(
+              context,
+            ).colorScheme.outlineVariant.withValues(alpha: 0.6),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _product!.description ?? L10n.tr(context, 'listing.no_description'),
+          ),
+          const SizedBox(height: 100),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+    );
+
+    final webDetailBodyContent = contentShell(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _product!.title,
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            formatter.format(agreedPrice),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (primaryTags.isNotEmpty)
+                for (final tag in primaryTags) Chip(label: Text(tag)),
+              Chip(
+                label: Text(
+                  L10n.tr(
+                    context,
+                    'listing.detail.stock',
+                    params: {'value': _product!.stockQuantity.toString()},
+                  ),
                 ),
               ),
             ],
-            flexibleSpace: FlexibleSpaceBar(
-              background: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: wideWebLayout ? 24 : 0,
-                ),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: centeredContent,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.vertical(
-                        bottom: Radius.circular(wideWebLayout ? 24 : 0),
-                      ),
-                      child: _ImageCarousel(
-                        controller: _pageController,
-                        images: heroImages,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
           ),
-          SliverToBoxAdapter(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: centeredContent,
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    wideWebLayout ? 24 : 16,
-                    16,
-                    wideWebLayout ? 24 : 16,
-                    0,
-                  ),
-                  child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _product!.title,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        formatter.format(agreedPrice),
-                        style: Theme.of(context).textTheme.headlineMedium,
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: statusColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          statusLabel,
-                          style: Theme.of(context).textTheme.labelMedium
-                              ?.copyWith(
-                                color: statusColor,
-                                fontWeight: FontWeight.w700,
-                              ),
-                        ),
-                      ),
-                      if (_acceptedOffer != null)
-                        Chip(
-                          label: Text(L10n.tr(context, 'offer.agreed')),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      if (isNegotiable)
-                        Chip(
-                          label: Text(
-                            L10n.tr(
-                              context,
-                              'listing.negotiable',
-                              fallback: 'Prix négociable',
-                            ),
-                          ),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  if (primaryTags.isNotEmpty)
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final tag in primaryTags) Chip(label: Text(tag)),
-                      ],
-                    ),
-                  if (allTags.length > primaryTags.length)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: ActionChip(
-                        avatar: const Icon(Icons.tune, size: 16),
-                        label: Text(
-                          L10n.tr(
-                            context,
-                            'listing.details',
-                            fallback: 'Details',
-                          ),
-                        ),
-                        onPressed: () => _showAllTagsSheet(context, allTags),
-                      ),
-                    ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      Chip(
-                        label: Text(
-                          L10n.tr(
-                            context,
-                            'listing.detail.stock',
-                            params: {
-                              'value': _product!.stockQuantity.toString(),
-                            },
-                          ),
-                        ),
-                      ),
-                      if (_product!.soldCount > 0)
-                        Chip(
-                          label: Text(
-                            L10n.tr(
-                              context,
-                              'listing.detail.sold',
-                              params: {'value': _product!.soldCount.toString()},
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  _SellerRowFixed(
-                    ownerId: _product!.ownerId,
-                    sellerName: _sellerProfile?['full_name']?.toString(),
-                    sellerEmail: _sellerProfile?['email']?.toString(),
-                    onContact: _contactSeller,
-                    onViewProfile: _sellerProfile?['is_public'] == true
-                        ? () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => PublicProfilePage(
-                                  sellerId: _product!.ownerId,
-                                ),
-                              ),
-                            );
-                          }
-                        : null,
-                  ),
-                  const SizedBox(height: 16),
-                  Divider(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.outlineVariant.withValues(alpha: 0.6),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    _product!.description ??
-                        L10n.tr(context, 'listing.no_description'),
-                  ),
-                  const SizedBox(height: 100),
-                ],
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              FilledButton.icon(
+                onPressed: _isOwner || outOfStock ? null : _buyNow,
+                icon: const Icon(Icons.shopping_bag_outlined),
+                label: Text(buyLabel),
               ),
-            ),
-              ),
-            ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            border: Border(
-              top: BorderSide(
-                color: Theme.of(
-                  context,
-                ).colorScheme.outlineVariant.withValues(alpha: 0.5),
-              ),
-            ),
-          ),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: centeredContent,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  wideWebLayout ? 24 : 16,
-                  10,
-                  wideWebLayout ? 24 : 16,
-                  12,
+              if (isNegotiable)
+                OutlinedButton.icon(
+                  onPressed: _isOwner || outOfStock ? null : _makeOffer,
+                  icon: const Icon(Icons.handshake_outlined),
+                  label: Text(L10n.tr(context, 'offers.make_offer')),
                 ),
-                child: Column(
-              mainAxisSize: MainAxisSize.min,
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            _product!.description ?? L10n.tr(context, 'listing.no_description'),
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        formatter.format(agreedPrice),
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    if (_product!.stockQuantity > 0)
-                      Text(
-                        L10n.tr(
-                          context,
-                          'listing.detail.stock',
-                          params: {'value': _product!.stockQuantity.toString()},
-                        ),
-                        style: Theme.of(context).textTheme.labelMedium,
-                      ),
-                  ],
+                const CircleAvatar(child: Icon(Icons.person)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    (_sellerProfile?['full_name']
+                                ?.toString()
+                                .trim()
+                                .isNotEmpty ??
+                            false)
+                        ? _sellerProfile!['full_name'].toString().trim()
+                        : ((_sellerProfile?['email']
+                                      ?.toString()
+                                      .trim()
+                                      .isNotEmpty ??
+                                  false)
+                              ? _sellerProfile!['email'].toString().trim()
+                              : L10n.tr(context, 'seller.fallback')),
+                    style: Theme.of(context).textTheme.titleMedium,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _isOwner || outOfStock ? null : _buyNow,
-                        icon: const Icon(Icons.shopping_bag_outlined),
-                        label: Text(buyLabel),
-                      ),
-                    ),
-                    if (isNegotiable) ...[
-                      const SizedBox(width: 12),
-                      OutlinedButton.icon(
-                        onPressed: _isOwner || outOfStock ? null : _makeOffer,
-                        icon: const Icon(Icons.handshake_outlined),
-                        label: Text(L10n.tr(context, 'offers.make_offer')),
-                      ),
-                    ],
-                  ],
+                TextButton.icon(
+                  onPressed: _contactSeller,
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  label: Text(L10n.tr(context, 'cta.contact')),
                 ),
               ],
             ),
+          ),
+          const SizedBox(height: 100),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+    );
+
+    return Scaffold(
+      body: useWebSafeDetailLayout
+          ? SafeArea(
+              bottom: false,
+              child: SingleChildScrollView(
+                controller: _detailScrollController,
+                padding: EdgeInsets.zero,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [buildHeroSection(), webDetailBodyContent],
+                ),
+              ),
+            ) /*
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _product!.title,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(
+                            formatter.format(agreedPrice),
+                            style: Theme.of(context).textTheme.headlineMedium,
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: statusColor.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              statusLabel,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelMedium
+                                  ?.copyWith(
+                                    color: statusColor,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          ),
+                          if (_acceptedOffer != null)
+                            Chip(
+                              label: Text(L10n.tr(context, 'offer.agreed')),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          if (isNegotiable)
+                            Chip(
+                              label: Text(
+                                L10n.tr(
+                                  context,
+                                  'listing.negotiable',
+                                  fallback: 'Prix nÃƒÂ©gociable',
+                                ),
+                              ),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (primaryTags.isNotEmpty)
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final tag in primaryTags) Chip(label: Text(tag)),
+                          ],
+                        ),
+                      if (allTags.length > primaryTags.length)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: ActionChip(
+                            avatar: const Icon(Icons.tune, size: 16),
+                            label: Text(
+                              L10n.tr(
+                                context,
+                                'listing.details',
+                                fallback: 'Details',
+                              ),
+                            ),
+                            onPressed: () => _showAllTagsSheet(context, allTags),
+                          ),
+                        ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          Chip(
+                            label: Text(
+                              L10n.tr(
+                                context,
+                                'listing.detail.stock',
+                                params: {
+                                  'value': _product!.stockQuantity.toString(),
+                                },
+                              ),
+                            ),
+                          ),
+                          if (_product!.soldCount > 0)
+                            Chip(
+                              label: Text(
+                                L10n.tr(
+                                  context,
+                                  'listing.detail.sold',
+                                  params: {
+                                    'value': _product!.soldCount.toString(),
+                                  },
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      _SellerRowFixed(
+                        ownerId: _product!.ownerId,
+                        sellerName: _sellerProfile?['full_name']?.toString(),
+                        sellerEmail: _sellerProfile?['email']?.toString(),
+                        onContact: _contactSeller,
+                        onViewProfile: viewSellerProfile,
+                      ),
+                      const SizedBox(height: 16),
+                      Divider(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .outlineVariant
+                            .withValues(alpha: 0.6),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        _product!.description ??
+                            L10n.tr(context, 'listing.no_description'),
+                      ),
+                      const SizedBox(height: 100),
+                    ],
+                  ),
+                  padding: const EdgeInsets.all(16),
+                ),
+              ],
+            ) */
+          : CustomScrollView(
+              controller: _detailScrollController,
+              primary: false,
+              slivers: [
+                SliverAppBar(
+                  pinned: true,
+                  expandedHeight: heroExpandedHeight,
+                  leading: _topOverlayIconButton(
+                    icon: Icons.arrow_back,
+                    onPressed: _handleBackNavigation,
+                  ),
+                  actions: buildHeroActions(),
+                  flexibleSpace: FlexibleSpaceBar(
+                    background: _ImageCarousel(
+                      controller: _pageController,
+                      images: heroImages,
+                    ),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: contentShell(
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _product!.title,
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              formatter.format(agreedPrice),
+                              style: Theme.of(context).textTheme.headlineMedium,
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: statusColor.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                statusLabel,
+                                style: Theme.of(context).textTheme.labelMedium
+                                    ?.copyWith(
+                                      color: statusColor,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                              ),
+                            ),
+                            if (_acceptedOffer != null)
+                              Chip(
+                                label: Text(L10n.tr(context, 'offer.agreed')),
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            if (isNegotiable)
+                              Chip(
+                                label: Text(
+                                  L10n.tr(
+                                    context,
+                                    'listing.negotiable',
+                                    fallback: 'Prix nÃ©gociable',
+                                  ),
+                                ),
+                                visualDensity: VisualDensity.compact,
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        if (primaryTags.isNotEmpty)
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              for (final tag in primaryTags)
+                                Chip(label: Text(tag)),
+                            ],
+                          ),
+                        if (allTags.length > primaryTags.length)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: ActionChip(
+                              avatar: const Icon(Icons.tune, size: 16),
+                              label: Text(
+                                L10n.tr(
+                                  context,
+                                  'listing.details',
+                                  fallback: 'Details',
+                                ),
+                              ),
+                              onPressed: () =>
+                                  _showAllTagsSheet(context, allTags),
+                            ),
+                          ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            Chip(
+                              label: Text(
+                                L10n.tr(
+                                  context,
+                                  'listing.detail.stock',
+                                  params: {
+                                    'value': _product!.stockQuantity.toString(),
+                                  },
+                                ),
+                              ),
+                            ),
+                            if (_product!.soldCount > 0)
+                              Chip(
+                                label: Text(
+                                  L10n.tr(
+                                    context,
+                                    'listing.detail.sold',
+                                    params: {
+                                      'value': _product!.soldCount.toString(),
+                                    },
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        _SellerRowFixed(
+                          ownerId: _product!.ownerId,
+                          sellerName: _sellerProfile?['full_name']?.toString(),
+                          sellerEmail: _sellerProfile?['email']?.toString(),
+                          onContact: _contactSeller,
+                          onViewProfile: viewSellerProfile,
+                        ),
+                        const SizedBox(height: 16),
+                        Divider(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.outlineVariant.withValues(alpha: 0.6),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          _product!.description ??
+                              L10n.tr(context, 'listing.no_description'),
+                        ),
+                        const SizedBox(height: 100),
+                      ],
+                    ),
+                    padding: const EdgeInsets.all(16),
+                  ),
+                ),
+              ],
+            ),
+      bottomNavigationBar: kIsWeb
+          ? null
+          : SafeArea(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  border: Border(
+                    top: BorderSide(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.outlineVariant.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ),
+                child: contentShell(
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              formatter.format(agreedPrice),
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                          if (_product!.stockQuantity > 0)
+                            Text(
+                              L10n.tr(
+                                context,
+                                'listing.detail.stock',
+                                params: {
+                                  'value': _product!.stockQuantity.toString(),
+                                },
+                              ),
+                              style: Theme.of(context).textTheme.labelMedium,
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _isOwner || outOfStock
+                                  ? null
+                                  : _buyNow,
+                              icon: const Icon(Icons.shopping_bag_outlined),
+                              label: Text(buyLabel),
+                            ),
+                          ),
+                          if (isNegotiable) ...[
+                            const SizedBox(width: 12),
+                            OutlinedButton.icon(
+                              onPressed: _isOwner || outOfStock
+                                  ? null
+                                  : _makeOffer,
+                              icon: const Icon(Icons.handshake_outlined),
+                              label: Text(
+                                L10n.tr(context, 'offers.make_offer'),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                ),
               ),
             ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -3250,7 +3920,7 @@ class _ImageCarouselState extends State<_ImageCarousel> {
               memCacheWidth: imagePrefs.detailImageMemCacheWidth,
               fadeInDuration: imagePrefs.imageFadeInDuration,
               fadeOutDuration: imagePrefs.imageFadeOutDuration,
-              imageRenderMethodForWeb: ImageRenderMethodForWeb.HtmlImage,
+              imageRenderMethodForWeb: ImageRenderMethodForWeb.HttpGet,
               errorWidget: (_, __, ___) => const ColoredBox(
                 color: Colors.black12,
                 child: Center(child: Icon(Icons.image_not_supported)),
@@ -3316,7 +3986,7 @@ class _ImageCarouselState extends State<_ImageCarousel> {
                           fadeInDuration: imagePrefs.imageFadeInDuration,
                           fadeOutDuration: imagePrefs.imageFadeOutDuration,
                           imageRenderMethodForWeb:
-                              ImageRenderMethodForWeb.HtmlImage,
+                              ImageRenderMethodForWeb.HttpGet,
                           errorWidget: (_, __, ___) => const ColoredBox(
                             color: Colors.black12,
                             child: Icon(Icons.image_not_supported, size: 16),
@@ -3498,7 +4168,7 @@ class _ZoomableNetworkImageState extends State<_ZoomableNetworkImage> {
             memCacheWidth: imagePrefs.detailImageMemCacheWidth,
             fadeInDuration: imagePrefs.imageFadeInDuration,
             fadeOutDuration: imagePrefs.imageFadeOutDuration,
-            imageRenderMethodForWeb: ImageRenderMethodForWeb.HtmlImage,
+            imageRenderMethodForWeb: ImageRenderMethodForWeb.HttpGet,
             errorWidget: (_, __, ___) => const Icon(
               Icons.image_not_supported,
               color: Colors.white70,
@@ -3534,12 +4204,14 @@ class _SellerRowFixed extends StatelessWidget {
       builder: (context, snapshot) {
         final rating = snapshot.data;
         final fallbackName = L10n.tr(context, 'seller.fallback');
+        final canViewProfile = onViewProfile != null;
         final displayName = (sellerName?.trim().isNotEmpty ?? false)
             ? sellerName!.trim()
             : (sellerEmail?.trim().isNotEmpty ?? false)
             ? sellerEmail!.trim()
             : fallbackName;
-        return Container(
+
+        final card = Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -3550,67 +4222,94 @@ class _SellerRowFixed extends StatelessWidget {
               ).colorScheme.outlineVariant.withValues(alpha: 0.45),
             ),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              InkWell(
-                onTap: onViewProfile,
-                borderRadius: BorderRadius.circular(28),
-                child: const CircleAvatar(child: Icon(Icons.person)),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: InkWell(
-                  onTap: onViewProfile,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        L10n.tr(context, 'seller.label'),
-                        style: Theme.of(context).textTheme.labelMedium,
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              displayName,
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(fontWeight: FontWeight.w600),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (rating != null) ...[
-                            const SizedBox(width: 8),
-                            const Icon(
-                              Icons.star,
-                              color: Colors.amber,
-                              size: 18,
-                            ),
-                            Text(rating.toStringAsFixed(1)),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        L10n.tr(
-                          context,
-                          'listing.seller_hint',
-                          fallback: 'Réponse via chat',
+              Row(
+                children: [
+                  const CircleAvatar(child: Icon(Icons.person)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          L10n.tr(context, 'seller.label'),
+                          style: Theme.of(context).textTheme.labelMedium,
                         ),
-                        style: Theme.of(context).textTheme.labelSmall,
-                      ),
-                    ],
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                displayName,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(fontWeight: FontWeight.w600),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (rating != null) ...[
+                              const SizedBox(width: 8),
+                              const Icon(
+                                Icons.star,
+                                color: Colors.amber,
+                                size: 18,
+                              ),
+                              Text(rating.toStringAsFixed(1)),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          L10n.tr(
+                            context,
+                            'listing.seller_hint',
+                            fallback: 'Reponse via chat',
+                          ),
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                  if (canViewProfile)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: Icon(
+                        Icons.chevron_right_rounded,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                ],
               ),
-              TextButton.icon(
-                onPressed: onContact,
-                icon: const Icon(Icons.chat_bubble_outline),
-                label: Text(L10n.tr(context, 'cta.contact')),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (canViewProfile)
+                    OutlinedButton.icon(
+                      onPressed: onViewProfile,
+                      icon: const Icon(Icons.person_outline),
+                      label: Text(L10n.tr(context, 'nav.profile')),
+                    ),
+                  TextButton.icon(
+                    onPressed: onContact,
+                    icon: const Icon(Icons.chat_bubble_outline),
+                    label: Text(L10n.tr(context, 'cta.contact')),
+                  ),
+                ],
               ),
             ],
           ),
+        );
+
+        if (!canViewProfile) return card;
+        return InkWell(
+          onTap: onViewProfile,
+          borderRadius: BorderRadius.circular(14),
+          child: card,
         );
       },
     );

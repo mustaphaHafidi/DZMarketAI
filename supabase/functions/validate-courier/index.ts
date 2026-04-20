@@ -25,6 +25,17 @@ const consumeRateLimit = async (
 const sleep = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
+const ecotrackBaseUrls = () => {
+  const candidates = ["https://api.ecotrack.dz", "https://ovred.ecotrack.dz"];
+  const seen = new Set<string>();
+  return candidates.filter((value) => {
+    const normalized = value.replace(/\/+$/, "");
+    if (!normalized || seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
+};
+
 const parseRetryAfterMs = (value: string | null) => {
   if (!value) return null;
   const seconds = Number(value);
@@ -220,8 +231,6 @@ serve(async (req) => {
   }
 
   if (courierName.includes("ecotrack")) {
-    const urlWithParam = `https://api.ecotrack.dz/api/v1/validate/token?api_token=${encodeURIComponent(apiKey)}`;
-    const urlNoParam = "https://api.ecotrack.dz/api/v1/validate/token";
     const headers = {
       Authorization: `Bearer ${apiKey}`,
       Accept: "application/json",
@@ -243,19 +252,49 @@ serve(async (req) => {
       return { resp, message, okMessage };
     };
 
-    const first = await attempt(urlWithParam);
-    if (first.resp.status === 200 && first.okMessage) {
-      return new Response(JSON.stringify({ ok: true, message: "OK" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    const feeAttempt = async (baseUrl: string) => {
+      const resp = await fetchWithRetry(`${baseUrl}/api/v1/get/fees`, {
+        method: "GET",
+        headers,
       });
+      if (!resp.ok) {
+        const bodyText = await resp.text();
+        return { ok: false, message: bodyText.trim() };
+      }
+      let hasFees = false;
+      try {
+        const parsed = await resp.json();
+        hasFees = Array.isArray(parsed?.livraison) && parsed.livraison.length > 0;
+      } catch {
+        hasFees = false;
+      }
+      return { ok: hasFees, message: hasFees ? "OK" : "" };
+    };
+
+    for (const baseUrl of ecotrackBaseUrls()) {
+      const withParam = `${baseUrl}/api/v1/validate/token?api_token=${encodeURIComponent(apiKey)}`;
+      const noParam = `${baseUrl}/api/v1/validate/token`;
+      const first = await attempt(withParam);
+      if (first.resp.status === 200 && first.okMessage) {
+        return new Response(JSON.stringify({ ok: true, message: "OK" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const second = await attempt(noParam);
+      if (second.resp.status === 200 && second.okMessage) {
+        return new Response(JSON.stringify({ ok: true, message: "OK" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const fees = await feeAttempt(baseUrl);
+      if (fees.ok) {
+        return new Response(JSON.stringify({ ok: true, message: "OK" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
-    const second = await attempt(urlNoParam);
-    if (second.resp.status === 200 && second.okMessage) {
-      return new Response(JSON.stringify({ ok: true, message: "OK" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const finalMessage = second.message || first.message || "Token invalide";
+
+    const finalMessage = "Token invalide";
     return new Response(
       JSON.stringify({ ok: false, message: finalMessage }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },

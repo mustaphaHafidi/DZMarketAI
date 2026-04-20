@@ -244,6 +244,12 @@ GoRouter createRouter({List<NavigatorObserver> observers = const []}) {
         ),
       ),
       GoRoute(
+        path: '/product/:id',
+        name: 'product',
+        builder: (context, state) =>
+            ProductDetailPage(productId: state.pathParameters['id'] ?? ''),
+      ),
+      GoRoute(
         path: '/',
         pageBuilder: (context, state) {
           final tab = state.uri.queryParameters['tab'] ?? 'listings';
@@ -255,12 +261,6 @@ GoRouter createRouter({List<NavigatorObserver> observers = const []}) {
             name: 'profile',
             pageBuilder: (context, state) =>
                 const NoTransitionPage(child: HomeShell(initialTab: 'profile')),
-          ),
-          GoRoute(
-            path: 'product/:id',
-            name: 'product',
-            builder: (context, state) =>
-                ProductDetailPage(productId: state.pathParameters['id'] ?? ''),
           ),
           GoRoute(
             path: 'order/:id/chat',

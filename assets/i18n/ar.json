@@ -528,6 +528,8 @@
   "listing.quick.new": "جديد",
   "listing.search_hint": "ابحث عن منتجات...",
   "listing.sell": "بيع",
+  "listing.share_link_copied": "تم نسخ رابط المنتج.",
+  "listing.favorite_login_required": "سجّل الدخول لإضافة المنتج إلى المفضلة.",
   "listing.seller_hint": "الرد عبر الدردشة",
   "listing.size": "المقاس: {value}",
   "listing.sort.newest": "الأحدث",

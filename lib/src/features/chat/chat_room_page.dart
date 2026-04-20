@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dzmarket/src/features/listings/product_detail_page.dart';
+import 'package:dzmarket/src/features/profile/public_profile_page.dart';
 import 'package:dzmarket/src/models/chat_message.dart';
 import 'package:dzmarket/src/models/offer.dart';
 import 'package:dzmarket/src/models/tracking_progress.dart';
@@ -13,6 +14,8 @@ import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:dzmarket/src/services/offer_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/services/user_safety_service.dart';
+import 'package:dzmarket/src/utils/bool_utils.dart';
+import 'package:dzmarket/src/utils/delivery_mode_utils.dart';
 import 'package:dzmarket/src/utils/label_url_resolver.dart';
 import 'package:dzmarket/src/widgets/arranged_delivery_card.dart';
 import 'package:dzmarket/src/widgets/tracking_stepper.dart';
@@ -51,9 +54,12 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   String? _buyerId;
   String? _sellerId;
   String? _productId;
+  String? _orderDeliveryMethod;
+  String? _orderShippingOption;
   final Map<String, String?> _orderIdByTrackingCache = {};
   late Future<void> _conversationFuture;
   late Future<_ProductHeaderData?> _headerFuture;
+  late Future<_ParticipantProfileData?> _participantProfileFuture;
   final RefreshController _refreshController = RefreshController();
 
   @override
@@ -67,6 +73,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     super.initState();
     _conversationFuture = _loadConversationInfo();
     _headerFuture = _conversationFuture.then((_) => _loadHeader());
+    _participantProfileFuture = _conversationFuture.then(
+      (_) => _loadOtherParticipantProfile(),
+    );
   }
 
   Future<void> _loadConversationInfo() async {
@@ -83,13 +92,21 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         try {
           final order = await supabase
               .from('orders')
-              .select('product_id')
+              .select('product_id,delivery_method,shipping_option')
               .eq('id', orderId)
               .maybeSingle();
           if (order != null) {
             final orderProductId = order['product_id']?.toString();
             if (orderProductId != null && orderProductId.isNotEmpty) {
               resolvedProductId = orderProductId;
+            }
+            final deliveryMethod = order['delivery_method']?.toString();
+            final shippingOption = order['shipping_option']?.toString();
+            if (mounted) {
+              setState(() {
+                _orderDeliveryMethod = deliveryMethod;
+                _orderShippingOption = shippingOption;
+              });
             }
           }
         } catch (_) {}
@@ -278,7 +295,11 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       detailsCtrl.dispose();
       return;
     }
-    final reasonLabel = L10n.tr(context, selectedReason!, fallback: selectedReason!);
+    final reasonLabel = L10n.tr(
+      context,
+      selectedReason!,
+      fallback: selectedReason!,
+    );
     final details = detailsCtrl.text.trim();
     detailsCtrl.dispose();
     final reason = details.isEmpty ? reasonLabel : '[$reasonLabel] $details';
@@ -328,6 +349,39 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     } catch (e) {
       return null;
     }
+  }
+
+  Future<_ParticipantProfileData?> _loadOtherParticipantProfile() async {
+    try {
+      final currentUserId = supabase.auth.currentUser?.id;
+      final otherUserId = _otherParticipantId(currentUserId);
+      if (otherUserId == null || otherUserId.isEmpty) return null;
+
+      final profile = await supabase
+          .from('profiles')
+          .select('id, full_name, avatar_url, is_public, wilaya')
+          .eq('id', otherUserId)
+          .maybeSingle();
+      if (profile == null) return null;
+      return _ParticipantProfileData(
+        userId: profile['id']?.toString() ?? otherUserId,
+        displayName: profile['full_name']?.toString().trim(),
+        avatarUrl: profile['avatar_url']?.toString().trim(),
+        wilaya: profile['wilaya']?.toString().trim(),
+        isPublic: isTruthyFlag(profile['is_public']),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _openOtherParticipantProfile(_ParticipantProfileData participant) {
+    if (!participant.isPublic) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PublicProfilePage(userId: participant.userId),
+      ),
+    );
   }
 
   Future<String?> _resolveOrderIdForLabelPayload(
@@ -620,6 +674,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     final status = payload['status']?.toString();
     final tracking = payload['tracking_number']?.toString();
     final labelUrl = normalizeLabelUrl(payload['label_url']?.toString());
+    final payloadDeliveryMethod = payload['delivery_method']?.toString();
+    final payloadShippingOption = payload['shipping_option']?.toString();
     final hasOfferPayload = offerId != null && offerId.isNotEmpty;
     final isOfferEvent =
         hasOfferPayload || (i18nKey?.startsWith('offer.system.') ?? false);
@@ -647,7 +703,16 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         payload['status_i18n']?.toString() ??
         (status == null ? null : 'order.status.$status');
     final hasLabel = labelUrl.isNotEmpty;
-    final isArrangedDeliveryEvent = i18nKey == 'order.system.pickup_request';
+    final arrangedOrderContext = isArrangedDelivery(
+      deliveryMethod: payloadDeliveryMethod ?? _orderDeliveryMethod,
+      shippingOption: payloadShippingOption ?? _orderShippingOption,
+    );
+    final explicitArrangedDeliveryEvent = isArrangedOrderSystemEvent(
+      i18nKey: i18nKey,
+      isOfferEvent: isOfferEvent,
+      deliveryMethod: payloadDeliveryMethod ?? _orderDeliveryMethod,
+      shippingOption: payloadShippingOption ?? _orderShippingOption,
+    );
     final isShipmentLikeEvent =
         !isOfferEvent &&
         (hasLabel ||
@@ -655,6 +720,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
             (status != null && status.isNotEmpty) ||
             (i18nKey?.startsWith('order.') ?? false) ||
             (i18nKey?.startsWith('chat.order.') ?? false));
+    final isArrangedDeliveryEvent =
+        explicitArrangedDeliveryEvent ||
+        (arrangedOrderContext && isShipmentLikeEvent);
     final messageText = i18nKey != null && i18nKey.isNotEmpty
         ? L10n.tr(context, i18nKey, fallback: msg.text)
         : msg.text;
@@ -735,14 +803,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: ArrangedDeliveryCard(
-                  title: L10n.tr(
-                    context,
-                    'seller_orders.arranged_delivery',
-                  ),
-                  description: L10n.tr(
-                    context,
-                    'shipments.arranged_no_label',
-                  ),
+                  title: L10n.tr(context, 'seller_orders.arranged_delivery'),
+                  description: L10n.tr(context, 'shipments.arranged_no_label'),
                   compact: true,
                 ),
               ),
@@ -1034,10 +1096,34 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(L10n.tr(context, 'chat.room.title')),
+        title: FutureBuilder<_ParticipantProfileData?>(
+          future: _participantProfileFuture,
+          builder: (context, snapshot) {
+            final participant = snapshot.data;
+            final title = participant?.displayName?.isNotEmpty == true
+                ? participant!.displayName!
+                : L10n.tr(context, 'chat.room.title');
+            return Text(title, overflow: TextOverflow.ellipsis);
+          },
+        ),
         actions: otherUserId == null
             ? null
             : [
+                FutureBuilder<_ParticipantProfileData?>(
+                  future: _participantProfileFuture,
+                  builder: (context, snapshot) {
+                    final participant = snapshot.data;
+                    if (participant == null || !participant.isPublic) {
+                      return const SizedBox.shrink();
+                    }
+                    return IconButton(
+                      tooltip: L10n.tr(context, 'nav.profile'),
+                      onPressed: () =>
+                          _openOtherParticipantProfile(participant),
+                      icon: const Icon(Icons.person_outline),
+                    );
+                  },
+                ),
                 FutureBuilder<bool>(
                   future: _isOtherParticipantBlocked(otherUserId),
                   builder: (context, snapshot) {
@@ -1457,4 +1543,20 @@ class _ProductHeaderData {
   final String? imageUrl;
   final String? status;
   final bool isNegotiable;
+}
+
+class _ParticipantProfileData {
+  const _ParticipantProfileData({
+    required this.userId,
+    required this.displayName,
+    required this.avatarUrl,
+    required this.wilaya,
+    required this.isPublic,
+  });
+
+  final String userId;
+  final String? displayName;
+  final String? avatarUrl;
+  final String? wilaya;
+  final bool isPublic;
 }

@@ -32,6 +32,17 @@ const normalizeToken = (value: unknown) =>
 const normalizeCourier = (value: unknown) =>
   textValue(value).toLowerCase().replace(/[^a-z0-9]/g, "");
 
+const ecotrackBaseUrls = () => {
+  const candidates = ["https://api.ecotrack.dz", "https://ovred.ecotrack.dz"];
+  const seen = new Set<string>();
+  return candidates.filter((value) => {
+    const normalized = value.replace(/\/+$/, "");
+    if (!normalized || seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
+};
+
 const extractList = (decoded: unknown): Array<Record<string, unknown>> => {
   if (Array.isArray(decoded)) {
     return decoded.filter((item): item is Record<string, unknown> =>
@@ -322,6 +333,192 @@ const parseEcotrackQuote = (
   };
 };
 
+const zrRateRows = (decoded: unknown): Array<Record<string, unknown>> => {
+  if (Array.isArray(decoded)) {
+    return decoded.filter((item): item is Record<string, unknown> =>
+      !!item && typeof item === "object"
+    );
+  }
+  if (!decoded || typeof decoded !== "object") return [];
+  const root = decoded as Record<string, unknown>;
+  const candidates = [root.rates, root.data, root.items, root.results];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate.filter((item): item is Record<string, unknown> =>
+        !!item && typeof item === "object"
+      );
+    }
+  }
+  if (root.data && typeof root.data === "object") {
+    const nested = root.data as Record<string, unknown>;
+    const nestedCandidates = [nested.rates, nested.items, nested.results];
+    for (const candidate of nestedCandidates) {
+      if (Array.isArray(candidate)) {
+        return candidate.filter((item): item is Record<string, unknown> =>
+          !!item && typeof item === "object"
+        );
+      }
+    }
+  }
+  return [];
+};
+
+const parseZrQuote = (
+  decoded: unknown,
+  receiverWilayaId: string,
+  receiverWilayaName: string,
+  receiverCommuneId: string,
+  receiverCommuneName: string,
+  deliveryType: string,
+): QuoteResult | null => {
+  const rows = zrRateRows(decoded);
+  if (rows.length === 0) return null;
+
+  const deliveryKey = deliveryType === "stopdesk" ? "pickuppoint" : "home";
+  const communeIdKey = normalizeToken(receiverCommuneId);
+  const communeNameKey = normalizeToken(receiverCommuneName);
+  const wilayaIdKey = normalizeToken(receiverWilayaId);
+  const wilayaNameKey = normalizeToken(receiverWilayaName);
+
+  const scored = rows
+    .map((row) => {
+      const rowIdKey = normalizeToken(row.toTerritoryId ?? row.id);
+      const rowNameKey = normalizeToken(row.toTerritoryName ?? row.name);
+      const rowLevelKey = normalizeToken(row.toTerritoryLevel ?? row.level);
+      let score = 0;
+      if (communeIdKey && rowIdKey === communeIdKey) score = 500;
+      else if (communeNameKey && rowNameKey === communeNameKey) score = 450;
+      else if (wilayaIdKey && rowIdKey === wilayaIdKey) score = 400;
+      else if (wilayaNameKey && rowNameKey === wilayaNameKey) score = 350;
+      if (score > 0) {
+        if (rowLevelKey.includes("commune")) score += 20;
+        if (rowLevelKey.includes("wilaya")) score += 10;
+      }
+      return { row, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score);
+  const target = scored[0]?.row;
+  if (!target) return null;
+
+  const deliveryPrices = Array.isArray(target.deliveryPrices)
+    ? target.deliveryPrices.filter((item): item is Record<string, unknown> =>
+      !!item && typeof item === "object"
+    )
+    : [];
+  const priceRow =
+    deliveryPrices.find((item) =>
+      normalizeToken(item.deliveryType).includes(deliveryKey)
+    ) ??
+    deliveryPrices.find((item) =>
+      deliveryKey === "pickuppoint"
+        ? normalizeToken(item.deliveryType).includes("desk")
+        : normalizeToken(item.deliveryType).includes("home")
+    ) ??
+    deliveryPrices[0];
+  if (!priceRow) return null;
+
+  const baseFee = pickNumber(priceRow, [
+    "discountedPrice",
+    "discounted_price",
+    "price",
+  ]);
+  if (baseFee == null || baseFee < 0) return null;
+
+  return {
+    fee: Math.max(0, baseFee),
+    baseFee,
+    overweightFee: 0,
+    source: "carrier_api",
+    currency: "DZD",
+  };
+};
+
+const guepexPerCommuneRows = (value: unknown): Array<Record<string, unknown>> => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const rows: Array<Record<string, unknown>> = [];
+  for (const [communeId, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    rows.push({
+      commune_id: communeId,
+      ...(raw as Record<string, unknown>),
+    });
+  }
+  return rows;
+};
+
+const guepexBillableWeightKg = (
+  weightKg: number,
+  heightCm: number,
+  widthCm: number,
+  lengthCm: number,
+) => {
+  const actualWeight = Math.max(1, Math.round(weightKg));
+  const volumeCm3 = Math.max(0, heightCm) * Math.max(0, widthCm) * Math.max(0, lengthCm);
+  if (volumeCm3 <= 0) return actualWeight;
+  // Guepex fees are based on the larger of actual and volumetric weight.
+  // Current live responses align with a 6000 cm3/kg divisor and integer truncation.
+  const volumetricWeight = Math.max(1, Math.floor(volumeCm3 / 6000));
+  return Math.max(actualWeight, volumetricWeight);
+};
+
+const parseGuepexQuote = (
+  decoded: unknown,
+  receiverCommuneId: string,
+  receiverCommuneName: string,
+  deliveryType: string,
+  weightKg: number,
+  heightCm: number,
+  widthCm: number,
+  lengthCm: number,
+): QuoteResult | null => {
+  if (!decoded || typeof decoded !== "object") return null;
+  const root = decoded as Record<string, unknown>;
+  const rows = guepexPerCommuneRows(root.per_commune);
+  const normalizedCommuneId = normalizeToken(receiverCommuneId);
+  const normalizedCommuneName = normalizeToken(receiverCommuneName);
+  const target = rows.find((row) => {
+    const rowId = normalizeToken(row.commune_id);
+    if (normalizedCommuneId && rowId === normalizedCommuneId) return true;
+    const rowName = normalizeToken(row.commune_name);
+    return !!normalizedCommuneName && rowName === normalizedCommuneName;
+  }) ?? rows[0];
+  if (!target) return null;
+
+  const baseFee = deliveryType === "stopdesk"
+    ? pickNumber(target, ["express_desk", "desk_fee", "pickup_fee", "pickup_price"])
+    : pickNumber(target, ["express_home", "home_fee", "delivery_fee", "delivery_price"]);
+  if (baseFee == null || baseFee < 0) return null;
+
+  const threshold = pickNumber(root, [
+    "overweight_threshold_kg",
+    "weight_threshold",
+    "seuil_kg",
+  ]) ?? 5;
+  const surchargePerKg = pickNumber(root, [
+    "oversize_fee",
+    "overweight_fee",
+    "overweight_fee_per_kg",
+    "extra_fee_per_kg",
+    "tarif_kg_supp",
+    "supplement_kg",
+  ]) ?? 0;
+  const billableWeightKg = guepexBillableWeightKg(weightKg, heightCm, widthCm, lengthCm);
+  const volumetricSurcharge = surchargePerKg > 0
+    ? Math.max(0, billableWeightKg - threshold) * surchargePerKg
+    : 0;
+  const returnFee = pickNumber(root, ["retour_fee", "return_fee"]) ?? 0;
+  const surchargeFee = Math.max(0, volumetricSurcharge + returnFee);
+
+  return {
+    fee: Math.max(0, baseFee + surchargeFee),
+    baseFee,
+    overweightFee: surchargeFee,
+    source: "carrier_api",
+    currency: "DZD",
+  };
+};
+
 const parseGenericCarrierQuote = (
   decoded: unknown,
   deliveryType: string,
@@ -560,22 +757,27 @@ serve(async (req) => {
   let quote: QuoteResult | null = null;
   try {
     if (carrierCode === "ecotrack") {
-      const resp = await carrierFetch(
-        admin,
-        carrierCode,
-        sellerId,
-        "https://api.ecotrack.dz/api/v1/get/fees",
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            Accept: "application/json",
+      for (const base of ecotrackBaseUrls()) {
+        const resp = await carrierFetch(
+          admin,
+          carrierCode,
+          sellerId,
+          `${base}/api/v1/get/fees`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              Accept: "application/json",
+            },
           },
-        },
-      );
-      if (!resp) return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
-      if (resp.ok) {
+        );
+        if (!resp) return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
+        if (!resp.ok) {
+          if (resp.status === 404 || resp.status === 405) continue;
+          break;
+        }
         quote = parseEcotrackQuote(await resp.json(), receiverRouteValue, deliveryType, weightKg);
+        if (quote) break;
       }
     } else if (carrierCode === "guepex") {
       const base = (Deno.env.get("GUEPEX_BASE_URL") ?? "https://api.guepex.app").replace(
@@ -601,7 +803,16 @@ serve(async (req) => {
       );
       if (!resp) return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
       if (resp.ok) {
-        quote = parseGenericCarrierQuote(await resp.json(), deliveryType, weightKg);
+        quote = parseGuepexQuote(
+          await resp.json(),
+          receiverCommuneId,
+          receiverCommuneName,
+          deliveryType,
+          weightKg,
+          heightCm,
+          widthCm,
+          lengthCm,
+        );
       }
     } else if (carrierCode === "yalidine") {
       const route = new URL("https://api.yalidine.app/v1/fees/");
@@ -623,32 +834,42 @@ serve(async (req) => {
       );
       if (!resp) return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
       if (resp.ok) {
-        quote = parseGenericCarrierQuote(await resp.json(), deliveryType, weightKg);
+        quote = parseGuepexQuote(
+          await resp.json(),
+          receiverCommuneId,
+          receiverCommuneName,
+          deliveryType,
+          weightKg,
+          heightCm,
+          widthCm,
+          lengthCm,
+        );
       }
     } else if (carrierCode === "zrexpress") {
-      const toTerritoryId = receiverRouteValue || receiverCommuneId || receiverCommuneName;
-      if (toTerritoryId) {
-        const route = `https://api.zrexpress.app/api/v1/delivery-pricing/rates/${
-          encodeURIComponent(toTerritoryId)
-        }`;
-        const resp = await carrierFetch(
-          admin,
-          carrierCode,
-          sellerId,
-          route,
-          {
-            method: "GET",
-            headers: {
-              "X-Api-Key": apiKey,
-              "X-Tenant": apiSecret,
-              Accept: "application/json",
-            },
+      const resp = await carrierFetch(
+        admin,
+        carrierCode,
+        sellerId,
+        "https://api.zrexpress.app/api/v1/delivery-pricing/rates",
+        {
+          method: "GET",
+          headers: {
+            "X-Api-Key": apiKey,
+            "X-Tenant": apiSecret,
+            Accept: "application/json",
           },
+        },
+      );
+      if (!resp) return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
+      if (resp.ok) {
+        quote = parseZrQuote(
+          await resp.json(),
+          receiverWilayaId,
+          receiverWilayaName,
+          receiverCommuneId,
+          receiverCommuneName,
+          deliveryType,
         );
-        if (!resp) return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
-        if (resp.ok) {
-          quote = parseGenericCarrierQuote(await resp.json(), deliveryType, weightKg);
-        }
       }
     }
   } catch {

@@ -1,3 +1,5 @@
+import 'package:dzmarket/src/utils/public_storage_url_resolver.dart';
+
 class Product {
   const Product({
     required this.id,
@@ -93,7 +95,7 @@ class Product {
     final seen = <String>{};
 
     void addIfNew(String? raw) {
-      final value = (raw ?? '').trim();
+      final value = normalizePublicStorageUrl(raw);
       if (value.isEmpty) return;
       if (seen.add(value)) {
         merged.add(value);

@@ -66,4 +66,5 @@ infra/hetzner/*.local.secrets.md
 /k6-results/
 /dzmarket-web.zip
 /dzmarket-web-*.zip
+/dzmarket-web-*.tar.gz
 /K6 test.txt

@@ -24,6 +24,14 @@ const numberValue = (value: unknown, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const firstPositiveNumber = (...values: unknown[]) => {
+  for (const value of values) {
+    const parsed = typeof value === "number" ? value : Number(textValue(value));
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return null;
+};
+
 const intValue = (value: unknown, fallback: number) => {
   const parsed = Number(textValue(value));
   if (!Number.isFinite(parsed)) return fallback;
@@ -265,6 +273,44 @@ const parseHttpUrl = (value: string) => {
   return null;
 };
 
+const decodeJwtPayloadSegment = (token: string) => {
+  const parts = textValue(token).split(".");
+  if (parts.length < 2) return null;
+  try {
+    const normalized = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+    return JSON.parse(atob(padded));
+  } catch {
+    return null;
+  }
+};
+
+const signedUrlExpiresAtMs = (rawUrl: string) => {
+  const parsed = parseHttpUrl(textValue(rawUrl));
+  if (!parsed) return null;
+
+  const token = textValue(parsed.searchParams.get("token"));
+  if (token) {
+    const payload = decodeJwtPayloadSegment(token);
+    const exp = payload?.exp;
+    if (typeof exp === "number" && Number.isFinite(exp)) {
+      return exp * 1000;
+    }
+  }
+
+  const sasExpiry = textValue(parsed.searchParams.get("se"));
+  if (sasExpiry) {
+    const expiresAt = Date.parse(sasExpiry);
+    if (Number.isFinite(expiresAt)) return expiresAt;
+  }
+  return null;
+};
+
+const isSignedUrlExpired = (rawUrl: string) => {
+  const expiresAtMs = signedUrlExpiresAtMs(rawUrl);
+  return expiresAtMs != null && expiresAtMs <= Date.now();
+};
+
 const isInternalSupabaseHost = (host: string) =>
   internalSupabaseHosts.has(host.trim().toLowerCase());
 
@@ -354,7 +400,10 @@ const rewriteSignedLabelUrl = (
     parsed.hostname.toLowerCase() === externalOrigin.hostname.toLowerCase();
   const needsHostRewrite = isInternalSupabaseHost(parsed.hostname);
   const needsPortRewrite = samePublicHost && internalProxyPorts.has(parsed.port);
-  if (!needsHostRewrite && !needsPortRewrite) return parsed.toString();
+  const needsProtocolRewrite = parsed.protocol !== externalOrigin.protocol;
+  if (!needsHostRewrite && !needsPortRewrite && !needsProtocolRewrite) {
+    return parsed.toString();
+  }
 
   parsed.protocol = externalOrigin.protocol;
   parsed.hostname = externalOrigin.hostname;
@@ -438,6 +487,251 @@ const refreshSignedLabelUrl = async ({
   } catch {
     return rewriteSignedLabelUrl(original, { preferredOrigin });
   }
+};
+
+const extractLabelSource = (value: unknown) => textValue(value ?? "");
+
+const looksLikeLabel = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return true;
+  }
+  if (/^data:.*;base64,/i.test(trimmed)) return true;
+  if (/^[A-Za-z0-9+/=]+$/.test(trimmed) && trimmed.length > 200) return true;
+  return false;
+};
+
+const pickLabelValue = (obj: Record<string, unknown> | undefined) => {
+  if (!obj) return "";
+  return extractLabelSource(
+    obj.url ??
+      obj.labelUrl ??
+      obj.label_url ??
+      obj.pdfUrl ??
+      obj.pdf_url ??
+      obj.fileUrl ??
+      obj.file_url ??
+      obj.downloadUrl ??
+      obj.download_url ??
+      obj.link ??
+      obj.label ??
+      obj.file ??
+      obj.pdf ??
+      obj.base64 ??
+      obj.content ??
+      obj.fileBase64 ??
+      obj.file_base64 ??
+      obj.contentBase64 ??
+      obj.content_base64 ??
+      obj.pdfBase64 ??
+      obj.pdf_base64,
+  );
+};
+
+const deepFindLabel = (value: unknown, trackingNumber = ""): string => {
+  if (value == null) return "";
+  if (typeof value === "string") {
+    return looksLikeLabel(value) ? value : "";
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = deepFindLabel(item, trackingNumber);
+      if (found) return found;
+    }
+    return "";
+  }
+  if (typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    const direct = pickLabelValue(obj);
+    if (looksLikeLabel(direct)) return direct;
+    if (trackingNumber) {
+      const matchesTracking =
+        textValue(
+          obj.trackingNumber ??
+            obj.tracking ??
+            obj.tracking_number ??
+            obj.number,
+        ) === trackingNumber;
+      if (matchesTracking) {
+        const matched = pickLabelValue(obj);
+        if (looksLikeLabel(matched)) return matched;
+      }
+    }
+    for (const [key, val] of Object.entries(obj)) {
+      const keyLower = key.toLowerCase();
+      if (
+        keyLower.includes("label") ||
+        keyLower.includes("pdf") ||
+        keyLower.includes("url") ||
+        keyLower.includes("file") ||
+        keyLower.includes("download") ||
+        keyLower.includes("link")
+      ) {
+        const candidate = deepFindLabel(val, trackingNumber);
+        if (candidate) return candidate;
+      }
+    }
+    for (const val of Object.values(obj)) {
+      const candidate = deepFindLabel(val, trackingNumber);
+      if (candidate) return candidate;
+    }
+  }
+  return "";
+};
+
+const parseCarrierLabelResponse = async (
+  resp: Response,
+  trackingNumber: string,
+) => {
+  const bytes = new Uint8Array(await resp.arrayBuffer());
+  if (isPdfBytes(bytes)) {
+    return { labelBytes: bytes, labelUrl: "" };
+  }
+
+  const bodyText = decodeBytes(bytes);
+  if (!bodyText) {
+    return { labelBytes: null, labelUrl: "" };
+  }
+
+  let labelSource = "";
+  try {
+    const labelDecoded = JSON.parse(bodyText);
+    const labelData =
+      labelDecoded?.data ??
+      labelDecoded?.items ??
+      labelDecoded?.results ??
+      labelDecoded?.labels ??
+      labelDecoded?.successes ??
+      labelDecoded;
+    if (Array.isArray(labelData)) {
+      const match = labelData.find((entry) =>
+        textValue(
+          entry?.trackingNumber ??
+            entry?.tracking ??
+            entry?.tracking_number ??
+            entry?.number,
+        ) === trackingNumber
+      );
+      labelSource =
+        deepFindLabel(match, trackingNumber) ||
+        deepFindLabel(labelData, trackingNumber) ||
+        deepFindLabel(labelDecoded, trackingNumber);
+    } else if (labelData && typeof labelData === "object") {
+      labelSource = deepFindLabel(
+        labelData as Record<string, unknown>,
+        trackingNumber,
+      );
+    } else {
+      labelSource = deepFindLabel(labelDecoded, trackingNumber);
+    }
+  } catch {
+    labelSource = deepFindLabel(bodyText, trackingNumber) ||
+      extractLabelSource(bodyText);
+  }
+
+  if (!labelSource) {
+    return { labelBytes: null, labelUrl: "" };
+  }
+  if (labelSource.startsWith("http://") || labelSource.startsWith("https://")) {
+    return { labelBytes: null, labelUrl: labelSource };
+  }
+  const labelBytes = await loadLabelBytes(labelSource);
+  return { labelBytes, labelUrl: "" };
+};
+
+const materializeLabelUrl = async ({
+  supabaseAdmin,
+  ownerId,
+  fileName,
+  labelBytes,
+  labelLink,
+  preferredOrigin,
+}: {
+  supabaseAdmin: ReturnType<typeof createClient>;
+  ownerId: string;
+  fileName: string;
+  labelBytes: Uint8Array | null;
+  labelLink: string;
+  preferredOrigin?: URL | null;
+}) => {
+  if (labelBytes) {
+    return await uploadLabel(
+      supabaseAdmin,
+      ownerId,
+      fileName,
+      labelBytes,
+      preferredOrigin,
+    );
+  }
+  if (!labelLink) return "";
+  try {
+    const downloaded = await loadLabelBytes(labelLink);
+    return await uploadLabel(
+      supabaseAdmin,
+      ownerId,
+      fileName,
+      downloaded,
+      preferredOrigin,
+    );
+  } catch {
+    return labelLink;
+  }
+};
+
+const refreshZrLabelByTracking = async ({
+  supabaseAdmin,
+  supabaseUser,
+  settingsRow,
+  outboundCarrierCode,
+  outboundOwnerId,
+  trackingNumber,
+  preferredOrigin,
+}: {
+  supabaseAdmin: ReturnType<typeof createClient>;
+  supabaseUser: ReturnType<typeof createClient>;
+  settingsRow: { api_key?: string | null; api_secret?: string | null };
+  outboundCarrierCode: string;
+  outboundOwnerId: string;
+  trackingNumber: string;
+  preferredOrigin?: URL | null;
+}) => {
+  const headers = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    "X-Api-Key": textValue(settingsRow.api_key),
+    "X-Tenant": textValue(settingsRow.api_secret),
+  };
+  const endpoints = [
+    "https://api.zrexpress.app/api/v1/parcels/labels/individual/pdf",
+    "https://api.zrexpress.app/api/v1/parcels/labels/individual",
+  ];
+
+  for (const endpoint of endpoints) {
+    const resp = await carrierFetch(
+      supabaseUser,
+      outboundCarrierCode,
+      outboundOwnerId,
+      endpoint,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ trackingNumbers: [trackingNumber] }),
+      },
+    );
+    if (!resp || !resp.ok) continue;
+    const parsed = await parseCarrierLabelResponse(resp, trackingNumber);
+    if (!parsed.labelBytes && !parsed.labelUrl) continue;
+    return await materializeLabelUrl({
+      supabaseAdmin,
+      ownerId: outboundOwnerId,
+      fileName: `zrexpress-${trackingNumber}.pdf`,
+      labelBytes: parsed.labelBytes,
+      labelLink: parsed.labelUrl,
+      preferredOrigin,
+    });
+  }
+  return "";
 };
 
 const isPdfBytes = (bytes: Uint8Array) =>
@@ -690,7 +984,9 @@ serve(async (req) => {
   }
 
   const baseOrderSelect =
-    "id, seller_id, buyer_id, courier_id, courier_name, delivery_method, shipping_option, shipping_cost, tracking_number, label_url, status";
+    "id, seller_id, buyer_id, courier_id, courier_name, delivery_method, "
+    + "shipping_option, shipping_cost, delivery_cost, tracking_number, "
+    + "label_url, status";
   let order = null;
   let orderError = null;
   {
@@ -733,16 +1029,23 @@ serve(async (req) => {
     .eq("order_id", orderId)
     .maybeSingle();
   if (existingShipment?.label_url && existingShipment?.tracking_number) {
+    const existingLabelUrl = textValue(existingShipment.label_url);
+    const existingTracking = textValue(existingShipment.tracking_number);
     const safeLabelUrl = await refreshSignedLabelUrl({
       supabaseAdmin,
-      rawUrl: textValue(existingShipment.label_url),
+      rawUrl: existingLabelUrl,
       preferredOrigin: requestPublicOrigin,
     });
-    return jsonResponse({
-      ok: true,
-      tracking_number: existingShipment.tracking_number,
-      label_url: safeLabelUrl,
-    });
+    const hasRefreshableStorageRef = extractStorageObjectRef(existingLabelUrl);
+    const expiredExternalUrl =
+      !hasRefreshableStorageRef && isSignedUrlExpired(existingLabelUrl);
+    if (!expiredExternalUrl) {
+      return jsonResponse({
+        ok: true,
+        tracking_number: existingTracking,
+        label_url: safeLabelUrl,
+      });
+    }
   }
 
   const courierId =
@@ -760,8 +1063,15 @@ serve(async (req) => {
     textValue(payload.delivery_mode) || textValue(order.delivery_method);
   const shippingOption =
     textValue(payload.shipping_option) || textValue(order.shipping_option);
-  const shippingCost =
-    numberValue(payload.shipping_cost, numberValue(order.shipping_cost, 0));
+  let shippingCost = firstPositiveNumber(
+    payload.shipping_cost,
+    order.shipping_cost,
+    order.delivery_cost,
+    pick(selection, "estimatedFee"),
+    pick(selection, "estimated_fee"),
+  ) ?? 0;
+  const effectiveCourierId = courierId || textValue(order.courier_id);
+  const effectiveCourierName = courierName || textValue(order.courier_name);
 
   if (isArrangedDelivery(deliveryMode) || isArrangedDelivery(shippingOption)) {
     return jsonResponse({ ok: false, message: "arranged_delivery_no_label" }, 409);
@@ -811,9 +1121,45 @@ serve(async (req) => {
       : "generic");
   const outboundOwnerId = effectiveUserId || userId || "unknown";
 
-  let trackingNumber = textValue(order.tracking_number);
-  let labelUrl = textValue(order.label_url);
+  let trackingNumber = textValue(
+    order.tracking_number ?? existingShipment?.tracking_number,
+  );
+  let labelUrl = textValue(order.label_url ?? existingShipment?.label_url);
   let summary: Record<string, unknown> | undefined;
+
+  const hasStorageBackedLabel = !!extractStorageObjectRef(labelUrl);
+  const needsZrLabelRefresh = isZrExpress &&
+    !!trackingNumber &&
+    (!labelUrl || (isSignedUrlExpired(labelUrl) && !hasStorageBackedLabel));
+  if (needsZrLabelRefresh) {
+    const refreshedLabelUrl = await refreshZrLabelByTracking({
+      supabaseAdmin,
+      supabaseUser,
+      settingsRow,
+      outboundCarrierCode,
+      outboundOwnerId,
+      trackingNumber,
+      preferredOrigin: requestPublicOrigin,
+    });
+    if (refreshedLabelUrl) {
+      labelUrl = rewriteSignedLabelUrl(refreshedLabelUrl, {
+        preferredOrigin: requestPublicOrigin,
+      });
+      await supabaseAdmin
+        .from("shipments")
+        .update({ tracking_number: trackingNumber, label_url: labelUrl })
+        .eq("order_id", orderId);
+      await supabaseAdmin
+        .from("orders")
+        .update({ tracking_number: trackingNumber, label_url: labelUrl })
+        .eq("id", orderId);
+      return jsonResponse({
+        ok: true,
+        tracking_number: trackingNumber,
+        label_url: labelUrl,
+      });
+    }
+  }
 
   if (trackingNumber && labelUrl) {
     labelUrl = await refreshSignedLabelUrl({
@@ -943,6 +1289,14 @@ serve(async (req) => {
     trackingNumber = textValue(
       first?.tracking ?? first?.tracking_number ?? first?.tracking_id ?? first?.parcel_id,
     );
+    const yalidineDeliveryFee = numberValue(
+      first?.delivery_fee ??
+        first?.deliveryPrice ??
+        first?.delivery_price,
+    );
+    if (yalidineDeliveryFee != null && yalidineDeliveryFee > 0) {
+      shippingCost = yalidineDeliveryFee;
+    }
     const labelValue =
       first?.label ?? first?.label_url ?? first?.label_pdf ?? first?.labels;
     if (!trackingNumber) {
@@ -1673,6 +2027,13 @@ serve(async (req) => {
       decoded?.result ??
       decoded?.parcel ??
       decoded;
+    const parcelDeliveryPrice = numberValue(
+      parcel?.deliveryPrice ??
+        parcel?.delivery_price,
+    );
+    if (parcelDeliveryPrice != null && parcelDeliveryPrice > 0) {
+      shippingCost = parcelDeliveryPrice;
+    }
     const createdId = textValue(
       parcel?.id ??
         parcel?.parcelId ??
@@ -1687,12 +2048,13 @@ serve(async (req) => {
         parcel?.barcode ??
         parcel?.code,
     );
-    if (!trackingNumber && createdId) {
+    const detailKey = trackingNumber || createdId;
+    if (detailKey) {
       const detailResp = await carrierFetch(
         supabaseUser,
         outboundCarrierCode,
         outboundOwnerId,
-        `https://api.zrexpress.app/api/v1/parcels/${createdId}`,
+        `https://api.zrexpress.app/api/v1/parcels/${detailKey}`,
         { method: "GET", headers },
       );
       if (!detailResp) {
@@ -1700,13 +2062,20 @@ serve(async (req) => {
       }
       if (detailResp.ok) {
         const detail = await detailResp.json();
-        trackingNumber = textValue(
+        trackingNumber ||= textValue(
           detail?.trackingNumber ??
             detail?.tracking ??
             detail?.tracking_number ??
             detail?.barcode ??
             detail?.code,
         );
+        const detailDeliveryPrice = numberValue(
+          detail?.deliveryPrice ??
+            detail?.delivery_price,
+        );
+        if (detailDeliveryPrice != null && detailDeliveryPrice > 0) {
+          shippingCost = detailDeliveryPrice;
+        }
       }
     }
     if (!trackingNumber) {
@@ -1734,123 +2103,10 @@ serve(async (req) => {
         502,
       );
     }
-    const extractLabelSource = (value: unknown) => textValue(value ?? "");
-    const looksLikeLabel = (value: string) => {
-      const trimmed = value.trim();
-      if (!trimmed) return false;
-      if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return true;
-      if (/^data:.*;base64,/i.test(trimmed)) return true;
-      if (/^[A-Za-z0-9+/=]+$/.test(trimmed) && trimmed.length > 200) return true;
-      return false;
-    };
-    const pickLabelValue = (obj: Record<string, unknown> | undefined) => {
-      if (!obj) return "";
-      return extractLabelSource(
-        obj.url ??
-          obj.labelUrl ??
-          obj.label_url ??
-          obj.pdfUrl ??
-          obj.pdf_url ??
-          obj.fileUrl ??
-          obj.file_url ??
-          obj.downloadUrl ??
-          obj.download_url ??
-          obj.link ??
-          obj.label ??
-          obj.file ??
-          obj.pdf ??
-          obj.base64 ??
-          obj.content ??
-          obj.fileBase64 ??
-          obj.file_base64 ??
-          obj.contentBase64 ??
-          obj.content_base64 ??
-          obj.pdfBase64 ??
-          obj.pdf_base64,
-      );
-    };
-    const deepFindLabel = (value: unknown): string => {
-      if (value == null) return "";
-      if (typeof value === "string") {
-        return looksLikeLabel(value) ? value : "";
-      }
-      if (Array.isArray(value)) {
-        for (const item of value) {
-          const found = deepFindLabel(item);
-          if (found) return found;
-        }
-        return "";
-      }
-      if (typeof value === "object") {
-        const obj = value as Record<string, unknown>;
-        const direct = pickLabelValue(obj);
-        if (looksLikeLabel(direct)) return direct;
-        for (const [key, val] of Object.entries(obj)) {
-          const keyLower = key.toLowerCase();
-          if (
-            keyLower.includes("label") ||
-            keyLower.includes("pdf") ||
-            keyLower.includes("url") ||
-            keyLower.includes("file") ||
-            keyLower.includes("download") ||
-            keyLower.includes("link")
-          ) {
-            const candidate = deepFindLabel(val);
-            if (candidate) return candidate;
-          }
-        }
-        for (const val of Object.values(obj)) {
-          const candidate = deepFindLabel(val);
-          if (candidate) return candidate;
-        }
-      }
-      return "";
-    };
-    const parseLabelResponse = async (resp: Response) => {
-      const bytes = new Uint8Array(await resp.arrayBuffer());
-      if (isPdfBytes(bytes)) {
-        return { labelBytes: bytes, labelUrl: "" };
-      }
-      const bodyText = decodeBytes(bytes);
-      let labelSource = "";
-      if (!bodyText) return { labelBytes: null, labelUrl: "" };
-      try {
-        const labelDecoded = JSON.parse(bodyText);
-        const labelData =
-          labelDecoded?.data ??
-          labelDecoded?.items ??
-          labelDecoded?.results ??
-          labelDecoded?.labels ??
-          labelDecoded?.successes ??
-          labelDecoded;
-        if (Array.isArray(labelData)) {
-          const match = labelData.find((m) =>
-            textValue(m?.trackingNumber ?? m?.tracking ?? m?.number) === trackingNumber
-          );
-          labelSource =
-            deepFindLabel(match) ||
-            deepFindLabel(labelData) ||
-            deepFindLabel(labelDecoded);
-        } else if (labelData && typeof labelData === "object") {
-          labelSource = deepFindLabel(labelData as Record<string, unknown>);
-        } else {
-          labelSource = deepFindLabel(labelDecoded);
-        }
-      } catch {
-        labelSource = deepFindLabel(bodyText) || extractLabelSource(bodyText);
-      }
-      if (!labelSource) return { labelBytes: null, labelUrl: "" };
-      if (labelSource.startsWith("http://") || labelSource.startsWith("https://")) {
-        return { labelBytes: null, labelUrl: labelSource };
-      }
-      const labelBytes = await loadLabelBytes(labelSource);
-      return { labelBytes, labelUrl: "" };
-    };
-
     let labelBytes: Uint8Array | null = null;
     let labelLink = "";
     {
-      const parsed = await parseLabelResponse(labelResp);
+      const parsed = await parseCarrierLabelResponse(labelResp, trackingNumber);
       labelBytes = parsed.labelBytes;
       labelLink = parsed.labelUrl;
     }
@@ -1870,7 +2126,10 @@ serve(async (req) => {
         return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
       }
       if (htmlResp.ok) {
-        const parsed = await parseLabelResponse(htmlResp);
+        const parsed = await parseCarrierLabelResponse(
+          htmlResp,
+          trackingNumber,
+        );
         labelBytes = parsed.labelBytes;
         labelLink = parsed.labelUrl;
       } else {
@@ -1884,17 +2143,14 @@ serve(async (req) => {
     if (!labelBytes && !labelLink) {
       return jsonResponse({ ok: false, message: "Label missing" }, 502);
     }
-    if (labelBytes) {
-      labelUrl = await uploadLabel(
-        supabaseAdmin,
-        outboundOwnerId,
-        `zrexpress-${trackingNumber}.pdf`,
-        labelBytes,
-        requestPublicOrigin,
-      );
-    } else {
-      labelUrl = labelLink;
-    }
+    labelUrl = await materializeLabelUrl({
+      supabaseAdmin,
+      ownerId: outboundOwnerId,
+      fileName: `zrexpress-${trackingNumber}.pdf`,
+      labelBytes,
+      labelLink,
+      preferredOrigin: requestPublicOrigin,
+    });
     summary = {
       price: price,
       tracking: trackingNumber,
@@ -1913,11 +2169,16 @@ serve(async (req) => {
     tracking_number: trackingNumber || null,
     label_url: labelUrl || null,
     status: labelUrl ? "shipped" : "pending",
+    carrier: effectiveCourierName || effectiveCourierId || null,
+    option: shippingOption || order.shipping_option || null,
+    delivery_mode: deliveryMode || order.delivery_method || null,
+    shipping_cost: shippingCost ?? null,
+    courier_id: effectiveCourierId || null,
   };
 
   let shipmentError: { message?: string; code?: string } | null = null;
   let shipmentPayloadCurrent = { ...shipmentPayload };
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 8; attempt++) {
     const res = await supabaseAdmin
       .from("shipments")
       .upsert(shipmentPayloadCurrent, { onConflict: "order_id" });
@@ -1942,10 +2203,11 @@ serve(async (req) => {
     );
   }
   const orderUpdate: Record<string, unknown> = {
-    courier_id: courierId || order.courier_id,
-    courier_name: courierName || order.courier_name,
+    courier_id: effectiveCourierId || order.courier_id,
+    courier_name: effectiveCourierName || order.courier_name,
     delivery_method: deliveryMode || order.delivery_method,
-    shipping_cost: shippingCost ?? order.shipping_cost,
+    shipping_cost: shippingCost ?? order.shipping_cost ?? order.delivery_cost,
+    delivery_cost: shippingCost ?? order.delivery_cost ?? order.shipping_cost,
     tracking_number: trackingNumber || order.tracking_number,
     label_url: labelUrl || order.label_url,
   };

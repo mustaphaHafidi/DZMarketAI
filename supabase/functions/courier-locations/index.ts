@@ -75,6 +75,17 @@ const guepexBaseUrl = () =>
     .trim()
     .replace(/\/+$/, "");
 
+const ecotrackBaseUrls = () => {
+  const candidates = ["https://api.ecotrack.dz", "https://ovred.ecotrack.dz"];
+  const seen = new Set<string>();
+  return candidates.filter((value) => {
+    const normalized = value.replace(/\/+$/, "");
+    if (!normalized || seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
+};
+
 const codeVariants = (value: string) =>
   Array.from(
     new Set(
@@ -448,22 +459,25 @@ serve(async (req) => {
     }
 
     if (isEcotrack) {
-      const url = "https://api.ecotrack.dz/api/v1/get/fees";
-      const resp = await carrierFetch(
-        supabaseUser,
-        carrierCode,
-        carrierOwnerId,
-        url,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${textValue(settingsRow.api_key)}`,
-            Accept: "application/json",
+      for (const base of ecotrackBaseUrls()) {
+        const resp = await carrierFetch(
+          supabaseUser,
+          carrierCode,
+          carrierOwnerId,
+          `${base}/api/v1/get/fees`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${textValue(settingsRow.api_key)}`,
+              Accept: "application/json",
+            },
           },
-        },
-      );
-      if (!resp) return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
-      if (resp.ok) {
+        );
+        if (!resp) return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
+        if (!resp.ok) {
+          if (resp.status === 404 || resp.status === 405) continue;
+          break;
+        }
         const decoded = await resp.json();
         const livraison = decoded?.livraison;
         if (Array.isArray(livraison)) {
@@ -712,23 +726,26 @@ serve(async (req) => {
         wilayaCode.padStart(2, "0"),
       ].filter((v) => v)),
     );
-    for (const code of attempts) {
-      const url = `https://api.ecotrack.dz/api/v1/get/communes?wilaya_id=${encodeURIComponent(code)}`;
-      const resp = await carrierFetch(
-        supabaseUser,
-        carrierCode,
-        carrierOwnerId,
-        url,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${textValue(settingsRow.api_key)}`,
-            Accept: "application/json",
+    for (const base of ecotrackBaseUrls()) {
+      for (const code of attempts) {
+        const resp = await carrierFetch(
+          supabaseUser,
+          carrierCode,
+          carrierOwnerId,
+          `${base}/api/v1/get/communes?wilaya_id=${encodeURIComponent(code)}`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${textValue(settingsRow.api_key)}`,
+              Accept: "application/json",
+            },
           },
-        },
-      );
-      if (!resp) return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
-      if (resp.ok) {
+        );
+        if (!resp) return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
+        if (!resp.ok) {
+          if (resp.status === 404 || resp.status === 405) continue;
+          break;
+        }
         const decoded = await resp.json();
         const data = Array.isArray(decoded) ? decoded : decoded?.data;
         if (Array.isArray(data)) {

@@ -21,3 +21,21 @@ bool isArrangedDelivery({
   return isArrangedDeliveryValue(deliveryMethod) ||
       isArrangedDeliveryValue(shippingOption);
 }
+
+bool isArrangedOrderSystemEvent({
+  required String? i18nKey,
+  required bool isOfferEvent,
+  String? deliveryMethod,
+  String? shippingOption,
+}) {
+  if (isOfferEvent) return false;
+  if (i18nKey == 'order.system.pickup_request') return true;
+  if (i18nKey == null || i18nKey.isEmpty) return false;
+  final isOrderEvent =
+      i18nKey.startsWith('order.system.') || i18nKey.startsWith('chat.order.');
+  if (!isOrderEvent) return false;
+  return isArrangedDelivery(
+    deliveryMethod: deliveryMethod,
+    shippingOption: shippingOption,
+  );
+}

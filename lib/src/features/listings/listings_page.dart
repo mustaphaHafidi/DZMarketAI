@@ -16,6 +16,7 @@ import 'package:dzmarket/src/services/saved_search_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/widgets/refresh_controller.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -125,14 +126,14 @@ class _ListingsPageState extends State<ListingsPage> {
     final screenWidth = MediaQuery.of(context).size.width;
     final crossAxisCount = switch (screenWidth) {
       >= 1500 => 5,
-      >= 1200 => 4,
-      >= 900 => 3,
+      >= 1180 => 4,
+      >= 820 => 3,
       _ => 2,
     };
     final gridAspectRatio = switch (crossAxisCount) {
-      >= 4 => 0.80,
-      3 => 0.76,
-      _ => 0.72,
+      >= 4 => 0.83,
+      3 => 0.79,
+      _ => screenWidth >= 600 ? 0.75 : 0.71,
     };
 
     return Scaffold(
@@ -605,9 +606,9 @@ class _ListingsPageState extends State<ListingsPage> {
             isFavorite: isFav,
             onFavoriteToggle: userId == null
                 ? null
-                : () => FavoriteService().toggleFavorite(
+                : (currentIsFavorite) => FavoriteService().toggleFavorite(
                     productId: product.id,
-                    isFav: isFav,
+                    isFav: currentIsFavorite,
                   ),
           );
         },
@@ -1474,7 +1475,7 @@ class _SavedSearchesRow extends StatelessWidget {
   }
 }
 
-class _ProductCard extends StatelessWidget {
+class _ProductCard extends StatefulWidget {
   const _ProductCard({
     required this.product,
     required this.currency,
@@ -1485,211 +1486,336 @@ class _ProductCard extends StatelessWidget {
   final Product product;
   final NumberFormat currency;
   final bool isFavorite;
-  final VoidCallback? onFavoriteToggle;
+  final Future<void> Function(bool currentIsFavorite)? onFavoriteToggle;
+
+  @override
+  State<_ProductCard> createState() => _ProductCardState();
+}
+
+class _ProductCardState extends State<_ProductCard> {
+  bool _hovered = false;
+  bool? _favoriteOverride;
+  bool _favoriteBusy = false;
+
+  @override
+  void didUpdateWidget(covariant _ProductCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.product.id != widget.product.id) {
+      _favoriteOverride = null;
+      _favoriteBusy = false;
+      return;
+    }
+    if (_favoriteOverride != null && widget.isFavorite == _favoriteOverride) {
+      _favoriteOverride = null;
+    }
+  }
+
+  Future<void> _handleFavoriteToggle() async {
+    final callback = widget.onFavoriteToggle;
+    if (callback == null || _favoriteBusy) return;
+    final currentIsFavorite = _favoriteOverride ?? widget.isFavorite;
+    final nextIsFavorite = !currentIsFavorite;
+    setState(() {
+      _favoriteBusy = true;
+      _favoriteOverride = nextIsFavorite;
+    });
+    try {
+      await callback(currentIsFavorite);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _favoriteOverride = currentIsFavorite;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            L10n.tr(
+              context,
+              'common.error',
+              fallback: 'Une erreur est survenue.',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _favoriteBusy = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     const fallbackImage =
         'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80';
-    final firstImage =
-        product.firstDisplayableImageUrl(fallback: fallbackImage) ??
-        fallbackImage;
+    final displayableImages = widget.product.displayableImageUrls(
+      fallback: fallbackImage,
+    );
     final imagePrefs = NetworkPreferencesService.instance;
-    return InkWell(
-      onTap: () => context.push('/product/${product.id}'),
-      borderRadius: BorderRadius.circular(16),
-      child: Ink(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
+    final theme = Theme.of(context);
+    final metadataStyle = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.outline,
+    );
+    final badges = <Widget>[
+      if (widget.product.deliveryOptions.contains('cod'))
+        _CardMiniBadge(
+          icon: Icons.local_shipping_outlined,
+          label: L10n.tr(
+            context,
+            'listing.quick.delivery',
+            fallback: 'Livraison',
+          ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  topRight: Radius.circular(16),
-                ),
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: CachedNetworkImage(
-                        imageUrl: firstImage,
-                        fit: BoxFit.cover,
-                        memCacheWidth: imagePrefs.listImageMemCacheWidth,
-                        fadeInDuration: imagePrefs.imageFadeInDuration,
-                        fadeOutDuration: imagePrefs.imageFadeOutDuration,
-                        imageRenderMethodForWeb:
-                            ImageRenderMethodForWeb.HtmlImage,
-                        errorWidget: (_, __, ___) => Container(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.surfaceContainerHighest,
-                          child: const Center(
-                            child: Icon(Icons.image_not_supported),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surface,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          currency.format(product.price),
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: IconButton(
-                        onPressed: onFavoriteToggle,
-                        icon: Icon(
-                          isFavorite ? Icons.favorite : Icons.favorite_border,
-                          color: isFavorite
-                              ? Colors.redAccent
-                              : Theme.of(context).colorScheme.onSurface,
-                        ),
-                        style: IconButton.styleFrom(
-                          backgroundColor: Theme.of(
-                            context,
-                          ).colorScheme.surface,
-                        ),
-                      ),
-                    ),
-                    if (product.condition != null &&
-                        product.condition!.isNotEmpty)
-                      Positioned(
-                        left: 8,
-                        bottom: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.7),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            product.condition!,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
+      if (widget.product.deliveryOptions.contains('pickup'))
+        _CardMiniBadge(
+          icon: Icons.handshake_outlined,
+          label: L10n.tr(context, 'listing.detail.delivery_pickup'),
+        ),
+      if (widget.product.isNegotiable)
+        _CardMiniBadge(
+          icon: Icons.sell_outlined,
+          label: L10n.tr(
+            context,
+            'listing.negotiable',
+            fallback: 'Prix negociable',
+          ),
+        ),
+    ];
+    final visibleBadges = badges.take(2).toList();
+    final hiddenBadgesCount = badges.length - visibleBadges.length;
+    final isDesktopCard = MediaQuery.of(context).size.width >= 900;
+    final displayIsFavorite = _favoriteOverride ?? widget.isFavorite;
+
+    return MouseRegion(
+      onEnter: (_) {
+        if (kIsWeb) setState(() => _hovered = true);
+      },
+      onExit: (_) {
+        if (kIsWeb) setState(() => _hovered = false);
+      },
+      child: AnimatedScale(
+        scale: _hovered ? 1.012 : 1,
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOut,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOut,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: _hovered
+                  ? theme.colorScheme.primary.withValues(alpha: 0.18)
+                  : theme.colorScheme.outlineVariant.withValues(alpha: 0.18),
             ),
-            Padding(
-              padding: const EdgeInsets.all(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: _hovered ? 0.11 : 0.06),
+                blurRadius: _hovered ? 26 : 16,
+                offset: Offset(0, _hovered ? 12 : 8),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => context.go('/product/${widget.product.id}'),
+              borderRadius: BorderRadius.circular(22),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    product.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 4),
-                  if (product.brand != null && product.brand!.isNotEmpty)
-                    Text(
-                      '${product.brand}${product.size != null ? ' - ${product.size}' : ''}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.outline,
-                        fontSize: 12,
+                  Expanded(
+                    flex: isDesktopCard ? 12 : 11,
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(22),
+                        topRight: Radius.circular(22),
+                      ),
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: _ListingCardImage(
+                              imageUrls: displayableImages,
+                              imagePrefs: imagePrefs,
+                            ),
+                          ),
+                          Positioned(
+                            top: 10,
+                            right: 10,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.surface.withValues(
+                                  alpha: 0.94,
+                                ),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                widget.currency.format(widget.product.price),
+                                style: theme.textTheme.labelLarge?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            top: 10,
+                            left: 10,
+                            child: Row(
+                              children: [
+                                IconButton(
+                                  onPressed: widget.onFavoriteToggle == null
+                                      ? null
+                                      : _handleFavoriteToggle,
+                                  icon: Icon(
+                                    displayIsFavorite
+                                        ? Icons.favorite
+                                        : Icons.favorite_border,
+                                    color: displayIsFavorite
+                                        ? Colors.white
+                                        : theme.colorScheme.onSurface,
+                                  ),
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: displayIsFavorite
+                                        ? Colors.redAccent.withValues(
+                                            alpha: 0.96,
+                                          )
+                                        : theme.colorScheme.surface.withValues(
+                                            alpha: 0.94,
+                                          ),
+                                  ),
+                                ),
+                                if (widget.product.imageUrls.length > 1) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 9,
+                                      vertical: 5,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(alpha: 0.52),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      '${widget.product.imageUrls.length}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          if (widget.product.condition != null &&
+                              widget.product.condition!.isNotEmpty)
+                            Positioned(
+                              left: 10,
+                              bottom: 10,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.62),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  widget.product.condition!,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.place_outlined,
-                        size: 14,
-                        color: Theme.of(context).colorScheme.outline,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          product.locationWilaya ??
-                              L10n.tr(
-                                context,
-                                'listing.location_unknown',
-                                fallback: 'Localisation inconnue',
-                              ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context).colorScheme.outline,
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      if (product.deliveryOptions.contains('cod'))
-                        _CardMiniBadge(
-                          icon: Icons.local_shipping_outlined,
-                          label: L10n.tr(
-                            context,
-                            'listing.quick.delivery',
-                            fallback: 'Livraison',
+                  Expanded(
+                    flex: isDesktopCard ? 8 : 9,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.product.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              height: 1.15,
+                            ),
                           ),
-                        ),
-                      if (product.deliveryOptions.contains('pickup'))
-                        _CardMiniBadge(
-                          icon: Icons.handshake_outlined,
-                          label: L10n.tr(
-                            context,
-                            'listing.detail.delivery_pickup',
+                          if (widget.product.brand != null &&
+                              widget.product.brand!.isNotEmpty) ...[
+                            const SizedBox(height: 5),
+                            Text(
+                              widget.product.size != null &&
+                                      widget.product.size!.trim().isNotEmpty
+                                  ? '${widget.product.brand} • ${widget.product.size}'
+                                  : widget.product.brand!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: metadataStyle,
+                            ),
+                          ],
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.place_outlined,
+                                size: 15,
+                                color: theme.colorScheme.outline,
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  widget.product.locationWilaya ??
+                                      L10n.tr(
+                                        context,
+                                        'listing.location_unknown',
+                                        fallback: 'Localisation inconnue',
+                                      ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: metadataStyle,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      if (product.isNegotiable)
-                        _CardMiniBadge(
-                          icon: Icons.sell_outlined,
-                          label: L10n.tr(
-                            context,
-                            'listing.negotiable',
-                            fallback: 'Prix negociable',
+                          const Spacer(),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: [
+                              ...visibleBadges,
+                              if (hiddenBadgesCount > 0)
+                                _CardMiniBadge(
+                                  icon: Icons.add_circle_outline,
+                                  label: '+$hiddenBadgesCount',
+                                ),
+                            ],
                           ),
-                        ),
-                    ],
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -1704,20 +1830,129 @@ class _CardMiniBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: Theme.of(context).colorScheme.outline),
+          Icon(icon, size: 13, color: theme.colorScheme.outline),
           const SizedBox(width: 4),
           Text(
             label,
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+            style: theme.textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ListingCardImage extends StatefulWidget {
+  const _ListingCardImage({
+    required this.imageUrls,
+    required this.imagePrefs,
+  });
+
+  final List<String> imageUrls;
+  final NetworkPreferencesService imagePrefs;
+
+  @override
+  State<_ListingCardImage> createState() => _ListingCardImageState();
+}
+
+class _ListingCardImageState extends State<_ListingCardImage> {
+  int _imageIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasImage = widget.imageUrls.isNotEmpty;
+    if (!hasImage) {
+      return _ListingImageFallback(theme: theme);
+    }
+
+    final currentUrl = widget.imageUrls[_imageIndex];
+    return CachedNetworkImage(
+      key: ValueKey(currentUrl),
+      imageUrl: currentUrl,
+      fit: BoxFit.cover,
+      memCacheWidth: widget.imagePrefs.listImageMemCacheWidth,
+      fadeInDuration: widget.imagePrefs.imageFadeInDuration,
+      fadeOutDuration: widget.imagePrefs.imageFadeOutDuration,
+      imageRenderMethodForWeb: ImageRenderMethodForWeb.HttpGet,
+      placeholder: (_, __) => DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              theme.colorScheme.surfaceContainerHighest,
+              theme.colorScheme.surfaceContainer,
+            ],
+          ),
+        ),
+        child: const Center(
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2.2),
+          ),
+        ),
+      ),
+      errorWidget: (_, __, ___) {
+        if (_imageIndex + 1 < widget.imageUrls.length) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() => _imageIndex += 1);
+            }
+          });
+          return DecoratedBox(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest,
+            ),
+          );
+        }
+        return _ListingImageFallback(theme: theme);
+      },
+    );
+  }
+}
+
+class _ListingImageFallback extends StatelessWidget {
+  const _ListingImageFallback({required this.theme});
+
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: theme.colorScheme.surfaceContainerHighest,
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.image_not_supported_outlined,
+            color: theme.colorScheme.outline,
+            size: 28,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            L10n.tr(
+              context,
+              'listing.image_unavailable',
+              fallback: 'Photo indisponible',
+            ),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.outline,
+            ),
           ),
         ],
       ),

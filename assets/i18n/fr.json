@@ -528,6 +528,8 @@
   "listing.quick.new": "Neuf",
   "listing.search_hint": "Rechercher des articles...",
   "listing.sell": "Vendre",
+  "listing.share_link_copied": "Lien du produit copié.",
+  "listing.favorite_login_required": "Connectez-vous pour ajouter aux favoris.",
   "listing.seller_hint": "Réponse via chat",
   "listing.size": "Taille: {value}",
   "listing.sort.newest": "Plus récentes",

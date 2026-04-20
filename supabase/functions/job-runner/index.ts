@@ -151,10 +151,19 @@ const detectTrackingStatusFromText = (text: string) => {
   }
 
   if (
+    lower.includes("out for delivery") ||
+    lower.includes("en livraison") ||
+    lower.includes("mise en livraison") ||
+    lower.includes("cours de livraison") ||
+    lower.includes("attempt_delivery")
+  ) {
+    return "out_for_delivery";
+  }
+
+  if (
     lower.includes("picked") ||
     lower.includes("accepted_by_carrier") ||
     lower.includes("dispatched_to_driver") ||
-    lower.includes("attempt_delivery") ||
     lower.includes("in_transit") ||
     lower.includes("expedie") ||
     lower.includes("shipped")
@@ -627,6 +636,7 @@ const syncBuyerReturns = async (
                   key: `status:${trackingStatus}`,
                   status: trackingStatus,
                   title: trackingStatus,
+                  i18n_key: `order.status.${trackingStatus}`,
                   description: courierName || courierId || "",
                   at: new Date().toISOString(),
                 },
