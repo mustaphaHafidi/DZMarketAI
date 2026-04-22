@@ -8,6 +8,7 @@ import 'package:dzmarket/src/services/review_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/services/user_safety_service.dart';
 import 'package:dzmarket/src/utils/bool_utils.dart';
+import 'package:dzmarket/src/utils/public_storage_url_resolver.dart';
 import 'package:dzmarket/src/widgets/user_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -479,9 +480,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                         (p) => Card(
                           child: ListTile(
                             leading: _ProductThumb(
-                              url: p.imageUrls.isNotEmpty
-                                  ? p.imageUrls.first
-                                  : p.imageUrl,
+                              url: p.firstDisplayableImageUrl(),
                             ),
                             title: Text(p.title),
                             subtitle: Text(currency.format(p.price)),
@@ -514,13 +513,14 @@ class _ProductThumb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final imagePrefs = NetworkPreferencesService.instance;
-    if (url == null || url!.isEmpty) {
+    final safeUrl = normalizePublicStorageUrl(url);
+    if (safeUrl.isEmpty) {
       return const CircleAvatar(child: Icon(Icons.image_not_supported));
     }
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
       child: CachedNetworkImage(
-        imageUrl: url!,
+        imageUrl: safeUrl,
         width: 48,
         height: 48,
         fit: BoxFit.cover,

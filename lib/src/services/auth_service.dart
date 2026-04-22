@@ -396,7 +396,6 @@ class AuthService {
     double? locationLat,
     double? locationLng,
     String? bio,
-    String? role,
     bool? isPublic,
     String? lang,
     bool? isSeller,
@@ -427,7 +426,6 @@ class AuthService {
       maxLength: 240,
       allowNewlines: true,
     );
-    final safeRole = InputSanitizer.sanitizeOptionalText(role, maxLength: 20);
     final safeLang = InputSanitizer.sanitizeOptionalText(lang, maxLength: 8);
     if (safeFullName != null) payload['full_name'] = safeFullName;
     if (avatarTouched || safeAvatar != null) payload['avatar_url'] = safeAvatar;
@@ -437,7 +435,6 @@ class AuthService {
     if (locationLat != null) payload['location_lat'] = locationLat;
     if (locationLng != null) payload['location_lng'] = locationLng;
     if (safeBio != null) payload['bio'] = safeBio;
-    if (safeRole != null) payload['role'] = safeRole;
     if (isPublic != null) payload['is_public'] = isPublic;
     if (safeLang != null) payload['lang'] = safeLang;
     if (isSeller != null) payload['is_seller'] = isSeller;

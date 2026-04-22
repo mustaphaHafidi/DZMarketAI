@@ -171,7 +171,6 @@ class _ProfilePageState extends State<ProfilePage> {
         isPublic: _isPublic,
         lang: lang,
         isSeller: _isSeller,
-        role: _profileRoleString(_profile?.role, _isSeller),
       );
       await LocaleService.instance.setLocale(_lang);
       if (!mounted) return;
@@ -253,17 +252,6 @@ class _ProfilePageState extends State<ProfilePage> {
       }
     });
     _syncCommuneSelectionFromText();
-  }
-
-  String _profileRoleString(UserRole? role, bool isSeller) {
-    switch (role) {
-      case UserRole.superadmin:
-        return 'superadmin';
-      case UserRole.seller:
-      case UserRole.buyer:
-      case null:
-        return isSeller ? 'seller' : 'buyer';
-    }
   }
 
   bool _looksOfflineError(Object? error) {

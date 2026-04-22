@@ -12,6 +12,7 @@ import 'package:dzmarket/src/services/product_service.dart';
 import 'package:dzmarket/src/services/seller_analytics_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/utils/delivery_mode_utils.dart';
+import 'package:dzmarket/src/utils/public_storage_url_resolver.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -873,8 +874,8 @@ class _ProductThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final safeUrl = InputSanitizer.safeUrl(url);
-    if (safeUrl == null) {
+    final safeUrl = normalizePublicStorageUrl(InputSanitizer.safeUrl(url));
+    if (safeUrl.isEmpty) {
       return const CircleAvatar(child: Icon(Icons.inventory_2_outlined));
     }
     return ClipRRect(

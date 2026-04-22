@@ -17,6 +17,7 @@ import 'package:dzmarket/src/services/user_safety_service.dart';
 import 'package:dzmarket/src/utils/bool_utils.dart';
 import 'package:dzmarket/src/utils/delivery_mode_utils.dart';
 import 'package:dzmarket/src/utils/label_url_resolver.dart';
+import 'package:dzmarket/src/utils/public_storage_url_resolver.dart';
 import 'package:dzmarket/src/widgets/arranged_delivery_card.dart';
 import 'package:dzmarket/src/widgets/tracking_stepper.dart';
 import 'package:dzmarket/src/widgets/refresh_controller.dart';
@@ -343,7 +344,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       return _ProductHeaderData(
         productId: product['id'].toString(),
         title: product['title']?.toString() ?? 'Produit',
-        imageUrl: product['image_url']?.toString(),
+        imageUrl: normalizePublicStorageUrl(product['image_url']?.toString()),
         price: (product['price'] as num?)?.toDouble(),
         status: product['status']?.toString(),
         isNegotiable: isNegotiable,

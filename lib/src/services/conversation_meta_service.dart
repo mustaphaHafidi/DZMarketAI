@@ -5,6 +5,7 @@ import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:dzmarket/src/services/rate_limiter.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/utils/public_storage_url_resolver.dart';
 
 class ConversationMeta {
   const ConversationMeta({
@@ -79,7 +80,9 @@ class ConversationMetaService {
 
   Future<Map<String, ConversationMeta>> fetchMany(List<String> roomIds) async {
     final metas = <String, ConversationMeta>{};
-    final productRooms = roomIds.where((r) => r.startsWith('product:')).toList();
+    final productRooms = roomIds
+        .where((r) => r.startsWith('product:'))
+        .toList();
     if (productRooms.isEmpty) return metas;
 
     final parsed = productRooms
@@ -127,29 +130,36 @@ class ConversationMetaService {
       final buyerProfile = profileMap[base.buyerId];
       final sellerName =
           (sellerProfile?['full_name'] as String?)?.trim().isNotEmpty == true
-              ? sellerProfile!['full_name'] as String
-              : (sellerProfile?['email'] as String? ?? sellerFallback);
+          ? sellerProfile!['full_name'] as String
+          : (sellerProfile?['email'] as String? ?? sellerFallback);
       final buyerName =
           (buyerProfile?['full_name'] as String?)?.trim().isNotEmpty == true
-              ? buyerProfile!['full_name'] as String
-              : (buyerProfile?['email'] as String? ?? buyerFallback);
+          ? buyerProfile!['full_name'] as String
+          : (buyerProfile?['email'] as String? ?? buyerFallback);
       final meta = ConversationMeta(
         roomId: base.roomId,
         productId: base.productId,
         buyerId: base.buyerId,
         sellerId: base.sellerId,
-        productTitle: product?['title']?.toString() ??
+        productTitle:
+            product?['title']?.toString() ??
             L10n.trLocale(
               locale,
               'orders.product_fallback',
               params: {'id': base.productId},
             ),
-        productImage: product?['image_url']?.toString(),
+        productImage: normalizePublicStorageUrl(
+          product?['image_url']?.toString(),
+        ),
         price: (product?['price'] as num?)?.toDouble(),
         sellerName: sellerName,
         buyerName: buyerName,
-        sellerAvatar: sellerProfile?['avatar_url']?.toString(),
-        buyerAvatar: buyerProfile?['avatar_url']?.toString(),
+        sellerAvatar: normalizePublicStorageUrl(
+          sellerProfile?['avatar_url']?.toString(),
+        ),
+        buyerAvatar: normalizePublicStorageUrl(
+          buyerProfile?['avatar_url']?.toString(),
+        ),
         status: product?['status']?.toString(),
       );
       metas[base.roomId] = meta;
@@ -167,8 +177,7 @@ class ConversationMetaService {
         .toList();
     if (filtered.isEmpty) return metas;
 
-    final productIds =
-        filtered.map((room) => room.productId!).toSet().toList();
+    final productIds = filtered.map((room) => room.productId!).toSet().toList();
     final userIds = <String>{};
     for (final room in filtered) {
       userIds.add(room.buyerId);
@@ -208,29 +217,36 @@ class ConversationMetaService {
       final buyerProfile = profileMap[room.buyerId];
       final sellerName =
           (sellerProfile?['full_name'] as String?)?.trim().isNotEmpty == true
-              ? sellerProfile!['full_name'] as String
-              : (sellerProfile?['email'] as String? ?? sellerFallback);
+          ? sellerProfile!['full_name'] as String
+          : (sellerProfile?['email'] as String? ?? sellerFallback);
       final buyerName =
           (buyerProfile?['full_name'] as String?)?.trim().isNotEmpty == true
-              ? buyerProfile!['full_name'] as String
-              : (buyerProfile?['email'] as String? ?? buyerFallback);
+          ? buyerProfile!['full_name'] as String
+          : (buyerProfile?['email'] as String? ?? buyerFallback);
       final meta = ConversationMeta(
         roomId: room.roomId,
         productId: room.productId!,
         buyerId: room.buyerId,
         sellerId: room.sellerId,
-        productTitle: product?['title']?.toString() ??
+        productTitle:
+            product?['title']?.toString() ??
             L10n.trLocale(
               locale,
               'orders.product_fallback',
               params: {'id': room.productId ?? ''},
             ),
-        productImage: product?['image_url']?.toString(),
+        productImage: normalizePublicStorageUrl(
+          product?['image_url']?.toString(),
+        ),
         price: (product?['price'] as num?)?.toDouble(),
         sellerName: sellerName,
         buyerName: buyerName,
-        sellerAvatar: sellerProfile?['avatar_url']?.toString(),
-        buyerAvatar: buyerProfile?['avatar_url']?.toString(),
+        sellerAvatar: normalizePublicStorageUrl(
+          sellerProfile?['avatar_url']?.toString(),
+        ),
+        buyerAvatar: normalizePublicStorageUrl(
+          buyerProfile?['avatar_url']?.toString(),
+        ),
         status: product?['status']?.toString(),
       );
       metas[room.roomId] = meta;
@@ -288,33 +304,41 @@ class ConversationMetaService {
       final sellerProfile = conv.sellerId != null
           ? profileMap[conv.sellerId]
           : null;
-      final buyerProfile =
-          conv.buyerId != null ? profileMap[conv.buyerId] : null;
+      final buyerProfile = conv.buyerId != null
+          ? profileMap[conv.buyerId]
+          : null;
       final sellerName =
           (sellerProfile?['full_name'] as String?)?.trim().isNotEmpty == true
-              ? sellerProfile!['full_name'] as String
-              : (sellerProfile?['email'] as String? ?? sellerFallback);
+          ? sellerProfile!['full_name'] as String
+          : (sellerProfile?['email'] as String? ?? sellerFallback);
       final buyerName =
           (buyerProfile?['full_name'] as String?)?.trim().isNotEmpty == true
-              ? buyerProfile!['full_name'] as String
-              : (buyerProfile?['email'] as String? ?? buyerFallback);
+          ? buyerProfile!['full_name'] as String
+          : (buyerProfile?['email'] as String? ?? buyerFallback);
       final meta = ConversationMeta(
         roomId: conv.id,
         productId: conv.productId!,
         buyerId: conv.buyerId ?? '',
         sellerId: conv.sellerId ?? '',
-        productTitle: product?['title']?.toString() ??
+        productTitle:
+            product?['title']?.toString() ??
             L10n.trLocale(
               locale,
               'orders.product_fallback',
               params: {'id': conv.productId ?? ''},
             ),
-        productImage: product?['image_url']?.toString(),
+        productImage: normalizePublicStorageUrl(
+          product?['image_url']?.toString(),
+        ),
         price: (product?['price'] as num?)?.toDouble(),
         sellerName: sellerName,
         buyerName: buyerName,
-        sellerAvatar: sellerProfile?['avatar_url']?.toString(),
-        buyerAvatar: buyerProfile?['avatar_url']?.toString(),
+        sellerAvatar: normalizePublicStorageUrl(
+          sellerProfile?['avatar_url']?.toString(),
+        ),
+        buyerAvatar: normalizePublicStorageUrl(
+          buyerProfile?['avatar_url']?.toString(),
+        ),
         status: product?['status']?.toString(),
       );
       metas[conv.id] = meta;
