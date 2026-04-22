@@ -405,7 +405,11 @@ class L10n {
         'Token invalide ou non autorisé: {error}',
     'courier_settings.snack_saved': 'Compte transporteur enregistré.',
     'courier_settings.status_saved_unverified': 'Enregistré (non vérifié)',
+    'courier_settings.status_invalid': 'Dernière validation échouée',
     'courier_settings.status_valid': 'Token valide',
+    'courier_settings.last_checked': 'Dernier contrôle: {date}',
+    'courier_settings.last_error': 'Dernière erreur: {error}',
+    'courier_settings.failures_count': 'Échecs consécutifs: {count}',
     'courier_settings.title': 'Comptes transporteurs',
     'courier_settings.token_label': 'Token Ecotrack',
     'courier_settings.validating': 'Validation...',
@@ -431,6 +435,12 @@ class L10n {
     'fulfillment.delivery_local': 'Coursier local',
     'fulfillment.delivery_mode': 'Mode de livraison',
     'fulfillment.delivery_pickup': 'Point relais / bureau poste',
+    'fulfillment.error_courier_credentials_invalid':
+        'Le compte {courier} n\'est plus valide. Mettez à jour le token dans Paramètres transporteurs puis réessayez. Détail: {error}',
+    'fulfillment.error_courier_rate_limited':
+        'Le transporteur répond trop souvent. Réessayez dans quelques secondes.',
+    'fulfillment.error_missing_courier_settings':
+        'Aucun identifiant transporteur valide n\'est enregistré pour {courier}.',
     'fulfillment.error_select_courier': 'Selectionnez un transporteur',
     'fulfillment.generate_label': 'Generer bordereau + expedier',
     'fulfillment.not_specified': 'Non precise',
@@ -673,6 +683,8 @@ class L10n {
     'notifications.pref_system': 'Système',
     'notifications.preferences_title': 'Préférences notifications',
     'notifications.system.body': 'Nouvelle mise à jour système',
+    'notifications.system.courier_credentials_invalid':
+        'Le compte transporteur {courier_name} de la commande #{order_id} n\'est plus valide. Mettez à jour le token puis relancez la génération du bordereau.',
     'notifications.system.title': 'Système',
     'notifications.title': 'Notifications',
     'notifications.unmute_now': 'Réactiver',
@@ -773,10 +785,8 @@ class L10n {
     'profile.account_deletion': 'Demander la suppression du compte',
     'profile.account_deletion_hint':
         'Demande initiee dans l app, traitement sous 30 jours maximum.',
-    'profile.account_deletion_in_progress':
-        'Demande de suppression en cours',
-    'profile.account_deletion_last_request':
-        'Derniere demande de suppression',
+    'profile.account_deletion_in_progress': 'Demande de suppression en cours',
+    'profile.account_deletion_last_request': 'Derniere demande de suppression',
     'profile.account_deletion_requested_at': 'Demandee le {date}',
     'profile.account_deletion_processed_at': 'Traitee le {date}',
     'profile.account_deletion_admin_note': 'Note admin: {note}',
@@ -1398,7 +1408,11 @@ class L10n {
     'courier_settings.snack_invalid_token_detail': 'بيانات غير صحيحة: {error}',
     'courier_settings.snack_saved': 'تم الحفظ',
     'courier_settings.status_saved_unverified': 'تم الحفظ (غير مُتحقق)',
+    'courier_settings.status_invalid': 'فشل آخر تحقق',
     'courier_settings.status_valid': 'تم التحقق',
+    'courier_settings.last_checked': 'آخر تحقق: {date}',
+    'courier_settings.last_error': 'آخر خطأ: {error}',
+    'courier_settings.failures_count': 'مرات الفشل المتتالية: {count}',
     'courier_settings.title': 'حسابات النقل',
     'courier_settings.token_label': 'معرّف API / توكن',
     'courier_settings.validating': 'جارٍ التحقق',
@@ -1423,6 +1437,12 @@ class L10n {
     'fulfillment.delivery_local': 'ساعي محلي',
     'fulfillment.delivery_mode': 'طريقة التوصيل',
     'fulfillment.delivery_pickup': 'نقطة استلام / مكتب بريد',
+    'fulfillment.error_courier_credentials_invalid':
+        'لم تعد بيانات {courier} صالحة. حدّث الرمز من إعدادات النقل ثم أعد المحاولة. التفاصيل: {error}',
+    'fulfillment.error_courier_rate_limited':
+        'شركة الشحن تطبق حد طلبات مؤقت. أعد المحاولة بعد قليل.',
+    'fulfillment.error_missing_courier_settings':
+        'لا توجد بيانات صالحة محفوظة لشركة {courier}.',
     'fulfillment.error_select_courier': 'اختر شركة الشحن',
     'fulfillment.generate_label': 'إنشاء البوليصة + الشحن',
     'fulfillment.not_specified': 'غير محدد',
@@ -1656,6 +1676,8 @@ class L10n {
     'notifications.pref_system': 'النظام',
     'notifications.preferences_title': 'تفضيلات الإشعارات',
     'notifications.system.body': 'تحديث نظام جديد',
+    'notifications.system.courier_credentials_invalid':
+        'لم تعد بيانات شركة الشحن {courier_name} للطلب #{order_id} صالحة. حدّث الرمز ثم أعد إنشاء البوليصة.',
     'notifications.system.title': 'النظام',
     'notifications.title': 'الإشعارات',
     'notifications.unmute_now': 'إعادة التفعيل',

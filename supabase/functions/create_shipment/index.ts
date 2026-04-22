@@ -679,6 +679,174 @@ const materializeLabelUrl = async ({
   }
 };
 
+const normalizeErrorBlob = (value: string) =>
+  textValue(value)
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, " ")
+    .replace(/[^a-z0-9]+/g, " ");
+
+const looksLikeCredentialError = (
+  carrierCode: string,
+  status: number,
+  rawBody: string,
+) => {
+  if (status === 401 || status === 403) return true;
+  const normalized = normalizeErrorBlob(rawBody);
+  if (!normalized) return false;
+  const genericHints = [
+    "token invalide",
+    "invalid token",
+    "invalid api token",
+    "invalid api key",
+    "invalid credentials",
+    "unauthorized",
+    "forbidden",
+    "authentication failed",
+    "not allowed",
+    "token not allowed",
+    "invalid tenant",
+    "tenant not found",
+    "expired token",
+  ];
+  if (genericHints.some((hint) => normalized.includes(hint))) return true;
+  if (carrierCode === "ecotrack") {
+    return normalized.includes("invalid token") ||
+      normalized.includes("token not allowed");
+  }
+  if (carrierCode === "yalidine" || carrierCode === "guepex") {
+    return normalized.includes("token") && normalized.includes("invalid");
+  }
+  if (carrierCode === "zrexpress") {
+    return normalized.includes("tenant") ||
+      normalized.includes("api key") ||
+      normalized.includes("unauthorized");
+  }
+  return false;
+};
+
+const updateCourierCredentialHealth = async ({
+  supabaseAdmin,
+  ownerId,
+  courierId,
+  status,
+  errorMessage,
+}: {
+  supabaseAdmin: ReturnType<typeof createClient>;
+  ownerId: string;
+  courierId: string;
+  status: "valid" | "invalid";
+  errorMessage?: string | null;
+}) => {
+  if (!ownerId || !courierId) return;
+  let consecutiveFailures = 0;
+  if (status === "invalid") {
+    try {
+      const { data } = await supabaseAdmin
+        .from("seller_delivery_settings")
+        .select("consecutive_failures")
+        .eq("owner_id", ownerId)
+        .eq("courier_id", courierId)
+        .maybeSingle();
+      consecutiveFailures = Math.max(
+        0,
+        numberValue(data?.consecutive_failures, 0),
+      ) + 1;
+    } catch {
+      consecutiveFailures = 1;
+    }
+  }
+  const updatePayload: Record<string, unknown> = {
+    last_validated_at: new Date().toISOString(),
+    last_validation_status: status,
+    last_validation_error: status === "invalid" ? textValue(errorMessage) || null : null,
+    consecutive_failures: consecutiveFailures,
+  };
+  await supabaseAdmin
+    .from("seller_delivery_settings")
+    .update(updatePayload)
+    .eq("owner_id", ownerId)
+    .eq("courier_id", courierId);
+};
+
+const notifyCourierCredentialInvalid = async ({
+  supabaseAdmin,
+  sellerId,
+  orderId,
+  courierId,
+  courierName,
+  errorMessage,
+}: {
+  supabaseAdmin: ReturnType<typeof createClient>;
+  sellerId: string;
+  orderId: string;
+  courierId: string;
+  courierName: string;
+  errorMessage: string;
+}) => {
+  if (!sellerId || !orderId) return;
+  try {
+    await supabaseAdmin.rpc("emit_notification", {
+      p_user_id: sellerId,
+      p_category: "system",
+      p_title_i18n: "notifications.system.title",
+      p_body_i18n: "notifications.system.courier_credentials_invalid",
+      p_payload: {
+        order_id: orderId,
+        courier_id: courierId,
+        courier_name: courierName || courierId,
+        error: errorMessage,
+      },
+      p_dedupe_key: `order:${orderId}:courier_credentials_invalid`,
+    });
+  } catch {
+    // Best effort only.
+  }
+};
+
+const credentialInvalidResponse = async ({
+  supabaseAdmin,
+  sellerId,
+  orderId,
+  courierId,
+  courierName,
+  detail,
+}: {
+  supabaseAdmin: ReturnType<typeof createClient>;
+  sellerId: string;
+  orderId: string;
+  courierId: string;
+  courierName: string;
+  detail: string;
+}) => {
+  await updateCourierCredentialHealth({
+    supabaseAdmin,
+    ownerId: sellerId,
+    courierId,
+    status: "invalid",
+    errorMessage: detail,
+  });
+  await notifyCourierCredentialInvalid({
+    supabaseAdmin,
+    sellerId,
+    orderId,
+    courierId,
+    courierName,
+    errorMessage: detail,
+  });
+  return jsonResponse(
+    {
+      ok: false,
+      error_code: "courier_credentials_invalid",
+      message: "courier_credentials_invalid",
+      detail,
+      courier_id: courierId,
+      courier_name: courierName || courierId,
+    },
+    409,
+  );
+};
+
 const refreshZrLabelByTracking = async ({
   supabaseAdmin,
   supabaseUser,
@@ -686,6 +854,9 @@ const refreshZrLabelByTracking = async ({
   outboundCarrierCode,
   outboundOwnerId,
   trackingNumber,
+  orderId,
+  courierId,
+  courierName,
   preferredOrigin,
 }: {
   supabaseAdmin: ReturnType<typeof createClient>;
@@ -694,6 +865,9 @@ const refreshZrLabelByTracking = async ({
   outboundCarrierCode: string;
   outboundOwnerId: string;
   trackingNumber: string;
+  orderId: string;
+  courierId: string;
+  courierName: string;
   preferredOrigin?: URL | null;
 }) => {
   const headers = {
@@ -719,7 +893,29 @@ const refreshZrLabelByTracking = async ({
         body: JSON.stringify({ trackingNumbers: [trackingNumber] }),
       },
     );
-    if (!resp || !resp.ok) continue;
+    if (!resp) continue;
+    if (!resp.ok) {
+      const bodyText = await resp.text().catch(() => "");
+      if (looksLikeCredentialError(outboundCarrierCode, resp.status, bodyText)) {
+        await updateCourierCredentialHealth({
+          supabaseAdmin,
+          ownerId: outboundOwnerId,
+          courierId,
+          status: "invalid",
+          errorMessage: bodyText || `Label ${resp.status}`,
+        });
+        await notifyCourierCredentialInvalid({
+          supabaseAdmin,
+          sellerId: outboundOwnerId,
+          orderId,
+          courierId,
+          courierName,
+          errorMessage: bodyText || `Label ${resp.status}`,
+        });
+        return "";
+      }
+      continue;
+    }
     const parsed = await parseCarrierLabelResponse(resp, trackingNumber);
     if (!parsed.labelBytes && !parsed.labelUrl) continue;
     return await materializeLabelUrl({
@@ -1093,7 +1289,16 @@ serve(async (req) => {
     .eq("courier_id", courierId)
     .maybeSingle();
   if (settingsError || !settingsRow?.api_key) {
-    return jsonResponse({ ok: false, message: "Missing courier settings" }, 400);
+    return jsonResponse(
+      {
+        ok: false,
+        error_code: "missing_courier_settings",
+        message: "Missing courier settings",
+        courier_id: courierId,
+        courier_name: courierName || courierId,
+      },
+      400,
+    );
   }
 
   const normalizeCourier = (value: string) =>
@@ -1139,6 +1344,9 @@ serve(async (req) => {
       outboundCarrierCode,
       outboundOwnerId,
       trackingNumber,
+      orderId,
+      courierId: effectiveCourierId,
+      courierName: effectiveCourierName,
       preferredOrigin: requestPublicOrigin,
     });
     if (refreshedLabelUrl) {
@@ -1159,6 +1367,7 @@ serve(async (req) => {
         label_url: labelUrl,
       });
     }
+    labelUrl = "";
   }
 
   if (trackingNumber && labelUrl) {
@@ -1274,6 +1483,17 @@ serve(async (req) => {
       return jsonResponse({ ok: false, message: "courier_rate_limited" }, 429);
     }
     if (!resp.ok) {
+      const bodyText = await resp.text().catch(() => "");
+      if (looksLikeCredentialError(outboundCarrierCode, resp.status, bodyText)) {
+        return await credentialInvalidResponse({
+          supabaseAdmin,
+          sellerId: effectiveUserId,
+          orderId,
+          courierId: effectiveCourierId,
+          courierName: effectiveCourierName,
+          detail: bodyText || `Yalidine ${resp.status}`,
+        });
+      }
       return jsonResponse({ ok: false, message: `Yalidine ${resp.status}` }, 502);
     }
     const decoded = await resp.json();
@@ -1284,7 +1504,18 @@ serve(async (req) => {
         ? data[Object.keys(data)[0]]
         : undefined;
     if (first?.success === false) {
-      return jsonResponse({ ok: false, message: textValue(first?.message) }, 400);
+      const message = textValue(first?.message);
+      if (looksLikeCredentialError(outboundCarrierCode, 400, message)) {
+        return await credentialInvalidResponse({
+          supabaseAdmin,
+          sellerId: effectiveUserId,
+          orderId,
+          courierId: effectiveCourierId,
+          courierName: effectiveCourierName,
+          detail: message || "Token invalide",
+        });
+      }
+      return jsonResponse({ ok: false, message }, 400);
     }
     trackingNumber = textValue(
       first?.tracking ?? first?.tracking_number ?? first?.tracking_id ?? first?.parcel_id,
@@ -1462,6 +1693,16 @@ serve(async (req) => {
     }
     if (!resp.ok) {
       const bodyText = await resp.text();
+      if (looksLikeCredentialError(outboundCarrierCode, resp.status, bodyText)) {
+        return await credentialInvalidResponse({
+          supabaseAdmin,
+          sellerId: effectiveUserId,
+          orderId,
+          courierId: effectiveCourierId,
+          courierName: effectiveCourierName,
+          detail: bodyText || `Guepex ${resp.status}`,
+        });
+      }
       return jsonResponse(
         { ok: false, message: `Guepex ${resp.status}: ${bodyText}` },
         502,
@@ -1516,7 +1757,18 @@ serve(async (req) => {
       return jsonResponse({ ok: false, message: "Unexpected Guepex response" }, 502);
     }
     if (first?.success === false) {
-      return jsonResponse({ ok: false, message: textValue(first?.message) }, 400);
+      const message = textValue(first?.message);
+      if (looksLikeCredentialError(outboundCarrierCode, 400, message)) {
+        return await credentialInvalidResponse({
+          supabaseAdmin,
+          sellerId: effectiveUserId,
+          orderId,
+          courierId: effectiveCourierId,
+          courierName: effectiveCourierName,
+          detail: message || "Token invalide",
+        });
+      }
+      return jsonResponse({ ok: false, message }, 400);
     }
 
     trackingNumber = textValue(
@@ -1660,6 +1912,16 @@ serve(async (req) => {
         if (resp.status !== 404 && resp.status !== 405) break;
       }
       if (!resp || !resp.ok) {
+        if (resp && looksLikeCredentialError(outboundCarrierCode, resp.status, errorBody)) {
+          return await credentialInvalidResponse({
+            supabaseAdmin,
+            sellerId: effectiveUserId,
+            orderId,
+            courierId: effectiveCourierId,
+            courierName: effectiveCourierName,
+            detail: errorBody || `Ecotrack ${resp.status}`,
+          });
+        }
         const suffix = errorBody ? `: ${errorBody}` : "";
         return jsonResponse(
           { ok: false, message: `Ecotrack ${resp?.status ?? "error"}${suffix}` },
@@ -1670,7 +1932,18 @@ serve(async (req) => {
       const results = decoded?.results ?? {};
       const result = results?.[orderId] ?? decoded;
       if (result?.success === false) {
-        return jsonResponse({ ok: false, message: textValue(result?.message) }, 400);
+        const message = textValue(result?.message);
+        if (looksLikeCredentialError(outboundCarrierCode, 400, message)) {
+          return await credentialInvalidResponse({
+            supabaseAdmin,
+            sellerId: effectiveUserId,
+            orderId,
+            courierId: effectiveCourierId,
+            courierName: effectiveCourierName,
+            detail: message || "Token invalide",
+          });
+        }
+        return jsonResponse({ ok: false, message }, 400);
       }
       trackingNumber = textValue(result?.tracking ?? decoded?.tracking);
       if (!trackingNumber) {
@@ -1706,6 +1979,16 @@ serve(async (req) => {
         if (labelResp.status !== 404 && labelResp.status !== 405) break;
       }
       if (!labelResp || !labelResp.ok) {
+        if (labelResp && looksLikeCredentialError(outboundCarrierCode, labelResp.status, labelError)) {
+          return await credentialInvalidResponse({
+            supabaseAdmin,
+            sellerId: effectiveUserId,
+            orderId,
+            courierId: effectiveCourierId,
+            courierName: effectiveCourierName,
+            detail: labelError || `Label ${labelResp.status}`,
+          });
+        }
         const suffix = labelError ? `: ${labelError}` : "";
         return jsonResponse(
           { ok: false, message: `Label ${labelResp?.status ?? "error"}${suffix}` },
@@ -2015,6 +2298,16 @@ serve(async (req) => {
       } catch {
         bodyText = "";
       }
+      if (looksLikeCredentialError(outboundCarrierCode, resp.status, bodyText)) {
+        return await credentialInvalidResponse({
+          supabaseAdmin,
+          sellerId: effectiveUserId,
+          orderId,
+          courierId: effectiveCourierId,
+          courierName: effectiveCourierName,
+          detail: bodyText || `ZrExpress ${resp.status}`,
+        });
+      }
       return jsonResponse(
         { ok: false, message: `ZrExpress ${resp.status}: ${bodyText}` },
         502,
@@ -2098,6 +2391,16 @@ serve(async (req) => {
     }
     if (!labelResp.ok) {
       const bodyText = await labelResp.text();
+      if (looksLikeCredentialError(outboundCarrierCode, labelResp.status, bodyText)) {
+        return await credentialInvalidResponse({
+          supabaseAdmin,
+          sellerId: effectiveUserId,
+          orderId,
+          courierId: effectiveCourierId,
+          courierName: effectiveCourierName,
+          detail: bodyText || `Label ${labelResp.status}`,
+        });
+      }
       return jsonResponse(
         { ok: false, message: `Label ${labelResp.status}: ${bodyText}` },
         502,
@@ -2134,6 +2437,16 @@ serve(async (req) => {
         labelLink = parsed.labelUrl;
       } else {
         const bodyText = await htmlResp.text();
+        if (looksLikeCredentialError(outboundCarrierCode, htmlResp.status, bodyText)) {
+          return await credentialInvalidResponse({
+            supabaseAdmin,
+            sellerId: effectiveUserId,
+            orderId,
+            courierId: effectiveCourierId,
+            courierName: effectiveCourierName,
+            detail: bodyText || `Label ${htmlResp.status}`,
+          });
+        }
         return jsonResponse(
           { ok: false, message: `Label ${htmlResp.status}: ${bodyText}` },
           502,
@@ -2224,6 +2537,13 @@ serve(async (req) => {
       500,
     );
   }
+
+  await updateCourierCredentialHealth({
+    supabaseAdmin,
+    ownerId: effectiveUserId,
+    courierId: effectiveCourierId,
+    status: "valid",
+  });
 
   const statusValue = labelUrl ? "shipped" : "validated";
   const i18nKey = labelUrl

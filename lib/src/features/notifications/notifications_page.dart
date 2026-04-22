@@ -56,6 +56,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
       'notifications.order.status': 'Commande #{id}: {status}',
       'notifications.system.title': 'Systeme',
       'notifications.system.body': 'Nouvelle mise a jour systeme',
+      'notifications.system.courier_credentials_invalid':
+          'Le compte transporteur {courier_name} de la commande #{order_id} n\'est plus valide. Mettez a jour le token puis relancez la generation du bordereau.',
     },
     'ar': {
       'notifications.title':
@@ -114,6 +116,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
       'notifications.system.title': '\u0627\u0644\u0646\u0638\u0627\u0645',
       'notifications.system.body':
           '\u062a\u062d\u062f\u064a\u062b \u0646\u0638\u0627\u0645 \u062c\u062f\u064a\u062f',
+      'notifications.system.courier_credentials_invalid':
+          '\u0644\u0645 \u062a\u0639\u062f \u0628\u064a\u0627\u0646\u0627\u062a \u0634\u0631\u0643\u0629 \u0627\u0644\u0634\u062d\u0646 {courier_name} \u0644\u0644\u0637\u0644\u0628 #{order_id} \u0635\u0627\u0644\u062d\u0629. \u062d\u062f\u0651\u062b \u0627\u0644\u0631\u0645\u0632 \u062b\u0645 \u0623\u0639\u062f \u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u0628\u0648\u0644\u064a\u0635\u0629.',
     },
   };
 

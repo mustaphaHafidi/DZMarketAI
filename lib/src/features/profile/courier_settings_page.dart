@@ -5,6 +5,9 @@ import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
+import 'package:dzmarket/src/utils/courier_credentials_status.dart';
 
 class CourierSettingsPage extends StatefulWidget {
   const CourierSettingsPage({super.key});
@@ -26,6 +29,9 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
   bool _deleting = false;
   String? _error;
   String? _status;
+  String? _validationErrorDetail;
+  DateTime? _lastValidatedAt;
+  int _consecutiveFailures = 0;
 
   @override
   void initState() {
@@ -47,11 +53,35 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
       final row = await ShippingService().loadSellerDeliverySettingsByName(
         _selectedCourierName,
       );
+      if (!mounted) return;
       _error = null;
       if (row != null) {
         _apiKeyCtrl.text = row['api_key']?.toString() ?? '';
         _apiSecretCtrl.text = row['api_secret']?.toString() ?? '';
         _senderCtrl.text = row['sender_id']?.toString() ?? '';
+        final health = courierCredentialStatusFromValue(
+          row['last_validation_status'],
+        );
+        _lastValidatedAt = DateTime.tryParse(
+          row['last_validated_at']?.toString() ?? '',
+        )?.toLocal();
+        _validationErrorDetail = row['last_validation_error']?.toString();
+        _consecutiveFailures =
+            int.tryParse('${row['consecutive_failures'] ?? 0}') ?? 0;
+        _status = switch (health) {
+          CourierCredentialStatus.valid => L10n.tr(
+            context,
+            'courier_settings.status_valid',
+          ),
+          CourierCredentialStatus.invalid => L10n.tr(
+            context,
+            'courier_settings.status_invalid',
+          ),
+          CourierCredentialStatus.unknown =>
+            row['api_key'] != null
+                ? L10n.tr(context, 'courier_settings.status_saved_unverified')
+                : null,
+        };
         _localCache[_selectedCourierName] = {
           'api_key': _apiKeyCtrl.text,
           'api_secret': _apiSecretCtrl.text,
@@ -68,6 +98,10 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
           _apiSecretCtrl.clear();
           _senderCtrl.clear();
         }
+        _status = null;
+        _validationErrorDetail = null;
+        _lastValidatedAt = null;
+        _consecutiveFailures = 0;
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -139,6 +173,11 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
       setState(() {
         _validating = false;
         _saving = false;
+        _lastValidatedAt = DateTime.now();
+        _validationErrorDetail = message;
+        _consecutiveFailures = (_consecutiveFailures <= 0)
+            ? 1
+            : _consecutiveFailures;
         _error = message == null || message.isEmpty
             ? L10n.tr(context, 'courier_settings.error_invalid_token')
             : L10n.tr(
@@ -169,6 +208,9 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
       _saving = true;
       if (valid) {
         _status = L10n.tr(context, 'courier_settings.status_valid');
+        _validationErrorDetail = null;
+        _lastValidatedAt = DateTime.now();
+        _consecutiveFailures = 0;
       }
     });
     await ShippingService().saveSellerDeliverySettingsByName(
@@ -224,6 +266,9 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
     final isGuepex = ShippingService.isGuepexCourier(
       courierName: _selectedCourierName,
     );
+    final checkedAtLabel = _lastValidatedAt == null
+        ? null
+        : DateFormat('dd/MM/yyyy HH:mm').format(_lastValidatedAt!);
     return Scaffold(
       appBar: AppBar(title: Text(L10n.tr(context, 'courier_settings.title'))),
       body: _loading
@@ -325,9 +370,49 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
                     Text(
                       _status!,
                       style: TextStyle(
-                        color: Colors.green.shade700,
+                        color:
+                            _status ==
+                                L10n.tr(
+                                  context,
+                                  'courier_settings.status_invalid',
+                                )
+                            ? Theme.of(context).colorScheme.error
+                            : Colors.green.shade700,
                         fontWeight: FontWeight.w600,
                       ),
+                    ),
+                  ],
+                  if (checkedAtLabel != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      L10n.tr(
+                        context,
+                        'courier_settings.last_checked',
+                        params: {'date': checkedAtLabel},
+                      ),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                  if ((_validationErrorDetail ?? '').trim().isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      L10n.tr(
+                        context,
+                        'courier_settings.last_error',
+                        params: {'error': _validationErrorDetail!},
+                      ),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                  if (_consecutiveFailures > 0) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      L10n.tr(
+                        context,
+                        'courier_settings.failures_count',
+                        params: {'count': '$_consecutiveFailures'},
+                      ),
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
                   if (_error != null) ...[

@@ -2389,6 +2389,10 @@ create table if not exists public.seller_delivery_settings (
   api_secret text,
   sender_id text,
   extra jsonb default '{}'::jsonb,
+  last_validated_at timestamptz,
+  last_validation_status text not null default 'unknown' check (last_validation_status in ('unknown','valid','invalid')),
+  last_validation_error text,
+  consecutive_failures integer not null default 0,
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
   unique (owner_id, courier_id)
@@ -2435,7 +2439,8 @@ begin
     and (
       s.courier_id = 'ecotrack'
       or s.api_secret is not null
-    );
+    )
+    and coalesce(nullif(trim(s.last_validation_status), ''), 'unknown') <> 'invalid';
 end;
 $$;
 revoke all on function public.get_enabled_couriers_for_seller(uuid) from public;

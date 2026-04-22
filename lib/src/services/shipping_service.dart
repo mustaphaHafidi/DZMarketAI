@@ -15,6 +15,7 @@ import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/locale_service.dart';
+import 'package:dzmarket/src/utils/shipment_error_mapper.dart';
 import 'package:dzmarket/src/utils/label_url_resolver.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -851,13 +852,20 @@ class ShippingService {
         () => supabase
             .from('seller_delivery_settings')
             .select(
-              'courier_id, api_key, api_secret, sender_id, couriers(name)',
+              'courier_id, api_key, api_secret, sender_id, '
+              'last_validation_status, couriers(name)',
             )
             .eq('owner_id', safeSellerId)
             .not('api_key', 'is', null)
             .or('courier_id.eq.ecotrack,api_secret.not.is.null'),
       );
       return rows
+          .where(
+            (r) =>
+                (r['last_validation_status']?.toString().trim().toLowerCase() ??
+                    'unknown') !=
+                'invalid',
+          )
           .map(
             (r) => {
               'courier_id': r['courier_id'],
@@ -978,7 +986,14 @@ class ShippingService {
             LocaleService.instance.locale.value?.languageCode ?? 'fr';
         throw StateError(L10n.trLocale(locale, 'checkout.error_zr_phone'));
       }
-      throw StateError(rawMessage);
+      final locale = LocaleService.instance.locale.value?.languageCode ?? 'fr';
+      throw StateError(
+        mapCreateShipmentError(
+          locale: locale,
+          data: Map<String, dynamic>.from(data),
+          courierName: safeCourierName,
+        ),
+      );
     }
     if (data is Map) {
       final map = Map<String, dynamic>.from(data);
@@ -2814,7 +2829,10 @@ class ShippingService {
     // Direct select: only for the authenticated owner.
     var query = supabase
         .from('seller_delivery_settings')
-        .select('api_key, api_secret, sender_id, extra');
+        .select(
+          'api_key, api_secret, sender_id, extra, last_validated_at, '
+          'last_validation_status, last_validation_error, consecutive_failures',
+        );
     query = query.inFilter('courier_id', courierIdVariants);
     if (safeOwnerId != null) query = query.eq('owner_id', safeOwnerId);
     if (safeOwnerId == null && current != null) {
@@ -2845,6 +2863,10 @@ class ShippingService {
       'base_url': baseUrl,
       'sender_id': map['sender_id'],
       'extra': map['extra'],
+      'last_validated_at': map['last_validated_at'],
+      'last_validation_status': map['last_validation_status'],
+      'last_validation_error': map['last_validation_error'],
+      'consecutive_failures': map['consecutive_failures'],
     };
   }
 
@@ -2926,6 +2948,10 @@ class ShippingService {
         'api_key': safeApiKey.isEmpty ? null : safeApiKey,
         'api_secret': safeApiSecret.isEmpty ? null : safeApiSecret,
         'sender_id': safeSenderId,
+        'last_validated_at': DateTime.now().toUtc().toIso8601String(),
+        'last_validation_status': 'valid',
+        'last_validation_error': null,
+        'consecutive_failures': 0,
         'extra': isEcotrack
             ? {'base_url': 'https://api.ecotrack.dz'}
             : isGuepex
