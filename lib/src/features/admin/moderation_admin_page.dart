@@ -920,12 +920,59 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
                           params: {'note': item.adminNote!.trim()},
                         ),
                       ),
+                    if ((item.processedByName ?? item.processedByEmail ?? '')
+                        .trim()
+                        .isNotEmpty)
+                      Text(
+                        L10n.tr(
+                          context,
+                          'admin.moderation.deletion_processed_by',
+                          fallback: 'Traitee par: {user}',
+                          params: {
+                            'user':
+                                (item.processedByName ??
+                                        item.processedByEmail ??
+                                        '')
+                                    .trim(),
+                          },
+                        ),
+                      ),
+                    if ((item.accountStatusBefore ?? '').trim().isNotEmpty ||
+                        (item.accountStatusAfter ?? '').trim().isNotEmpty)
+                      Text(
+                        L10n.tr(
+                          context,
+                          'admin.moderation.deletion_account_transition',
+                          fallback: 'Compte: {before} -> {after}',
+                          params: {
+                            'before': _statusLabel(
+                              (item.accountStatusBefore ?? item.userStatus)
+                                  .trim()
+                                  .toLowerCase(),
+                            ),
+                            'after': _statusLabel(
+                              (item.accountStatusAfter ?? item.userStatus)
+                                  .trim()
+                                  .toLowerCase(),
+                            ),
+                          },
+                        ),
+                      ),
                     if (item.processedAt != null)
                       Text(
                         L10n.tr(
                           context,
-                          'admin.moderation.updated_at',
+                          'admin.moderation.deletion_processed_at',
+                          fallback: 'Traitee le: {date}',
                           params: {'date': _dateFmt.format(item.processedAt!)},
+                        ),
+                      )
+                    else
+                      Text(
+                        L10n.tr(
+                          context,
+                          'admin.moderation.updated_at',
+                          params: {'date': _dateFmt.format(item.requestedAt)},
                         ),
                       ),
                   ],
@@ -1206,6 +1253,10 @@ class _DeletionRequestItem {
     this.reason,
     this.processedAt,
     this.adminNote,
+    this.processedByName,
+    this.processedByEmail,
+    this.accountStatusBefore,
+    this.accountStatusAfter,
     this.userEmail,
     this.userFullName,
   });
@@ -1219,11 +1270,17 @@ class _DeletionRequestItem {
   final String userStatus;
   final String? reason;
   final String? adminNote;
+  final String? processedByName;
+  final String? processedByEmail;
+  final String? accountStatusBefore;
+  final String? accountStatusAfter;
   final String? userEmail;
   final String? userFullName;
 
   factory _DeletionRequestItem.fromJson(Map<String, dynamic> json) {
     final user = (json['user'] as Map?)?.cast<String, dynamic>();
+    final processedBy = (json['processed_by_profile'] as Map?)
+        ?.cast<String, dynamic>();
     final requestedAt =
         DateTime.tryParse(json['requested_at']?.toString() ?? '')?.toLocal() ??
         DateTime.now();
@@ -1243,6 +1300,10 @@ class _DeletionRequestItem {
       userStatus: (user?['status']?.toString() ?? 'active').toLowerCase(),
       reason: json['reason']?.toString(),
       adminNote: json['admin_note']?.toString(),
+      processedByName: processedBy?['full_name']?.toString(),
+      processedByEmail: processedBy?['email']?.toString(),
+      accountStatusBefore: json['account_status_before']?.toString(),
+      accountStatusAfter: json['account_status_after']?.toString(),
       userEmail: user?['email']?.toString(),
       userFullName: user?['full_name']?.toString(),
     );

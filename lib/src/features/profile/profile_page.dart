@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dzmarket/src/models/account_deletion_request.dart';
 import 'package:dzmarket/src/models/profile.dart';
 import 'package:dzmarket/src/services/app_error_service.dart';
 import 'package:dzmarket/src/services/auth_service.dart';
@@ -17,6 +18,7 @@ import 'package:dzmarket/src/widgets/user_avatar.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Unified profile page (buyer/seller) with editable fields and seller tools.
@@ -30,6 +32,7 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   final NotificationInboxService _notificationInboxService =
       NotificationInboxService();
+  final DateFormat _dateFmt = DateFormat('dd/MM HH:mm');
   final _nameCtrl = TextEditingController();
   final _bioCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
@@ -50,6 +53,7 @@ class _ProfilePageState extends State<ProfilePage> {
   String? _locationLoadError;
   List<Map<String, String>> _wilayas = const [];
   List<Map<String, String>> _communes = const [];
+  AccountDeletionRequestSummary? _deletionRequest;
   String? _selectedWilayaCode;
   String? _selectedCommuneId;
   String? _lastLoggedError;
@@ -88,8 +92,13 @@ class _ProfilePageState extends State<ProfilePage> {
         return;
       }
       await AuthService.instance.ensureProfileExists();
-      final p = await AuthService.instance.fetchProfile();
+      final results = await Future.wait<dynamic>([
+        AuthService.instance.fetchProfile(),
+        AuthService.instance.fetchLatestAccountDeletionRequest(),
+      ]);
       if (!mounted) return;
+      final p = results[0] as Profile?;
+      final deletionRequest = results[1] as AccountDeletionRequestSummary?;
       if (p == null) {
         setState(() {
           _error = L10n.trLocale(localeCode, 'profile.not_found');
@@ -110,6 +119,7 @@ class _ProfilePageState extends State<ProfilePage> {
           p.lang ?? LocaleService.instance.locale.value?.languageCode ?? 'fr';
       _lat = p.locationLat;
       _lng = p.locationLng;
+      _deletionRequest = deletionRequest;
       _syncLocationSelectionFromText();
     } on FormatException catch (e) {
       if (!mounted) return;
@@ -766,6 +776,22 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _requestAccountDeletion() async {
+    if (_deletionRequest?.isOpen ?? false) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            L10n.tr(
+              context,
+              'profile.account_deletion_pending_banner',
+              fallback:
+                  'Une demande de suppression est deja en cours de traitement.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
     final reasonCtrl = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
@@ -837,6 +863,8 @@ class _ProfilePageState extends State<ProfilePage> {
         reason: reasonCtrl.text,
       );
       if (!mounted) return;
+      await _loadProfile();
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -850,9 +878,8 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
       );
       await AuthService.instance.signOut();
-      if (mounted) {
-        context.go('/sign-in');
-      }
+      if (!mounted) return;
+      context.go('/sign-in');
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -873,6 +900,193 @@ class _ProfilePageState extends State<ProfilePage> {
         setState(() => _saving = false);
       }
     }
+  }
+
+  String _deletionStatusLabel(String status) {
+    switch (status) {
+      case 'processing':
+        return L10n.tr(
+          context,
+          'admin.moderation.deletion_processing',
+          fallback: 'En traitement',
+        );
+      case 'completed':
+        return L10n.tr(
+          context,
+          'admin.moderation.deletion_completed',
+          fallback: 'Clôturée',
+        );
+      case 'rejected':
+        return L10n.tr(
+          context,
+          'admin.moderation.deletion_rejected',
+          fallback: 'Rejetée',
+        );
+      case 'cancelled':
+        return L10n.tr(
+          context,
+          'admin.moderation.deletion_cancelled',
+          fallback: 'Annulée',
+        );
+      case 'pending':
+      default:
+        return L10n.tr(
+          context,
+          'admin.moderation.deletion_pending',
+          fallback: 'En attente',
+        );
+    }
+  }
+
+  Color _deletionStatusColor(String status) {
+    switch (status) {
+      case 'processing':
+        return Colors.blue;
+      case 'completed':
+        return Colors.green;
+      case 'rejected':
+        return Colors.red;
+      case 'cancelled':
+        return Colors.blueGrey;
+      case 'pending':
+      default:
+        return Colors.orange;
+    }
+  }
+
+  Widget _buildAccountDeletionTile(BuildContext context) {
+    final request = _deletionRequest;
+    final hasOpenRequest = request?.isOpen ?? false;
+    final note = request?.adminNote?.trim() ?? '';
+    final processedAt = request?.processedAt;
+    final requestedAt = request?.requestedAt;
+
+    if (request != null) {
+      final statusColor = _deletionStatusColor(request.status);
+      final detailLines = <String>[];
+      if (requestedAt != null) {
+        detailLines.add(
+          L10n.tr(
+            context,
+            'profile.account_deletion_requested_at',
+            fallback: 'Demandée le {date}',
+            params: {'date': _dateFmt.format(requestedAt)},
+          ),
+        );
+      }
+      if (processedAt != null) {
+        detailLines.add(
+          L10n.tr(
+            context,
+            'profile.account_deletion_processed_at',
+            fallback: 'Traitée le {date}',
+            params: {'date': _dateFmt.format(processedAt)},
+          ),
+        );
+      }
+      if (note.isNotEmpty) {
+        detailLines.add(
+          L10n.tr(
+            context,
+            'profile.account_deletion_admin_note',
+            fallback: 'Note admin: {note}',
+            params: {'note': note},
+          ),
+        );
+      }
+
+      return ListTile(
+        leading: Icon(
+          hasOpenRequest
+              ? Icons.hourglass_top_outlined
+              : Icons.assignment_turned_in_outlined,
+        ),
+        title: Text(
+          hasOpenRequest
+              ? L10n.tr(
+                  context,
+                  'profile.account_deletion_in_progress',
+                  fallback: 'Demande de suppression en cours',
+                )
+              : L10n.tr(
+                  context,
+                  'profile.account_deletion_last_request',
+                  fallback: 'Dernière demande de suppression',
+                ),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 2),
+            _buildInlineStatusChip(
+              _deletionStatusLabel(request.status),
+              statusColor,
+            ),
+            if (detailLines.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(detailLines.join('\n')),
+            ],
+            const SizedBox(height: 6),
+            Text(
+              hasOpenRequest
+                  ? L10n.tr(
+                      context,
+                      'profile.account_deletion_open_hint',
+                      fallback:
+                          'Votre demande est deja ouverte. Aucun doublon ne sera cree tant qu elle est en attente ou en traitement.',
+                    )
+                  : L10n.tr(
+                      context,
+                      'profile.account_deletion_hint',
+                      fallback:
+                          'Demande initiee dans l app, traitement sous 30 jours maximum.',
+                    ),
+            ),
+          ],
+        ),
+        trailing: hasOpenRequest
+            ? const Icon(Icons.info_outline)
+            : const Icon(Icons.chevron_right),
+        onTap: hasOpenRequest
+            ? null
+            : (_saving ? null : _requestAccountDeletion),
+      );
+    }
+
+    return ListTile(
+      leading: const Icon(Icons.delete_sweep_outlined),
+      title: Text(
+        L10n.tr(
+          context,
+          'profile.account_deletion',
+          fallback: 'Demander la suppression du compte',
+        ),
+      ),
+      subtitle: Text(
+        L10n.tr(
+          context,
+          'profile.account_deletion_hint',
+          fallback:
+              'Demande initiee dans l app, traitement sous 30 jours maximum.',
+        ),
+      ),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: _saving ? null : _requestAccountDeletion,
+    );
+  }
+
+  Widget _buildInlineStatusChip(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(color: color, fontWeight: FontWeight.w600),
+      ),
+    );
   }
 
   Widget _buildProfileHeader({
@@ -1484,28 +1698,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     const SizedBox(height: 16),
                     sectionCard(
                       title: L10n.tr(context, 'profile.section_security'),
-                      children: [
-                        ListTile(
-                          leading: const Icon(Icons.delete_sweep_outlined),
-                          title: Text(
-                            L10n.tr(
-                              context,
-                              'profile.account_deletion',
-                              fallback: 'Demander la suppression du compte',
-                            ),
-                          ),
-                          subtitle: Text(
-                            L10n.tr(
-                              context,
-                              'profile.account_deletion_hint',
-                              fallback:
-                                  'Demande initiee dans l app, traitement sous 30 jours maximum.',
-                            ),
-                          ),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: _saving ? null : _requestAccountDeletion,
-                        ),
-                      ],
+                      children: [_buildAccountDeletionTile(context)],
                     ),
                     const SizedBox(height: 16),
                     sectionCard(

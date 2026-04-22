@@ -1,3 +1,4 @@
+import 'package:dzmarket/src/models/account_deletion_request.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/locale_service.dart';
@@ -306,6 +307,36 @@ class AuthService {
         'status': 'pending',
       }),
     );
+  }
+
+  Future<AccountDeletionRequestSummary?>
+  fetchLatestAccountDeletionRequest() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return null;
+    try {
+      final response = await RateLimiter.instance.run(
+        'accountDeletion.select.latest',
+        () => supabase
+            .from('account_deletion_requests')
+            .select(
+              'id,status,reason,requested_at,processed_at,updated_at,admin_note',
+            )
+            .eq('user_id', user.id)
+            .order('requested_at', ascending: false)
+            .limit(1)
+            .maybeSingle(),
+      );
+      if (response == null) return null;
+      return AccountDeletionRequestSummary.fromJson(response);
+    } on PostgrestException catch (error) {
+      final missingSchema =
+          error.code == 'PGRST202' ||
+          error.code == '42P01' ||
+          error.code == '42703' ||
+          error.message.contains('account_deletion_requests');
+      if (missingSchema) return null;
+      rethrow;
+    }
   }
 
   Future<Profile?> fetchProfile() async {
