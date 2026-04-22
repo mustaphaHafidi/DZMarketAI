@@ -209,17 +209,24 @@ class NotificationService {
             fallback: payload['status']?.toString(),
           );
     final snippet = payload['snippet']?.toString();
-    return L10n.trLocale(
-      locale,
-      notification.bodyI18n,
-      fallback: notification.bodyI18n,
-      params: {
+    final params = notification.interpolationParams()
+      ..addAll({
         'amount': amountText,
         'id': orderId ?? '',
         'status': statusText,
         'snippet': snippet ?? '',
-      },
+      });
+    final raw = L10n.trLocale(
+      locale,
+      notification.bodyI18n,
+      fallback: notification.bodyI18n,
+      params: params,
     );
+    var text = raw;
+    params.forEach((key, value) {
+      text = text.replaceAll('{$key}', value);
+    });
+    return text;
   }
 
   String _amountText(Object? amountRaw) {

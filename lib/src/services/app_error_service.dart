@@ -78,6 +78,14 @@ class AppErrorService {
       return true;
     }
 
+    const mediaNoise = <String>[
+      'encodingerror: the source image cannot be decoded',
+      'invalid statuscode: 400, uri = https://api.dzmarket.pro/storage/v1/object/public/',
+    ];
+    if (mediaNoise.any(loweredMessage.contains)) {
+      return true;
+    }
+
     return false;
   }
 

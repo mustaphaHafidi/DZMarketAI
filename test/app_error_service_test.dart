@@ -49,6 +49,29 @@ void main() {
       expect(skipped, isFalse);
     });
 
+    test('skips non-actionable media decode noise', () {
+      final skipped = AppErrorService.isSkippableAppError(
+        message: 'EncodingError: The source image cannot be decoded.',
+        context: 'my_listings.avatar',
+        fatal: false,
+        hasAuthenticatedUser: true,
+      );
+
+      expect(skipped, isTrue);
+    });
+
+    test('skips public storage 400 noise when UI falls back gracefully', () {
+      final skipped = AppErrorService.isSkippableAppError(
+        message:
+            'HttpException: Invalid statusCode: 400, uri = https://api.dzmarket.pro/storage/v1/object/public/products/user/file.jpg',
+        context: 'my_listings.avatar',
+        fatal: false,
+        hasAuthenticatedUser: true,
+      );
+
+      expect(skipped, isTrue);
+    });
+
     test('keeps fatal errors even without authenticated user', () {
       final skipped = AppErrorService.isSkippableAppError(
         message: 'StateError: fatal bootstrap failure',

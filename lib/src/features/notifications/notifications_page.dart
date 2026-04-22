@@ -472,19 +472,21 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final amount = amountNum == null ? '0' : amountNum.toStringAsFixed(0);
     final orderId = payload['order_id']?.toString() ?? '';
     final snippet = payload['snippet']?.toString() ?? '';
-    final result = _tr(
-      n.bodyI18n,
-      fallback: n.bodyI18n,
-      params: {
+    final params = n.interpolationParams()
+      ..addAll({
         'amount': amount,
         'id': orderId,
         'status': statusText,
         'snippet': snippet,
-      },
+      });
+    final result = _tr(
+      n.bodyI18n,
+      fallback: n.bodyI18n,
+      params: params,
     );
     if (result == n.bodyI18n && snippet.isNotEmpty) {
       return snippet;
     }
-    return result;
+    return _applyParams(result, params);
   }
 }

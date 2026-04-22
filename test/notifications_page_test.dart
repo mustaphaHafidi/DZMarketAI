@@ -99,4 +99,69 @@ void main() {
       expect(find.text('Silence 8h'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'notifications page interpolates system notification payload values',
+    (tester) async {
+      final service = _FakeNotificationInboxService(
+        notifications: [
+          AppNotification(
+            id: 2,
+            userId: 'user-1',
+            category: AppNotificationCategory.system,
+            titleI18n: 'notifications.system.title',
+            bodyI18n: 'notifications.system.courier_credentials_invalid',
+            payload: {'order_id': '146', 'courier_name': 'Yalidine Express'},
+            createdAt: DateTime.fromMillisecondsSinceEpoch(1713517200000),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('fr'),
+          home: NotificationsPage(service: service),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Yalidine Express'), findsOneWidget);
+      expect(find.textContaining('commande #146'), findsOneWidget);
+      expect(find.textContaining('{courier_name}'), findsNothing);
+      expect(find.textContaining('{order_id}'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'notifications page interpolates legacy raw notification templates',
+    (tester) async {
+      final service = _FakeNotificationInboxService(
+        notifications: [
+          AppNotification(
+            id: 3,
+            userId: 'user-1',
+            category: AppNotificationCategory.system,
+            titleI18n: 'notifications.system.title',
+            bodyI18n:
+                "Le compte transporteur {courier_name} de la commande #{order_id} n'est plus valide.",
+            payload: {'order_id': '146', 'courier_name': 'Yalidine Express'},
+            createdAt: DateTime.fromMillisecondsSinceEpoch(1713517200000),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('fr'),
+          home: NotificationsPage(service: service),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Yalidine Express'), findsOneWidget);
+      expect(find.textContaining('commande #146'), findsOneWidget);
+      expect(find.textContaining('{courier_name}'), findsNothing);
+      expect(find.textContaining('{order_id}'), findsNothing);
+    },
+  );
 }

@@ -36,6 +36,16 @@ class AppNotification {
 
   bool get isUnread => readAt == null;
 
+  Map<String, String> interpolationParams() {
+    final params = <String, String>{};
+    payload.forEach((key, value) {
+      if (value == null) return;
+      if (value is Map || value is List) return;
+      params[key] = value.toString();
+    });
+    return params;
+  }
+
   factory AppNotification.fromJson(Map<String, dynamic> json) {
     final payloadRaw = json['payload'];
     final payload = payloadRaw is Map<String, dynamic>

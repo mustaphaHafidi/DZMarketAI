@@ -1,10 +1,8 @@
-﻿import 'package:cached_network_image/cached_network_image.dart';
-import 'package:cached_network_image_platform_interface/cached_network_image_platform_interface.dart';
-import 'package:dzmarket/src/features/profile/edit_product_page.dart';
 import 'package:dzmarket/src/features/listings/product_detail_page.dart';
+import 'package:dzmarket/src/features/profile/edit_product_page.dart';
 import 'package:dzmarket/src/models/product.dart';
-import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/i18n.dart';
+import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/product_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:flutter/material.dart';
@@ -53,8 +51,9 @@ class _MyListingsPageState extends State<MyListingsPage> {
                 .where((p) => !p.isArchived && p.stockQuantity > 0)
                 .toList(),
           }
-            ..sort((a, b) => (b.createdAt ?? DateTime(0))
-                .compareTo(a.createdAt ?? DateTime(0)));
+            ..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(
+                  a.createdAt ?? DateTime(0),
+                ));
           final limited = filtered.take(_maxListings).toList();
           final emptyLabel = switch (_filter) {
             'archived' => L10n.tr(context, 'listing.archived_empty'),
@@ -74,11 +73,12 @@ class _MyListingsPageState extends State<MyListingsPage> {
                       ChoiceChip(
                         label: Text(L10n.tr(context, 'listing.filter_active')),
                         selected: _filter == 'active',
-                        onSelected: (_) =>
-                            setState(() => _filter = 'active'),
+                        onSelected: (_) => setState(() => _filter = 'active'),
                       ),
                       ChoiceChip(
-                        label: Text(L10n.tr(context, 'listing.filter_archived')),
+                        label: Text(
+                          L10n.tr(context, 'listing.filter_archived'),
+                        ),
                         selected: _filter == 'archived',
                         onSelected: (_) =>
                             setState(() => _filter = 'archived'),
@@ -98,60 +98,61 @@ class _MyListingsPageState extends State<MyListingsPage> {
                   child: Center(child: Text(emptyLabel)),
                 );
               }
-              final p = limited[index - 1];
-              final raw = p.firstDisplayableImageUrl();
-              final img = InputSanitizer.safeUrl(raw);
+              final product = limited[index - 1];
+              final imageUrls = product
+                  .displayableImageUrls()
+                  .map(InputSanitizer.safeUrl)
+                  .whereType<String>()
+                  .toList();
               final stockLabel = L10n.tr(
                 context,
                 'listing.detail.stock',
-                params: {'value': p.stockQuantity.toString()},
+                params: {'value': product.stockQuantity.toString()},
               );
               final soldLabel = L10n.tr(
                 context,
                 'listing.detail.sold',
-                params: {'value': p.soldCount.toString()},
+                params: {'value': product.soldCount.toString()},
               );
               final metaParts = <String>[
-                currency.format(p.price),
+                currency.format(product.price),
                 stockLabel,
                 soldLabel,
               ];
-              if (p.stockQuantity <= 0) {
+              if (product.stockQuantity <= 0) {
                 metaParts.add(L10n.tr(context, 'cta.out_of_stock'));
               }
-              if (p.isArchived) {
+              if (product.isArchived) {
                 metaParts.add(L10n.tr(context, 'listing.status_archived'));
               }
               return ListTile(
-                leading: img != null
-                    ? CircleAvatar(
-                        backgroundImage: CachedNetworkImageProvider(
-                          img,
-                          imageRenderMethodForWeb:
-                              ImageRenderMethodForWeb.HtmlImage,
-                        ),
-                      )
-                    : const CircleAvatar(child: Icon(Icons.image)),
-                title: Text(p.title),
-                subtitle: Text(
-                  metaParts.join(' • '),
-                ),
+                leading: _MyListingAvatarImage(imageUrls: imageUrls),
+                title: Text(product.title),
+                subtitle: Text(metaParts.join(' • ')),
                 trailing: PopupMenuButton<String>(
                   onSelected: (value) async {
                     if (value == 'edit') {
                       await Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => EditProductPage(product: p)),
+                        MaterialPageRoute(
+                          builder: (_) => EditProductPage(product: product),
+                        ),
                       );
                     } else if (value == 'archive') {
-                      await ProductService()
-                          .updateProduct(id: p.id.toString(), isArchived: true);
+                      await ProductService().updateProduct(
+                        id: product.id.toString(),
+                        isArchived: true,
+                      );
                     } else if (value == 'unarchive') {
-                      await ProductService()
-                          .updateProduct(id: p.id.toString(), isArchived: false);
+                      await ProductService().updateProduct(
+                        id: product.id.toString(),
+                        isArchived: false,
+                      );
                     } else {
                       await Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => ProductDetailPage(productId: p.id.toString()),
+                          builder: (_) => ProductDetailPage(
+                            productId: product.id.toString(),
+                          ),
                         ),
                       );
                     }
@@ -165,12 +166,12 @@ class _MyListingsPageState extends State<MyListingsPage> {
                       value: 'edit',
                       child: Text(L10n.tr(context, 'common.edit')),
                     ),
-                    if (!p.isArchived)
+                    if (!product.isArchived)
                       PopupMenuItem(
                         value: 'archive',
                         child: Text(L10n.tr(context, 'common.archive')),
                       ),
-                    if (p.isArchived)
+                    if (product.isArchived)
                       PopupMenuItem(
                         value: 'unarchive',
                         child: Text(L10n.tr(context, 'common.unarchive')),
@@ -179,7 +180,8 @@ class _MyListingsPageState extends State<MyListingsPage> {
                 ),
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => ProductDetailPage(productId: p.id.toString()),
+                    builder: (_) =>
+                        ProductDetailPage(productId: product.id.toString()),
                   ),
                 ),
               );
@@ -191,3 +193,51 @@ class _MyListingsPageState extends State<MyListingsPage> {
   }
 }
 
+class _MyListingAvatarImage extends StatefulWidget {
+  const _MyListingAvatarImage({required this.imageUrls});
+
+  final List<String> imageUrls;
+
+  @override
+  State<_MyListingAvatarImage> createState() => _MyListingAvatarImageState();
+}
+
+class _MyListingAvatarImageState extends State<_MyListingAvatarImage> {
+  int _index = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.imageUrls.isEmpty) {
+      return const CircleAvatar(child: Icon(Icons.image));
+    }
+
+    final imageUrl = widget.imageUrls[_index];
+    return CircleAvatar(
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+      child: ClipOval(
+        child: SizedBox.expand(
+          child: Image.network(
+            imageUrl,
+            key: ValueKey(imageUrl),
+            fit: BoxFit.cover,
+            loadingBuilder: (_, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return const SizedBox.shrink();
+            },
+            errorBuilder: (_, __, ___) {
+              if (_index + 1 < widget.imageUrls.length) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    setState(() => _index += 1);
+                  }
+                });
+                return const SizedBox.shrink();
+              }
+              return const Icon(Icons.image);
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
