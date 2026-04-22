@@ -773,6 +773,15 @@ class L10n {
     'profile.account_deletion': 'Demander la suppression du compte',
     'profile.account_deletion_hint':
         'Demande initiee dans l app, traitement sous 30 jours maximum.',
+    'profile.account_deletion_in_progress':
+        'Demande de suppression en cours',
+    'profile.account_deletion_last_request':
+        'Derniere demande de suppression',
+    'profile.account_deletion_requested_at': 'Demandee le {date}',
+    'profile.account_deletion_processed_at': 'Traitee le {date}',
+    'profile.account_deletion_admin_note': 'Note admin: {note}',
+    'profile.account_deletion_open_hint':
+        'Votre demande est deja ouverte. Aucun doublon ne sera cree tant qu elle est en attente ou en traitement.',
     'profile.privacy_policy': 'Politique de confidentialite',
     'profile.terms': 'Conditions d\'utilisation',
     'profile.contact_support': 'Contacter le support',
@@ -1961,6 +1970,29 @@ class L10n {
     'track.waiting': 'بانتظار تحديثات السائق...',
   };
 
+  static const Map<String, String> _runtimeFixesAr = {
+    'courier_settings.web_notice': 'يتم التحقق من بيانات API على الخادم.',
+    'profile.delete_account': 'طلب حذف الحساب',
+    'profile.delete_account_confirm_title': 'طلب حذف الحساب',
+    'profile.delete_account_confirm_body':
+        'يرسل هذا الاجراء طلبا لحذف حسابك في DZMarket. تتم المعالجة يدويا خلال 30 يوما كحد اقصى. قد نحتفظ ببعض البيانات مؤقتا لالتزامات قانونية ومحاسبية ولمكافحة الاحتيال ولاغراض الامن.',
+    'profile.delete_account_reason_label': 'السبب (اختياري)',
+    'profile.delete_account_cta': 'ارسال الطلب',
+    'profile.delete_account_success':
+        'تم ارسال طلب حذف الحساب. ستتم معالجة حسابك خلال 30 يوما كحد اقصى.',
+    'profile.delete_account_failed': 'تعذر ارسال طلب حذف الحساب حاليا.',
+    'profile.account_deletion': 'طلب حذف الحساب',
+    'profile.account_deletion_hint':
+        'يبدأ من داخل التطبيق، وتتم المعالجة خلال 30 يوما كحد اقصى.',
+    'profile.account_deletion_in_progress': 'طلب حذف الحساب قيد المعالجة',
+    'profile.account_deletion_last_request': 'اخر طلب حذف للحساب',
+    'profile.account_deletion_requested_at': 'طُلبت في {date}',
+    'profile.account_deletion_processed_at': 'عولجت في {date}',
+    'profile.account_deletion_admin_note': 'ملاحظة الادارة: {note}',
+    'profile.account_deletion_open_hint':
+        'طلبك مفتوح بالفعل. لن يتم انشاء طلب جديد ما دام في انتظار المعالجة او قيد المعالجة.',
+  };
+
   /// Translate using JSON assets (and optional DB override).
   static String tr(
     BuildContext context,
@@ -2055,7 +2087,7 @@ class L10n {
   }
 
   static String? _hardFallback(String locale, String key) {
-    if (locale == 'ar') return _hardFallbackAr[key];
+    if (locale == 'ar') return _runtimeFixesAr[key] ?? _hardFallbackAr[key];
     return _hardFallbackFr[key];
   }
 

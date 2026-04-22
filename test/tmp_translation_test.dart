@@ -9,9 +9,9 @@ void main() {
     final fr = TranslationService.instance.translate('fr', 'listing.add.title_label');
     final ar = TranslationService.instance.translate('ar', 'listing.add.title_label');
     // ignore: avoid_print
-    print('FR=' + (fr ?? 'null'));
+    print('FR=${fr ?? 'null'}');
     // ignore: avoid_print
-    print('AR=' + (ar ?? 'null'));
+    print('AR=${ar ?? 'null'}');
     expect(fr, isNotNull);
     expect(ar, isNotNull);
   });

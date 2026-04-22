@@ -9,6 +9,20 @@ import 'package:flutter/services.dart';
 class TranslationService {
   TranslationService._();
   static final instance = TranslationService._();
+  static const Set<String> _assetAuthoritativeKeys = {
+    'courier_settings.web_notice',
+    'profile.account_deletion',
+    'profile.account_deletion_hint',
+    'profile.account_deletion_in_progress',
+    'profile.account_deletion_last_request',
+    'profile.account_deletion_requested_at',
+    'profile.account_deletion_processed_at',
+    'profile.account_deletion_admin_note',
+    'profile.account_deletion_open_hint',
+    'profile.delete_account',
+    'profile.delete_account_confirm_title',
+    'profile.delete_account_cta',
+  };
 
   final Map<String, Map<String, String>> _cache = {};
 
@@ -27,6 +41,10 @@ class TranslationService {
         final text = row['text'] as String? ?? '';
         if (key.isEmpty || locale.isEmpty || text.isEmpty) continue;
         if (_looksCorrupt(locale, text) || _looksPlaceholderText(key, text)) {
+          continue;
+        }
+        if (_assetAuthoritativeKeys.contains(key) &&
+            (_cache[locale]?[key]?.isNotEmpty ?? false)) {
           continue;
         }
         _cache.putIfAbsent(locale, () => {})[key] = text;

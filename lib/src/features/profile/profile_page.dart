@@ -781,11 +781,11 @@ class _ProfilePageState extends State<ProfilePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            L10n.tr(
+            _trWithLocaleFallback(
               context,
               'profile.account_deletion_pending_banner',
-              fallback:
-                  'Une demande de suppression est deja en cours de traitement.',
+              fr: 'Une demande de suppression est deja en cours de traitement.',
+              ar: 'يوجد بالفعل طلب حذف قيد المعالجة.',
             ),
           ),
         ),
@@ -797,10 +797,11 @@ class _ProfilePageState extends State<ProfilePage> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(
-          L10n.tr(
+          _trWithLocaleFallback(
             dialogContext,
             'profile.delete_account_confirm_title',
-            fallback: 'Demander la suppression du compte',
+            fr: 'Demander la suppression du compte',
+            ar: 'طلب حذف الحساب',
           ),
         ),
         content: Column(
@@ -808,11 +809,13 @@ class _ProfilePageState extends State<ProfilePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              L10n.tr(
+              _trWithLocaleFallback(
                 dialogContext,
                 'profile.delete_account_confirm_body',
-                fallback:
+                fr:
                     'Cette action envoie une demande de suppression de votre compte DZMarket. Le traitement est effectue manuellement sous 30 jours maximum. Certaines donnees peuvent etre conservees temporairement pour des obligations legales, comptables, antifraude et de securite.',
+                ar:
+                    'يرسل هذا الاجراء طلبا لحذف حسابك في DZMarket. تتم المعالجة يدويا خلال 30 يوما كحد اقصى. قد نحتفظ ببعض البيانات مؤقتا لالتزامات قانونية ومحاسبية ولمكافحة الاحتيال ولاغراض الامن.',
               ),
             ),
             const SizedBox(height: 12),
@@ -820,10 +823,11 @@ class _ProfilePageState extends State<ProfilePage> {
               controller: reasonCtrl,
               maxLines: 3,
               decoration: InputDecoration(
-                labelText: L10n.tr(
+                labelText: _trWithLocaleFallback(
                   dialogContext,
                   'profile.delete_account_reason_label',
-                  fallback: 'Raison (optionnel)',
+                  fr: 'Raison (optionnel)',
+                  ar: 'السبب (اختياري)',
                 ),
               ),
             ),
@@ -841,10 +845,11 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: Text(
-              L10n.tr(
+              _trWithLocaleFallback(
                 dialogContext,
                 'profile.delete_account_cta',
-                fallback: 'Envoyer la demande',
+                fr: 'Envoyer la demande',
+                ar: 'ارسال الطلب',
               ),
             ),
           ),
@@ -868,11 +873,13 @@ class _ProfilePageState extends State<ProfilePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            L10n.tr(
+            _trWithLocaleFallback(
               context,
               'profile.delete_account_success',
-              fallback:
+              fr:
                   'Demande de suppression envoyee. Votre compte sera traite sous 30 jours maximum.',
+              ar:
+                  'تم ارسال طلب حذف الحساب. ستتم معالجة حسابك خلال 30 يوما كحد اقصى.',
             ),
           ),
         ),
@@ -885,11 +892,12 @@ class _ProfilePageState extends State<ProfilePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            L10n.tr(
+            _trWithLocaleFallback(
               context,
               'profile.delete_account_failed',
-              fallback:
+              fr:
                   'Impossible d envoyer la demande de suppression pour le moment.',
+              ar: 'تعذر ارسال طلب حذف الحساب حاليا.',
             ),
           ),
         ),
@@ -899,6 +907,74 @@ class _ProfilePageState extends State<ProfilePage> {
       if (mounted) {
         setState(() => _saving = false);
       }
+    }
+  }
+
+  bool _isArabicLocale(BuildContext context) {
+    return Localizations.localeOf(context).languageCode == 'ar';
+  }
+
+  String _localizedFallback(
+    BuildContext context, {
+    required String fr,
+    required String ar,
+  }) {
+    return _isArabicLocale(context) ? ar : fr;
+  }
+
+  String _trWithLocaleFallback(
+    BuildContext context,
+    String key, {
+    required String fr,
+    required String ar,
+    Map<String, String>? params,
+  }) {
+    return L10n.tr(
+      context,
+      key,
+      fallback: _localizedFallback(context, fr: fr, ar: ar),
+      params: params,
+    );
+  }
+
+  String _deletionStatusLabelWithLocale(BuildContext context, String status) {
+    switch (status) {
+      case 'processing':
+        return _trWithLocaleFallback(
+          context,
+          'admin.moderation.deletion_processing',
+          fr: 'En traitement',
+          ar: 'قيد المعالجة',
+        );
+      case 'completed':
+        return _trWithLocaleFallback(
+          context,
+          'admin.moderation.deletion_completed',
+          fr: 'Cloturee',
+          ar: 'مغلقة',
+        );
+      case 'rejected':
+        return _trWithLocaleFallback(
+          context,
+          'admin.moderation.deletion_rejected',
+          fr: 'Rejetee',
+          ar: 'مرفوضة',
+        );
+      case 'cancelled':
+        return _trWithLocaleFallback(
+          context,
+          'admin.moderation.deletion_cancelled',
+          fr: 'Annulee',
+          ar: 'ملغاة',
+        );
+      case 'pending':
+      default:
+        return _trWithLocaleFallback(
+          context,
+          'admin.moderation.deletion_pending',
+          fr: 'En attente',
+          ar: 'قيد الانتظار',
+        );
     }
   }
 
@@ -954,7 +1030,7 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  Widget _buildAccountDeletionTile(BuildContext context) {
+  Widget buildAccountDeletionTileLegacy(BuildContext context) {
     final request = _deletionRequest;
     final hasOpenRequest = request?.isOpen ?? false;
     final note = request?.adminNote?.trim() ?? '';
@@ -1068,6 +1144,136 @@ class _ProfilePageState extends State<ProfilePage> {
           'profile.account_deletion_hint',
           fallback:
               'Demande initiee dans l app, traitement sous 30 jours maximum.',
+        ),
+      ),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: _saving ? null : _requestAccountDeletion,
+    );
+  }
+
+  Widget _buildLocalizedAccountDeletionTile(BuildContext context) {
+    final request = _deletionRequest;
+    final hasOpenRequest = request?.isOpen ?? false;
+    final note = request?.adminNote?.trim() ?? '';
+    final processedAt = request?.processedAt;
+    final requestedAt = request?.requestedAt;
+
+    if (request != null) {
+      final statusColor = _deletionStatusColor(request.status);
+      final detailLines = <String>[];
+      if (requestedAt != null) {
+        detailLines.add(
+          _trWithLocaleFallback(
+            context,
+            'profile.account_deletion_requested_at',
+            fr: 'Demandee le {date}',
+            ar: 'طُلبت في {date}',
+            params: {'date': _dateFmt.format(requestedAt)},
+          ),
+        );
+      }
+      if (processedAt != null) {
+        detailLines.add(
+          _trWithLocaleFallback(
+            context,
+            'profile.account_deletion_processed_at',
+            fr: 'Traitee le {date}',
+            ar: 'عولجت في {date}',
+            params: {'date': _dateFmt.format(processedAt)},
+          ),
+        );
+      }
+      if (note.isNotEmpty) {
+        detailLines.add(
+          _trWithLocaleFallback(
+            context,
+            'profile.account_deletion_admin_note',
+            fr: 'Note admin: {note}',
+            ar: 'ملاحظة الادارة: {note}',
+            params: {'note': note},
+          ),
+        );
+      }
+
+      return ListTile(
+        leading: Icon(
+          hasOpenRequest
+              ? Icons.hourglass_top_outlined
+              : Icons.assignment_turned_in_outlined,
+        ),
+        title: Text(
+          hasOpenRequest
+              ? _trWithLocaleFallback(
+                  context,
+                  'profile.account_deletion_in_progress',
+                  fr: 'Demande de suppression en cours',
+                  ar: 'طلب حذف الحساب قيد المعالجة',
+                )
+              : _trWithLocaleFallback(
+                  context,
+                  'profile.account_deletion_last_request',
+                  fr: 'Derniere demande de suppression',
+                  ar: 'اخر طلب حذف للحساب',
+                ),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 2),
+            _buildInlineStatusChip(
+              _deletionStatusLabelWithLocale(context, request.status),
+              statusColor,
+            ),
+            if (detailLines.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(detailLines.join('\n')),
+            ],
+            const SizedBox(height: 6),
+            Text(
+              hasOpenRequest
+                  ? _trWithLocaleFallback(
+                      context,
+                      'profile.account_deletion_open_hint',
+                      fr:
+                          'Votre demande est deja ouverte. Aucun doublon ne sera cree tant qu elle est en attente ou en traitement.',
+                      ar:
+                          'طلبك مفتوح بالفعل. لن يتم انشاء طلب جديد ما دام في انتظار المعالجة او قيد المعالجة.',
+                    )
+                  : _trWithLocaleFallback(
+                      context,
+                      'profile.account_deletion_hint',
+                      fr:
+                          'Demande initiee dans l app, traitement sous 30 jours maximum.',
+                      ar:
+                          'يتم تقديم الطلب من داخل التطبيق، وتتم معالجته خلال 30 يوما كحد اقصى.',
+                    ),
+            ),
+          ],
+        ),
+        trailing: hasOpenRequest
+            ? const Icon(Icons.info_outline)
+            : const Icon(Icons.chevron_right),
+        onTap: hasOpenRequest ? null : (_saving ? null : _requestAccountDeletion),
+      );
+    }
+
+    return ListTile(
+      leading: const Icon(Icons.delete_sweep_outlined),
+      title: Text(
+        _trWithLocaleFallback(
+          context,
+          'profile.account_deletion',
+          fr: 'Demander la suppression du compte',
+          ar: 'طلب حذف الحساب',
+        ),
+      ),
+      subtitle: Text(
+        _trWithLocaleFallback(
+          context,
+          'profile.account_deletion_hint',
+          fr: 'Demande initiee dans l app, traitement sous 30 jours maximum.',
+          ar:
+              'يتم تقديم الطلب من داخل التطبيق، وتتم معالجته خلال 30 يوما كحد اقصى.',
         ),
       ),
       trailing: const Icon(Icons.chevron_right),
@@ -1698,7 +1904,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     const SizedBox(height: 16),
                     sectionCard(
                       title: L10n.tr(context, 'profile.section_security'),
-                      children: [_buildAccountDeletionTile(context)],
+                      children: [_buildLocalizedAccountDeletionTile(context)],
                     ),
                     const SizedBox(height: 16),
                     sectionCard(

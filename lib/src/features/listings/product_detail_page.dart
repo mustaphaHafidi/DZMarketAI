@@ -231,6 +231,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   Future<void> _load() async {
+    final userId = supabase.auth.currentUser?.id;
     final safeProductId = InputSanitizer.sanitizeId(
       widget.productId,
       maxLength: 64,
@@ -243,7 +244,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           .eq('id', safeProductId)
           .maybeSingle(),
     );
-    final userId = supabase.auth.currentUser?.id;
+    final isOwner = userId != null && data != null && data['owner_id'] == userId;
+    final isArchived = data?['is_archived'] as bool? ?? false;
+    final moderationStatus = data?['moderation_status']?.toString();
+    final isPubliclyVisible =
+        data != null && !isArchived && moderationStatus == 'approved';
     Map<String, dynamic>? buyerProfile;
     Map<String, dynamic>? seller;
     Offer? acceptedOffer;
@@ -256,6 +261,22 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             .eq('id', userId)
             .maybeSingle(),
       );
+    }
+    if (data != null && !isOwner && !isPubliclyVisible) {
+      if (!mounted) return;
+      setState(() {
+        _product = null;
+        _buyerWilaya = buyerProfile?['wilaya']?.toString();
+        _sellerWilaya = null;
+        _buyerProfile = buyerProfile;
+        _sellerProfile = null;
+        _loaded = true;
+        _acceptedOffer = null;
+        _isOwner = false;
+        _favoriteOverride = null;
+        _favoriteBusy = false;
+      });
+      return;
     }
     if (data != null && data['owner_id'] != null) {
       seller = await RateLimiter.instance.run(
@@ -297,7 +318,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       _sellerProfile = seller;
       _loaded = true;
       _acceptedOffer = acceptedOffer;
-      _isOwner = userId != null && data != null && data['owner_id'] == userId;
+      _isOwner = isOwner;
       _favoriteOverride = null;
       _favoriteBusy = false;
     });
