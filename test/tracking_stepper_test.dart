@@ -30,6 +30,25 @@ Widget _buildApp({
 }
 
 void main() {
+  test('order delay messages stay neutral in French and Arabic', () {
+    expect(
+      L10n.trLocale('fr', 'order.system.label_reminder'),
+      'Expedition en attente : le bordereau n\'a pas encore ete genere.',
+    );
+    expect(
+      L10n.trLocale('fr', 'order.system.carrier_scan_reminder'),
+      'Retard d\'expedition : le bordereau est genere mais aucun mouvement transporteur n\'a encore ete detecte.',
+    );
+    expect(
+      L10n.trLocale('ar', 'order.system.label_reminder'),
+      'الشحن قيد الانتظار: لم يتم إنشاء البوليصة بعد.',
+    );
+    expect(
+      L10n.trLocale('ar', 'order.system.carrier_scan_reminder'),
+      'تأخر في الشحن: تم إنشاء البوليصة لكن لم يتم رصد أي حركة من شركة النقل بعد.',
+    );
+  });
+
   testWidgets('tracking stepper renders French labels and reminder alert', (
     tester,
   ) async {
@@ -49,6 +68,10 @@ void main() {
     );
     expect(
       find.text(L10n.trLocale('fr', 'tracking.alert.label_reminder')),
+      findsOne,
+    );
+    expect(
+      find.text('Expedition en attente : le bordereau n\'a pas encore ete genere.'),
       findsOne,
     );
   });
@@ -92,6 +115,28 @@ void main() {
     expect(
       find.text(L10n.trLocale('fr', 'tracking.alert.auto_cancel_soon')),
       findsNothing,
+    );
+  });
+
+  testWidgets('tracking stepper renders Arabic neutral overdue alert', (
+    tester,
+  ) async {
+    final presentation = TrackingPresentation.fromData(
+      status: 'shipped',
+      trackingNumber: 'TRK123',
+      labelUrl: 'https://example.com/label.pdf',
+      createdAt: DateTime.now().subtract(const Duration(hours: 97)),
+    );
+
+    await tester.pumpWidget(
+      _buildApp(locale: const Locale('ar'), presentation: presentation),
+    );
+
+    expect(
+      find.text(
+        L10n.trLocale('ar', 'tracking.alert.dropoff_overdue'),
+      ),
+      findsOne,
     );
   });
 }

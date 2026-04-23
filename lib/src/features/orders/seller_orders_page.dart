@@ -153,7 +153,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
                         orderId: orderId,
                         labelUrl: labelUrl,
                       ),
-                      onDelete: () => _confirmDelete(context, order.id),
+                      onDelete: () => _confirmCancel(context, order.id),
                       onManageArrangedDelivery: () =>
                           context.push('/order/${order.id}/chat'),
                       canCancel:
@@ -204,7 +204,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
     }
   }
 
-  Future<void> _confirmDelete(BuildContext context, String orderId) async {
+  Future<void> _confirmCancel(BuildContext context, String orderId) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
@@ -218,7 +218,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: Text(L10n.tr(context, 'common.delete')),
+              child: Text(L10n.tr(context, 'seller_orders.delete_button')),
             ),
           ],
         );
@@ -226,10 +226,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
     );
     if (confirmed != true) return;
     try {
-      await _orderService.updateStatus(
-        orderId: orderId,
-        status: OrderStatus.cancelled,
-      );
+      await _orderService.cancelOrderBySeller(orderId: orderId);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(L10n.tr(context, 'seller_orders.cancelled'))),
@@ -239,17 +236,22 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              L10n.tr(
-                context,
-                'common.error_with',
-                params: {'error': e.toString()},
-              ),
-            ),
+            content: Text(_friendlyCancelError(context, e)),
           ),
         );
       }
     }
+  }
+
+  String _friendlyCancelError(BuildContext context, Object error) {
+    final raw = error.toString().trim();
+    if (raw.startsWith('Bad state: ')) {
+      return raw.substring('Bad state: '.length).trim();
+    }
+    if (raw.isNotEmpty) {
+      return raw;
+    }
+    return L10n.tr(context, 'common.error');
   }
 }
 
@@ -355,8 +357,10 @@ class _SellerOrderCard extends StatelessWidget {
                       if (canCancel)
                         TextButton.icon(
                           onPressed: onDelete,
-                          icon: const Icon(Icons.delete_outline),
-                          label: Text(L10n.tr(context, 'common.delete')),
+                          icon: const Icon(Icons.cancel_outlined),
+                          label: Text(
+                            L10n.tr(context, 'seller_orders.delete_button'),
+                          ),
                         ),
                       if ((order.labelUrl ?? '').isNotEmpty)
                         Column(

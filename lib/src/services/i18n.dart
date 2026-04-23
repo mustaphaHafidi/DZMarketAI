@@ -727,12 +727,14 @@ class L10n {
     'order.stock_unavailable': 'Stock indisponible',
     'order.system.cancelled':
         'Commande annulee automatiquement (inactivite vendeur).',
+    'order.system.cancelled_by_seller':
+        'Commande annulee par le vendeur.',
     'order.system.created':
         'Commande enregistree, en attente de validation vendeur.',
     'order.system.label_reminder':
-        'Rappel vendeur: veuillez generer le bordereau avant annulation automatique.',
+        'Expedition en attente : le bordereau n\'a pas encore ete genere.',
     'order.system.carrier_scan_reminder':
-        'Retard transporteur: bordereau cree mais aucun scan colis. Merci de verifier la prise en charge.',
+        'Retard d\'expedition : le bordereau est genere mais aucun mouvement transporteur n\'a encore ete detecte.',
     'order.system.pickup_request':
         'Bonjour, je souhaite une livraison a convenir (remise locale ou transporteur externe). Merci de preciser la methode, le cout et le delai.',
     'order.system.arranged_validated':
@@ -934,11 +936,15 @@ class L10n {
     'seller_dashboard.work_queue_title': 'File de traitement',
     'seller_dashboard.work_queue_view_all': 'Voir toutes les ventes',
     'seller_orders.arranged_delivery': 'Livraison a convenir',
-    'seller_orders.cancelled': 'Commande annulee.',
-    'seller_orders.delete_button': 'Supprimer',
+    'seller_orders.cancelled': 'Commande annulee. L\'acheteur a ete informe.',
+    'seller_orders.delete_button': 'Annuler',
     'seller_orders.delete_confirm':
-        'Cette action annulera la commande pour le vendeur.',
-    'seller_orders.delete_title': 'Supprimer la commande',
+        'Cette action annulera la commande et informera l\'acheteur.',
+    'seller_orders.delete_title': 'Annuler la commande',
+    'seller_orders.cancel_blocked_label':
+        'La commande ne peut plus etre annulee apres generation du bordereau.',
+    'seller_orders.cancel_not_allowed':
+        'Seul le vendeur de cette commande peut l\'annuler.',
     'seller_orders.empty': 'Aucune vente pour le moment.',
     'seller_orders.generate_label': 'Generer bordereau',
     'seller_orders.login_required': 'Connectez-vous pour voir vos ventes.',
@@ -1001,9 +1007,9 @@ class L10n {
         'Aucune etiquette generee depuis 72h. La commande risque une annulation automatique.',
     'tracking.alert.cancelled': 'Commande annulee. Le suivi est clos.',
     'tracking.alert.dropoff_overdue':
-        'Le bordereau est genere mais aucun mouvement transporteur n\'a ete detecte. Verifiez le depot du colis.',
+        'Retard d\'expedition : le bordereau est genere mais aucun mouvement transporteur n\'a encore ete detecte.',
     'tracking.alert.label_reminder':
-        'Rappel vendeur: genere le bordereau ou depose le colis pour eviter un blocage du suivi.',
+        'Expedition en attente : le bordereau n\'a pas encore ete genere.',
     'tracking.alert.not_claimed':
         'Le colis n\'a pas ete reclame. Un retour expediteur peut suivre.',
     'tracking.alert.refused': 'Le colis a ete refuse par le destinataire.',
@@ -1718,11 +1724,12 @@ class L10n {
     'order.status.validated': 'تم التأكيد',
     'order.stock_unavailable': 'المخزون غير متوفر',
     'order.system.cancelled': 'تم إلغاء الطلب تلقائيًا (عدم تفاعل البائع).',
+    'order.system.cancelled_by_seller': 'تم إلغاء الطلب من طرف البائع.',
     'order.system.created': 'تم تسجيل الطلب، في انتظار موافقة البائع.',
     'order.system.label_reminder':
-        'تذكير للبائع: يرجى إنشاء البوليصة قبل الإلغاء التلقائي.',
+        'الشحن قيد الانتظار: لم يتم إنشاء البوليصة بعد.',
     'order.system.carrier_scan_reminder':
-        'تأخير من شركة النقل: تم إنشاء البوليصة لكن لا يوجد مسح طرد للآن. يرجى التحقق من التكفل.',
+        'تأخر في الشحن: تم إنشاء البوليصة لكن لم يتم رصد أي حركة من شركة النقل بعد.',
     'order.system.pickup_request':
         'مرحبًا، أرغب في توصيل باتفاق (تسليم محلي أو ناقل خارجي). يرجى تحديد الطريقة والتكلفة والموعد.',
     'order.system.arranged_validated':
@@ -1912,10 +1919,14 @@ class L10n {
     'seller_dashboard.work_queue_title': 'قائمة المعالجة',
     'seller_dashboard.work_queue_view_all': 'عرض كل المبيعات',
     'seller_orders.arranged_delivery': 'التوصيل يُتفق عليه',
-    'seller_orders.cancelled': 'تم إلغاء الطلب.',
-    'seller_orders.delete_button': 'حذف',
-    'seller_orders.delete_confirm': 'هذا الإجراء سيُلغي الطلب للبائع.',
-    'seller_orders.delete_title': 'حذف الطلب',
+    'seller_orders.cancelled': 'تم إلغاء الطلب وإبلاغ المشتري.',
+    'seller_orders.delete_button': 'إلغاء',
+    'seller_orders.delete_confirm': 'هذا الإجراء سيُلغي الطلب ويُبلغ المشتري.',
+    'seller_orders.delete_title': 'إلغاء الطلب',
+    'seller_orders.cancel_blocked_label':
+        'لا يمكن إلغاء الطلب بعد إنشاء البوليصة.',
+    'seller_orders.cancel_not_allowed':
+        'فقط بائع هذا الطلب يمكنه إلغاؤه.',
     'seller_orders.empty': 'لا توجد مبيعات حاليًا.',
     'seller_orders.generate_label': 'إنشاء البوليصة',
     'seller_orders.login_required': 'يرجى تسجيل الدخول لعرض مبيعاتك.',
@@ -1974,9 +1985,9 @@ class L10n {
         'لم يتم إنشاء البوليصة منذ 72 ساعة. الطلب معرّض للإلغاء التلقائي.',
     'tracking.alert.cancelled': 'تم إلغاء الطلب. أُغلق مسار التتبع.',
     'tracking.alert.dropoff_overdue':
-        'تم إنشاء البوليصة لكن لم يتم رصد أي حركة من الناقل. تحقّق من تسليم الطرد.',
+        'تأخر في الشحن: تم إنشاء البوليصة لكن لم يتم رصد أي حركة من شركة النقل بعد.',
     'tracking.alert.label_reminder':
-        'تذكير للبائع: أنشئ البوليصة أو سلّم الطرد للناقل لتفادي تعطّل التتبع.',
+        'الشحن قيد الانتظار: لم يتم إنشاء البوليصة بعد.',
     'tracking.alert.not_claimed':
         'لم يتم استلام الطرد. قد يتم إرجاعه إلى البائع.',
     'tracking.alert.refused': 'تم رفض الطرد من طرف المستلم.',

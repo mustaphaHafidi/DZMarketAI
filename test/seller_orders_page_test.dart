@@ -4,6 +4,7 @@ import 'package:dzmarket/src/models/order.dart';
 import 'package:dzmarket/src/services/buyer_return_service.dart';
 import 'package:dzmarket/src/services/order_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _FakeOrderService extends OrderService {
@@ -31,6 +32,104 @@ class _FakeBuyerReturnService extends BuyerReturnService {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  Order pendingOrder() => Order(
+    id: 'order-pending',
+    productId: 'product-1',
+    buyerId: 'buyer-1',
+    sellerId: 'seller-1',
+    status: OrderStatus.pending,
+    createdAt: DateTime(2026, 4, 23),
+    productTitle: 'Produit 45',
+    productPrice: 40000,
+    courierName: 'Yalidine Express',
+    shippingOption: 'home',
+  );
+
+  testWidgets('pending seller order shows Annuler action in French', (
+    tester,
+  ) async {
+    final order = pendingOrder();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('fr'),
+        supportedLocales: const [Locale('fr'), Locale('ar')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: SellerOrdersPage(
+          orderService: _FakeOrderService([order]),
+          buyerReturnService: _FakeBuyerReturnService(const {}),
+          userIdOverride: 'seller-1',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Annuler'), findsOneWidget);
+    expect(find.text('Supprimer'), findsNothing);
+
+    await tester.tap(find.text('Annuler'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Annuler la commande'), findsOneWidget);
+    expect(
+      find.text(
+        "Cette action annulera la commande et informera l'acheteur.",
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('pending seller order shows cancel action in Arabic', (
+    tester,
+  ) async {
+    final order = Order(
+      id: pendingOrder().id,
+      productId: pendingOrder().productId,
+      buyerId: pendingOrder().buyerId,
+      sellerId: pendingOrder().sellerId,
+      status: pendingOrder().status,
+      createdAt: pendingOrder().createdAt,
+      productTitle: pendingOrder().productTitle,
+      productPrice: pendingOrder().productPrice,
+      courierName: pendingOrder().courierName,
+      shippingOption: pendingOrder().shippingOption,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ar'),
+        supportedLocales: const [Locale('fr'), Locale('ar')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: SellerOrdersPage(
+          orderService: _FakeOrderService([order]),
+          buyerReturnService: _FakeBuyerReturnService(const {}),
+          userIdOverride: 'seller-1',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('إلغاء'), findsOneWidget);
+    expect(find.text('Supprimer'), findsNothing);
+
+    await tester.tap(find.text('إلغاء'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('إلغاء الطلب'), findsOneWidget);
+    expect(
+      find.text('هذا الإجراء سيُلغي الطلب ويُبلغ المشتري.'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('seller order card shows DZMarket returns summary and PDF note', (
     tester,
   ) async {
@@ -56,6 +155,12 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         locale: const Locale('fr'),
+        supportedLocales: const [Locale('fr'), Locale('ar')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
         home: SellerOrdersPage(
           orderService: _FakeOrderService([order]),
           buyerReturnService: _FakeBuyerReturnService({'buyer-1': stats}),

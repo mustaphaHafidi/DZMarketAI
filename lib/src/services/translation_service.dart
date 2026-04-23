@@ -11,6 +11,9 @@ class TranslationService {
   static final instance = TranslationService._();
   static const Set<String> _assetAuthoritativeKeys = {
     'courier_settings.web_notice',
+    'order.system.cancelled_by_seller',
+    'order.system.label_reminder',
+    'order.system.carrier_scan_reminder',
     'profile.account_deletion',
     'profile.account_deletion_hint',
     'profile.account_deletion_in_progress',
@@ -22,6 +25,13 @@ class TranslationService {
     'profile.delete_account',
     'profile.delete_account_confirm_title',
     'profile.delete_account_cta',
+    'seller_orders.delete_button',
+    'seller_orders.delete_confirm',
+    'seller_orders.delete_title',
+    'seller_orders.cancel_blocked_label',
+    'seller_orders.cancel_not_allowed',
+    'tracking.alert.dropoff_overdue',
+    'tracking.alert.label_reminder',
   };
 
   final Map<String, Map<String, String>> _cache = {};

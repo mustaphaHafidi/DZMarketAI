@@ -2,8 +2,10 @@ import 'package:dzmarket/src/config/supabase_options.dart';
 import 'package:dzmarket/src/models/order.dart';
 import 'package:dzmarket/src/services/chat_repository.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
+import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:dzmarket/src/services/rate_limiter.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/utils/delivery_mode_utils.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -258,6 +260,61 @@ class OrderService {
         if (feeAmount != null) 'fee_amount': feeAmount,
       }).eq('id', safeOrderId),
     );
+  }
+
+  Future<void> cancelOrderBySeller({
+    required String orderId,
+  }) async {
+    final currentUserId = supabase.auth.currentUser?.id;
+    if (currentUserId == null) {
+      throw StateError('User must be signed in to cancel an order');
+    }
+    final safeOrderId = InputSanitizer.sanitizeId(orderId, maxLength: 64);
+    final locale = LocaleService.instance.locale.value?.languageCode ?? 'fr';
+    final orderRow = await RateLimiter.instance.run(
+      'orders.cancel.fetch',
+      () => supabase
+          .from(SupabaseTables.orders)
+          .select('id,seller_id,status,label_url,tracking_number')
+          .eq('id', safeOrderId)
+          .maybeSingle(),
+    );
+    if (orderRow == null) {
+      throw StateError('Commande introuvable');
+    }
+    final sellerId = orderRow['seller_id']?.toString() ?? '';
+    if (sellerId != currentUserId) {
+      throw StateError(
+        L10n.trLocale(locale, 'seller_orders.cancel_not_allowed'),
+      );
+    }
+    final status = orderRow['status']?.toString().trim().toLowerCase() ?? '';
+    if (status == 'cancelled') return;
+    final hasLabel =
+        (orderRow['label_url']?.toString().trim().isNotEmpty ?? false) ||
+        (orderRow['tracking_number']?.toString().trim().isNotEmpty ?? false);
+    if (hasLabel) {
+      throw StateError(
+        L10n.trLocale(locale, 'seller_orders.cancel_blocked_label'),
+      );
+    }
+
+    await updateStatus(orderId: safeOrderId, status: OrderStatus.cancelled);
+
+    try {
+      await ChatRepository().postOrderSystemMessage(
+        orderId: safeOrderId,
+        text: 'order.system.cancelled_by_seller',
+        payload: {
+          'i18n_key': 'order.system.cancelled_by_seller',
+          'status': 'cancelled',
+          'status_i18n': 'order.status.cancelled',
+        },
+        dedupeKey: 'order:$safeOrderId:cancelled_by_seller',
+      );
+    } catch (_) {
+      // Buyer still gets the order-status notification through DB trigger.
+    }
   }
 
   Future<void> updatePaymentStatus({
