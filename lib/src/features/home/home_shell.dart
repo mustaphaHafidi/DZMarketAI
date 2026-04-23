@@ -7,6 +7,7 @@ import 'package:dzmarket/src/services/chat_repository.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/notification_inbox_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/utils/ios_public_browse_policy.dart';
 import 'package:dzmarket/src/widgets/web_frame.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -38,6 +39,14 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   void _onTabSelected(int index) {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null &&
+        index != 0 &&
+        allowsIosAnonymousBrowse()) {
+      final from = Uri.encodeComponent('/?tab=${_tabs[index]}');
+      context.go('/sign-in?from=$from');
+      return;
+    }
     setState(() {
       _currentIndex = index;
     });

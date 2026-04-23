@@ -24,6 +24,7 @@ import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/utils/bool_utils.dart';
+import 'package:dzmarket/src/utils/ios_public_browse_policy.dart';
 import 'package:dzmarket/src/utils/product_share_url.dart';
 import 'package:dzmarket/src/widgets/user_avatar.dart';
 import 'package:flutter/foundation.dart';
@@ -328,6 +329,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     final userId = supabase.auth.currentUser?.id;
     if (_product == null) return;
     if (userId == null) {
+      if (allowsIosAnonymousBrowse()) {
+        _redirectGuestToSignIn();
+        return;
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -725,6 +730,20 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   Future<void> _buyNow() async {
     if (_isOwner) return;
     if (_product == null) return;
+    if (supabase.auth.currentUser?.id == null) {
+      if (allowsIosAnonymousBrowse()) {
+        _redirectGuestToSignIn();
+        return;
+      }
+      _showInfoSnack(
+        L10n.tr(
+          context,
+          'checkout.login_required',
+          fallback: 'Connectez-vous pour acheter cet article.',
+        ),
+      );
+      return;
+    }
     if ((_product?.stockQuantity ?? 0) <= 0 || _product?.isArchived == true) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1467,7 +1486,16 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     messenger.showSnackBar(SnackBar(content: Text(message)));
   }
 
+  void _redirectGuestToSignIn() {
+    final from = Uri.encodeComponent('/product/${widget.productId}');
+    context.go('/sign-in?from=$from');
+  }
+
   void _promptLoginForFavorites() {
+    if (allowsIosAnonymousBrowse()) {
+      _redirectGuestToSignIn();
+      return;
+    }
     _showInfoSnack(
       L10n.tr(
         context,

@@ -17,6 +17,8 @@ import 'package:dzmarket/src/features/profile/courier_settings_page.dart';
 import 'package:dzmarket/src/features/profile/my_listings_page.dart';
 import 'package:dzmarket/src/features/profile/seller_dashboard_page.dart';
 import 'package:dzmarket/src/features/tracking/map_tracking_page.dart';
+import 'package:dzmarket/src/utils/ios_public_browse_policy.dart';
+import 'package:dzmarket/src/widgets/guest_browse_gate.dart';
 import 'package:dzmarket/src/widgets/web_frame.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -116,7 +118,15 @@ GoRouter createRouter({List<NavigatorObserver> observers = const []}) {
       }
 
       if (session == null) {
-        if (loggingIn || signingUp || resetting || inLegal || callback) {
+        if (loggingIn ||
+            signingUp ||
+            resetting ||
+            inLegal ||
+            callback ||
+            isAnonymousRouteAllowed(
+              matchedLocation: state.matchedLocation,
+              uri: state.uri,
+            )) {
           return null;
         }
         final from = Uri.encodeComponent(state.uri.toString());
@@ -247,13 +257,23 @@ GoRouter createRouter({List<NavigatorObserver> observers = const []}) {
         path: '/product/:id',
         name: 'product',
         builder: (context, state) =>
-            ProductDetailPage(productId: state.pathParameters['id'] ?? ''),
+            GuestBrowseGate(
+              returnPath: state.uri.toString(),
+              child: ProductDetailPage(
+                productId: state.pathParameters['id'] ?? '',
+              ),
+            ),
       ),
       GoRoute(
         path: '/',
         pageBuilder: (context, state) {
           final tab = state.uri.queryParameters['tab'] ?? 'listings';
-          return NoTransitionPage(child: HomeShell(initialTab: tab));
+          return NoTransitionPage(
+            child: GuestBrowseGate(
+              returnPath: state.uri.toString(),
+              child: HomeShell(initialTab: tab),
+            ),
+          );
         },
         routes: [
           GoRoute(
