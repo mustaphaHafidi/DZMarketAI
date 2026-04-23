@@ -113,12 +113,16 @@ void main() {
   });
 
   test('shipment created with validated status stays on label ready step', () {
+    final recentCreatedAt = DateTime.now()
+        .subtract(const Duration(hours: 12))
+        .toUtc()
+        .toIso8601String();
     final shipment = Shipment.fromJson({
       'order_id': 142,
       'status': 'validated',
       'tracking_number': 'TRACK-1',
       'label_url': 'https://example.com/label.pdf',
-      'created_at': '2026-04-19T10:00:00Z',
+      'created_at': recentCreatedAt,
       'events': [
         {
           'status': 'validated',

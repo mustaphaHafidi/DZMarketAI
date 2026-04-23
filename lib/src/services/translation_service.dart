@@ -11,6 +11,10 @@ class TranslationService {
   static final instance = TranslationService._();
   static const Set<String> _assetAuthoritativeKeys = {
     'courier_settings.web_notice',
+    'offer.system.accepted',
+    'offer.system.counter',
+    'offer.system.created',
+    'offer.system.rejected',
     'order.system.cancelled_by_seller',
     'order.system.label_reminder',
     'order.system.carrier_scan_reminder',

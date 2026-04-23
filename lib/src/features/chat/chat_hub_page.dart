@@ -25,6 +25,7 @@ class ChatHubPage extends StatefulWidget {
 }
 
 class _ChatHubPageState extends State<ChatHubPage> {
+  static const int _maxAutoRecoverAttempts = 1;
   final ChatRepository _repo = ChatRepository();
   final ConversationMetaService _metaService = ConversationMetaService();
   final TextEditingController _searchCtrl = TextEditingController();
@@ -35,6 +36,8 @@ class _ChatHubPageState extends State<ChatHubPage> {
   Future<Map<String, ConversationMeta>>? _metaFuture;
   String _metaKey = '';
   String? _lastLoggedLoadError;
+  int _autoRecoverAttempts = 0;
+  bool _autoRecoverScheduled = false;
 
   int _fallbackUnreadCount(
     Conversation conversation,
@@ -89,6 +92,22 @@ class _ChatHubPageState extends State<ChatHubPage> {
       ),
     );
     await _forceConversationRefresh();
+  }
+
+  void _scheduleAutoRecover() {
+    if (_autoRecoverScheduled || _autoRecoverAttempts >= _maxAutoRecoverAttempts) {
+      return;
+    }
+    _autoRecoverScheduled = true;
+    _autoRecoverAttempts += 1;
+    Future<void>.delayed(const Duration(milliseconds: 900), () {
+      _autoRecoverScheduled = false;
+      if (!mounted) return;
+      setState(() {
+        _metaFuture = null;
+        _metaKey = '';
+      });
+    });
   }
 
   @override
@@ -220,6 +239,31 @@ class _ChatHubPageState extends State<ChatHubPage> {
                     final offline =
                         !ConnectivityService.instance.isOnline.value ||
                         _looksOffline(snapshot.error);
+                    if (!offline &&
+                        _autoRecoverAttempts < _maxAutoRecoverAttempts) {
+                      _scheduleAutoRecover();
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const CircularProgressIndicator(),
+                              const SizedBox(height: 12),
+                              Text(
+                                L10n.tr(
+                                  context,
+                                  'chat.offline_reconnecting',
+                                  fallback:
+                                      'Reconnexion des conversations...',
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
                     return Center(
                       child: Padding(
                         padding: const EdgeInsets.all(16),
@@ -256,6 +300,8 @@ class _ChatHubPageState extends State<ChatHubPage> {
                       ),
                     );
                   }
+                  _autoRecoverAttempts = 0;
+                  _autoRecoverScheduled = false;
                   final conversations = snapshot.data ?? const [];
                   if (conversations.isEmpty) {
                     return Center(child: Text(L10n.tr(context, 'chat.empty')));

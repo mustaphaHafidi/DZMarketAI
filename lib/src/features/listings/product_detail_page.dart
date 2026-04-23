@@ -1520,7 +1520,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       L10n.tr(
         context,
         'listing.share_link_copied',
-        fallback: 'Lien du produit copiÃ©.',
+        fallback: 'Lien du produit copie.',
       ),
     );
   }
@@ -1915,7 +1915,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     L10n.tr(
                       context,
                       'listing.negotiable',
-                      fallback: 'Prix nÃƒÆ’Ã‚Â©gociable',
+                      fallback: 'Prix negociable',
                     ),
                   ),
                   visualDensity: VisualDensity.compact,
@@ -2129,7 +2129,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                 L10n.tr(
                                   context,
                                   'listing.negotiable',
-                                  fallback: 'Prix nÃƒÂ©gociable',
+                                  fallback: 'Prix negociable',
                                 ),
                               ),
                               visualDensity: VisualDensity.compact,
@@ -2287,7 +2287,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                   L10n.tr(
                                     context,
                                     'listing.negotiable',
-                                    fallback: 'Prix nÃ©gociable',
+                                    fallback: 'Prix negociable',
                                   ),
                                 ),
                                 visualDensity: VisualDensity.compact,

@@ -38,6 +38,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
   late final BuyerReturnService _buyerReturnService;
   late final LabelUrlService _labelUrlService;
   Future<Map<String, BuyerReturnStats>>? _returnStatsFuture;
+  final Set<String> _hiddenCancelledOrderIds = <String>{};
   int _refreshEpoch = 0;
   static const int _maxOrders = 30;
 
@@ -110,6 +111,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
                     (o) =>
                         o.sellerId == userId &&
                         o.status != OrderStatus.cancelled &&
+                        !_hiddenCancelledOrderIds.contains(o.id) &&
                         !_isOfferOnlyGhostOrder(o),
                   )
                   .toList()
@@ -153,7 +155,11 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
                         orderId: orderId,
                         labelUrl: labelUrl,
                       ),
-                      onDelete: () => _confirmCancel(context, order.id),
+                      onDelete: () => _confirmCancel(
+                        context,
+                        orderId: order.id,
+                        userId: userId,
+                      ),
                       onManageArrangedDelivery: () =>
                           context.push('/order/${order.id}/chat'),
                       canCancel:
@@ -204,21 +210,25 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
     }
   }
 
-  Future<void> _confirmCancel(BuildContext context, String orderId) async {
+  Future<void> _confirmCancel(
+    BuildContext context, {
+    required String orderId,
+    required String userId,
+  }) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text(_cancelDialogTitle(context)),
-          content: Text(_cancelDialogBody(context)),
+          title: Text(_cancelDialogTitleV2(context)),
+          content: Text(_cancelDialogBodyV2(context)),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: Text(_cancelDialogDismissLabel(context)),
+              child: Text(_cancelDialogDismissLabelV2(context)),
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: Text(_cancelDialogConfirmLabel(context)),
+              child: Text(_cancelDialogConfirmLabelV2(context)),
             ),
           ],
         );
@@ -227,9 +237,16 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
     if (confirmed != true) return;
     try {
       await _orderService.cancelOrderBySeller(orderId: orderId);
+      if (mounted) {
+        setState(() {
+          _hiddenCancelledOrderIds.add(orderId);
+          _refreshEpoch++;
+        });
+      }
+      await _triggerRefresh(userId);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_cancelledSnackLabel(context))),
+          SnackBar(content: Text(_cancelledSnackLabelV2(context))),
         );
       }
     } catch (e) {
@@ -254,29 +271,48 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
     return L10n.tr(context, 'common.error');
   }
 
+  // ignore: unused_element
   String _cancelDialogTitle(BuildContext context) =>
       L10n.t(context, 'Annuler la commande', 'إلغاء الطلب');
 
+  // ignore: unused_element
   String _cancelDialogBody(BuildContext context) => L10n.t(
     context,
     "Cette action annulera la commande et informera l'acheteur.",
     'سيؤدي هذا الإجراء إلى إلغاء الطلب وإبلاغ المشتري.',
   );
 
+  // ignore: unused_element
   String _cancelDialogDismissLabel(BuildContext context) =>
       L10n.t(context, 'Annuler', 'إلغاء');
 
+  // ignore: unused_element
   String _cancelDialogConfirmLabel(BuildContext context) => L10n.t(
     context,
     "Confirmer l'annulation",
     'تأكيد الإلغاء',
   );
 
+  // ignore: unused_element
   String _cancelledSnackLabel(BuildContext context) => L10n.t(
     context,
     "Commande annulee. L'acheteur a ete informe.",
     'تم إلغاء الطلب وتم إبلاغ المشتري.',
   );
+  String _cancelDialogTitleV2(BuildContext context) =>
+      L10n.tr(context, 'seller_orders.delete_title');
+
+  String _cancelDialogBodyV2(BuildContext context) =>
+      L10n.tr(context, 'seller_orders.delete_confirm');
+
+  String _cancelDialogDismissLabelV2(BuildContext context) =>
+      L10n.tr(context, 'common.cancel');
+
+  String _cancelDialogConfirmLabelV2(BuildContext context) =>
+      L10n.tr(context, 'seller_orders.confirm_cancel_button');
+
+  String _cancelledSnackLabelV2(BuildContext context) =>
+      L10n.tr(context, 'seller_orders.cancelled');
 }
 
 class _SellerOrderCard extends StatelessWidget {
@@ -382,7 +418,7 @@ class _SellerOrderCard extends StatelessWidget {
                         TextButton.icon(
                           onPressed: onDelete,
                           icon: const Icon(Icons.cancel_outlined),
-                          label: Text(_cancelButtonLabel(context)),
+                          label: Text(_cancelButtonLabelV2(context)),
                         ),
                       if ((order.labelUrl ?? '').isNotEmpty)
                         Column(
@@ -432,6 +468,7 @@ class _SellerOrderCard extends StatelessWidget {
     );
   }
 
+  // ignore: unused_element
   String _cancelButtonLabel(BuildContext context) =>
       L10n.t(context, 'Annuler', 'إلغاء');
 
@@ -440,6 +477,8 @@ class _SellerOrderCard extends StatelessWidget {
 
   String _arrangedDeliveryButtonLabel(BuildContext context) =>
       L10n.t(context, 'Livraison a convenir', 'تسليم يتم بالاتفاق');
+  String _cancelButtonLabelV2(BuildContext context) =>
+      L10n.tr(context, 'common.cancel');
 }
 
 class _BuyerReturnSummary extends StatelessWidget {

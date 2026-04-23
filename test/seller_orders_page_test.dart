@@ -6,18 +6,30 @@ import 'package:dzmarket/src/services/order_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'dart:async';
 
 class _FakeOrderService extends OrderService {
-  _FakeOrderService(this.orders);
+  _FakeOrderService(this.orders) {
+    _controller.onListen = () {
+      _controller.add(List<Order>.from(orders));
+    };
+  }
 
   final List<Order> orders;
+  final StreamController<List<Order>> _controller =
+      StreamController<List<Order>>.broadcast();
 
   @override
-  Stream<List<Order>> streamOrdersForUser(String userId) =>
-      Stream.value(orders);
+  Stream<List<Order>> streamOrdersForUser(String userId) => _controller.stream;
 
   @override
   Future<void> refreshOrders(String userId) async {}
+
+  @override
+  Future<void> cancelOrderBySeller({required String orderId}) async {
+    orders.removeWhere((order) => order.id == orderId);
+    _controller.add(List<Order>.from(orders));
+  }
 }
 
 class _FakeBuyerReturnService extends BuyerReturnService {
@@ -174,6 +186,38 @@ void main() {
     expect(find.textContaining('DZMarket'), findsWidgets);
     expect(
       find.textContaining('Le bordereau reste disponible pendant 6 mois'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('cancelling a seller order removes it from the list immediately', (
+    tester,
+  ) async {
+    final service = _FakeOrderService([pendingOrder()]);
+
+    await tester.pumpWidget(
+      wrapApp(
+        locale: const Locale('fr'),
+        child: SellerOrdersPage(
+          orderService: service,
+          buyerReturnService: _FakeBuyerReturnService(const {}),
+          userIdOverride: 'seller-1',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Produit 45'), findsOneWidget);
+
+    await tester.tap(find.text('Annuler'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text("Confirmer l'annulation"));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('Produit 45'), findsNothing);
+    expect(
+      find.text("Commande annulée. L'acheteur a été informé."),
       findsOneWidget,
     );
   });

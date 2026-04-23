@@ -47,6 +47,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   final _labelUrlService = LabelUrlService();
   final _safetyService = UserSafetyService();
   final _controller = TextEditingController();
+  final ScrollController _messagesController = ScrollController();
   final Map<String, Future<Offer?>> _offerLookupFutures = {};
   bool _sending = false;
   bool _offerActionBusy = false;
@@ -58,6 +59,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   String? _orderDeliveryMethod;
   String? _orderShippingOption;
   final Map<String, String?> _orderIdByTrackingCache = {};
+  String? _lastRenderedMessageId;
   late Future<void> _conversationFuture;
   late Future<_ProductHeaderData?> _headerFuture;
   late Future<_ParticipantProfileData?> _participantProfileFuture;
@@ -66,7 +68,25 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   @override
   void dispose() {
     _controller.dispose();
+    _messagesController.dispose();
     super.dispose();
+  }
+
+  void _scheduleScrollToLatest({bool animate = false}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_messagesController.hasClients) return;
+      final position = _messagesController.position;
+      final target = position.maxScrollExtent;
+      if (animate) {
+        _messagesController.animateTo(
+          target,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+        );
+      } else {
+        _messagesController.jumpTo(target);
+      }
+    });
   }
 
   @override
@@ -733,8 +753,16 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     final effectiveI18nKey = isArrangedDeliveryEvent
         ? arrangedDeliverySystemMessageKey(i18nKey)
         : i18nKey;
+    final messageParams = <String, String>{
+      if (offerAmount != null) 'amount': offerAmount.toStringAsFixed(0),
+    };
     final messageText = effectiveI18nKey != null && effectiveI18nKey.isNotEmpty
-        ? L10n.tr(context, effectiveI18nKey, fallback: msg.text)
+        ? L10n.tr(
+            context,
+            effectiveI18nKey,
+            params: messageParams.isEmpty ? null : messageParams,
+            fallback: msg.text,
+          )
         : msg.text;
     final trackingPresentation = isShipmentLikeEvent && !isArrangedDeliveryEvent
         ? TrackingPresentation.fromData(
@@ -1375,6 +1403,13 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                     if (snapshot.hasData) {
                       _markRead(messages);
                     }
+                    final lastMessageId = messages.isEmpty ? null : messages.last.id;
+                    if (lastMessageId != null &&
+                        lastMessageId != _lastRenderedMessageId) {
+                      final animate = _lastRenderedMessageId != null;
+                      _lastRenderedMessageId = lastMessageId;
+                      _scheduleScrollToLatest(animate: animate);
+                    }
                     if (messages.isEmpty) {
                       return Center(
                         child: Text(L10n.tr(context, 'chat.room.empty')),
@@ -1384,6 +1419,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                       onRefresh: () =>
                           _refreshController.run(context, _forceReload),
                       child: ListView.builder(
+                        controller: _messagesController,
                         padding: const EdgeInsets.symmetric(
                           vertical: 8,
                           horizontal: 12,

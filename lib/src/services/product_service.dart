@@ -12,6 +12,11 @@ class ProductService {
   static const Duration _cacheTtl = Duration(seconds: 20);
   static const int _maxOwnerProducts = 30;
   static bool _supportsSearchKeywords = true;
+  static const String _listingSelect =
+      'id,title,price,owner_id,image_url,image_urls,category_id,'
+      'categories(name_fr, name_ar, slug),condition,brand,size,color,'
+      'location_wilaya,location_daira,delivery_options,is_negotiable,'
+      'shipping_free,stock_quantity,sold_count,is_archived,created_at';
 
   Stream<List<Product>> streamProducts() {
     final userId = supabase.auth.currentUser?.id;
@@ -116,7 +121,7 @@ class ProductService {
 
     final query = supabase
         .from(SupabaseTables.products)
-        .select('*, categories(name_fr, name_ar, slug)');
+        .select(_listingSelect);
     var filtered = query;
     filtered = filtered.eq('is_archived', false);
     filtered = filtered.gt('stock_quantity', 0);

@@ -1,3 +1,5 @@
+import 'package:dzmarket/src/utils/text_encoding_utils.dart';
+
 enum ChatMessageType { text, system, label }
 
 class ChatMessage {
@@ -41,7 +43,7 @@ class ChatMessage {
       id: json['id']?.toString() ?? '',
       conversationId: json['conversation_id']?.toString() ?? '',
       senderId: json['sender_id']?.toString() ?? '',
-      text: json['text']?.toString() ?? '',
+      text: repairMojibake(json['text']?.toString()),
       type: type,
       payload: payload,
       moderationStatus: json['moderation_status']?.toString(),

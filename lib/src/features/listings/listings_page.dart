@@ -29,6 +29,9 @@ class ListingsPage extends StatefulWidget {
 }
 
 class _ListingsPageState extends State<ListingsPage> {
+  static const Duration _initialLoadTimeout = Duration(seconds: 18);
+  static const Duration _retryLoadTimeout = Duration(seconds: 22);
+  static const int _maxInitialLoadAttempts = 2;
   final _searchController = TextEditingController();
   final _priceMin = TextEditingController();
   final _priceMax = TextEditingController();
@@ -133,7 +136,7 @@ class _ListingsPageState extends State<ListingsPage> {
     final gridAspectRatio = switch (crossAxisCount) {
       >= 4 => 0.83,
       3 => 0.79,
-      _ => screenWidth >= 600 ? 0.75 : 0.71,
+      _ => screenWidth >= 600 ? 0.75 : 0.6,
     };
 
     return Scaffold(
@@ -386,7 +389,7 @@ class _ListingsPageState extends State<ListingsPage> {
     ].join('|');
   }
 
-  Future<void> _refresh() async {
+  Future<void> _refresh({int attempt = 1}) async {
     final key = _queryKey();
     _activeQueryKey = key;
     final min = _effectiveMinPrice();
@@ -423,7 +426,11 @@ class _ListingsPageState extends State<ListingsPage> {
             offset: 0,
             excludeOwner: true,
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(
+            attempt >= _maxInitialLoadAttempts
+                ? _retryLoadTimeout
+                : _initialLoadTimeout,
+          );
     } on TimeoutException {
       failed = true;
       timedOut = true;
@@ -435,6 +442,14 @@ class _ListingsPageState extends State<ListingsPage> {
     }
 
     if (!mounted || _activeQueryKey != key) return;
+    if (failed &&
+        wasEmpty &&
+        !offline &&
+        attempt < _maxInitialLoadAttempts) {
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+      if (!mounted || _activeQueryKey != key) return;
+      return _refresh(attempt: attempt + 1);
+    }
     if (failed) {
       final friendlyMessage = timedOut
           ? L10n.tr(context, 'common.refresh_timeout')
@@ -1558,6 +1573,7 @@ class _ProductCardState extends State<_ProductCard> {
     final metadataStyle = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.outline,
     );
+    final isCompactCard = MediaQuery.of(context).size.width < 430;
     final badges = <Widget>[
       if (widget.product.deliveryOptions.contains('cod'))
         _CardMiniBadge(
@@ -1583,7 +1599,7 @@ class _ProductCardState extends State<_ProductCard> {
           ),
         ),
     ];
-    final visibleBadges = badges.take(2).toList();
+    final visibleBadges = badges.take(isCompactCard ? 1 : 2).toList();
     final hiddenBadgesCount = badges.length - visibleBadges.length;
     final isDesktopCard = MediaQuery.of(context).size.width >= 900;
     final displayIsFavorite = _favoriteOverride ?? widget.isFavorite;
