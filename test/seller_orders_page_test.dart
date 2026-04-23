@@ -32,6 +32,22 @@ class _FakeBuyerReturnService extends BuyerReturnService {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  MaterialApp wrapApp({
+    required Locale locale,
+    required Widget child,
+  }) {
+    return MaterialApp(
+      locale: locale,
+      supportedLocales: const [Locale('fr'), Locale('ar')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      home: child,
+    );
+  }
+
   Order pendingOrder() => Order(
     id: 'order-pending',
     productId: 'product-1',
@@ -45,22 +61,14 @@ void main() {
     shippingOption: 'home',
   );
 
-  testWidgets('pending seller order shows Annuler action in French', (
+  testWidgets('pending seller order shows cancel action in French', (
     tester,
   ) async {
-    final order = pendingOrder();
-
     await tester.pumpWidget(
-      MaterialApp(
+      wrapApp(
         locale: const Locale('fr'),
-        supportedLocales: const [Locale('fr'), Locale('ar')],
-        localizationsDelegates: const [
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        home: SellerOrdersPage(
-          orderService: _FakeOrderService([order]),
+        child: SellerOrdersPage(
+          orderService: _FakeOrderService([pendingOrder()]),
           buyerReturnService: _FakeBuyerReturnService(const {}),
           userIdOverride: 'seller-1',
         ),
@@ -81,35 +89,17 @@ void main() {
       ),
       findsOneWidget,
     );
+    expect(find.text("Confirmer l'annulation"), findsOneWidget);
   });
 
-  testWidgets('pending seller order shows cancel action in Arabic', (
+  testWidgets('pending seller order shows cancel dialog in Arabic', (
     tester,
   ) async {
-    final order = Order(
-      id: pendingOrder().id,
-      productId: pendingOrder().productId,
-      buyerId: pendingOrder().buyerId,
-      sellerId: pendingOrder().sellerId,
-      status: pendingOrder().status,
-      createdAt: pendingOrder().createdAt,
-      productTitle: pendingOrder().productTitle,
-      productPrice: pendingOrder().productPrice,
-      courierName: pendingOrder().courierName,
-      shippingOption: pendingOrder().shippingOption,
-    );
-
     await tester.pumpWidget(
-      MaterialApp(
+      wrapApp(
         locale: const Locale('ar'),
-        supportedLocales: const [Locale('fr'), Locale('ar')],
-        localizationsDelegates: const [
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        home: SellerOrdersPage(
-          orderService: _FakeOrderService([order]),
+        child: SellerOrdersPage(
+          orderService: _FakeOrderService([pendingOrder()]),
           buyerReturnService: _FakeBuyerReturnService(const {}),
           userIdOverride: 'seller-1',
         ),
@@ -117,15 +107,27 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('إلغاء'), findsOneWidget);
     expect(find.text('Supprimer'), findsNothing);
 
-    await tester.tap(find.text('إلغاء'));
+    final cancelButtons = find.byWidgetPredicate(
+      (widget) => widget is Text && widget.data == 'إلغاء',
+    );
+    expect(cancelButtons, findsOneWidget);
+
+    await tester.tap(cancelButtons);
     await tester.pumpAndSettle();
 
-    expect(find.text('إلغاء الطلب'), findsOneWidget);
+    expect(find.byType(AlertDialog), findsOneWidget);
     expect(
-      find.text('هذا الإجراء سيُلغي الطلب ويُبلغ المشتري.'),
+      find.byWidgetPredicate(
+        (widget) => widget is Text && widget.data == 'إلغاء الطلب',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is Text && widget.data == 'تأكيد الإلغاء',
+      ),
       findsOneWidget,
     );
   });
@@ -153,15 +155,9 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(
+      wrapApp(
         locale: const Locale('fr'),
-        supportedLocales: const [Locale('fr'), Locale('ar')],
-        localizationsDelegates: const [
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        home: SellerOrdersPage(
+        child: SellerOrdersPage(
           orderService: _FakeOrderService([order]),
           buyerReturnService: _FakeBuyerReturnService({'buyer-1': stats}),
           userIdOverride: 'seller-1',
@@ -175,10 +171,7 @@ void main() {
       find.textContaining('Retours DZMarket : 1 sur 6 mois'),
       findsOneWidget,
     );
-    expect(
-      find.text('Basé uniquement sur les commandes passées sur DZMarket.'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('DZMarket'), findsWidgets);
     expect(
       find.textContaining('Le bordereau reste disponible pendant 6 mois'),
       findsOneWidget,

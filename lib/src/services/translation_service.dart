@@ -26,6 +26,7 @@ class TranslationService {
     'profile.delete_account_confirm_title',
     'profile.delete_account_cta',
     'seller_orders.delete_button',
+    'seller_orders.confirm_cancel_button',
     'seller_orders.delete_confirm',
     'seller_orders.delete_title',
     'seller_orders.cancel_blocked_label',

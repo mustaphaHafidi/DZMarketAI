@@ -745,6 +745,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
             systemEventKey: i18nKey,
           )
         : null;
+    final hidePrimarySystemText =
+        trackingPresentation != null &&
+        isTrackingReminderSystemEvent(i18nKey);
     final statusText = statusKey != null
         ? L10n.tr(context, statusKey, fallback: status ?? '')
         : status;
@@ -790,14 +793,15 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              messageText,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+            if (!hidePrimarySystemText)
+              Text(
+                messageText,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
             if (statusText != null && statusText.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.only(top: 6),
+                padding: EdgeInsets.only(top: hidePrimarySystemText ? 0 : 6),
                 child: Text(
                   '${L10n.tr(context, 'chat.room.system_status')}: $statusText',
                 ),

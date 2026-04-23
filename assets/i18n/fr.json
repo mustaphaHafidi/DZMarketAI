@@ -828,6 +828,7 @@
   "seller_orders.arranged_delivery": "Livraison a convenir",
   "seller_orders.cancelled": "Commande annulee. L'acheteur a ete informe.",
   "seller_orders.delete_button": "Annuler",
+  "seller_orders.confirm_cancel_button": "Confirmer l'annulation",
   "seller_orders.delete_confirm": "Cette action annulera la commande et informera l'acheteur.",
   "seller_orders.delete_title": "Annuler la commande",
   "seller_orders.cancel_blocked_label": "La commande ne peut plus etre annulee apres generation du bordereau.",

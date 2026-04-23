@@ -209,16 +209,16 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text(L10n.tr(context, 'seller_orders.delete_title')),
-          content: Text(L10n.tr(context, 'seller_orders.delete_confirm')),
+          title: Text(_cancelDialogTitle(context)),
+          content: Text(_cancelDialogBody(context)),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: Text(L10n.tr(context, 'common.cancel')),
+              child: Text(_cancelDialogDismissLabel(context)),
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: Text(L10n.tr(context, 'seller_orders.delete_button')),
+              child: Text(_cancelDialogConfirmLabel(context)),
             ),
           ],
         );
@@ -229,7 +229,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
       await _orderService.cancelOrderBySeller(orderId: orderId);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(L10n.tr(context, 'seller_orders.cancelled'))),
+          SnackBar(content: Text(_cancelledSnackLabel(context))),
         );
       }
     } catch (e) {
@@ -253,6 +253,30 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
     }
     return L10n.tr(context, 'common.error');
   }
+
+  String _cancelDialogTitle(BuildContext context) =>
+      L10n.t(context, 'Annuler la commande', 'إلغاء الطلب');
+
+  String _cancelDialogBody(BuildContext context) => L10n.t(
+    context,
+    "Cette action annulera la commande et informera l'acheteur.",
+    'سيؤدي هذا الإجراء إلى إلغاء الطلب وإبلاغ المشتري.',
+  );
+
+  String _cancelDialogDismissLabel(BuildContext context) =>
+      L10n.t(context, 'Annuler', 'إلغاء');
+
+  String _cancelDialogConfirmLabel(BuildContext context) => L10n.t(
+    context,
+    "Confirmer l'annulation",
+    'تأكيد الإلغاء',
+  );
+
+  String _cancelledSnackLabel(BuildContext context) => L10n.t(
+    context,
+    "Commande annulee. L'acheteur a ete informe.",
+    'تم إلغاء الطلب وتم إبلاغ المشتري.',
+  );
 }
 
 class _SellerOrderCard extends StatelessWidget {
@@ -358,9 +382,7 @@ class _SellerOrderCard extends StatelessWidget {
                         TextButton.icon(
                           onPressed: onDelete,
                           icon: const Icon(Icons.cancel_outlined),
-                          label: Text(
-                            L10n.tr(context, 'seller_orders.delete_button'),
-                          ),
+                          label: Text(_cancelButtonLabel(context)),
                         ),
                       if ((order.labelUrl ?? '').isNotEmpty)
                         Column(
@@ -391,17 +413,13 @@ class _SellerOrderCard extends StatelessWidget {
                         FilledButton.icon(
                           onPressed: onGenerateLabel,
                           icon: const Icon(Icons.local_shipping_outlined),
-                          label: Text(
-                            L10n.tr(context, 'seller_orders.generate_label'),
-                          ),
+                          label: Text(_generateLabelButtonLabel(context)),
                         )
                       else
                         OutlinedButton.icon(
                           onPressed: onManageArrangedDelivery,
                           icon: const Icon(Icons.chat_bubble_outline),
-                          label: Text(
-                            L10n.tr(context, 'seller_orders.arranged_delivery'),
-                          ),
+                          label: Text(_arrangedDeliveryButtonLabel(context)),
                         ),
                     ],
                   ),
@@ -413,6 +431,15 @@ class _SellerOrderCard extends StatelessWidget {
       ),
     );
   }
+
+  String _cancelButtonLabel(BuildContext context) =>
+      L10n.t(context, 'Annuler', 'إلغاء');
+
+  String _generateLabelButtonLabel(BuildContext context) =>
+      L10n.t(context, 'Generer bordereau', 'إنشاء البوليصة');
+
+  String _arrangedDeliveryButtonLabel(BuildContext context) =>
+      L10n.t(context, 'Livraison a convenir', 'تسليم يتم بالاتفاق');
 }
 
 class _BuyerReturnSummary extends StatelessWidget {

@@ -87,4 +87,14 @@ void main() {
       'order.system.created',
     );
   });
+
+  test('isTrackingReminderSystemEvent matches only transport delay reminders', () {
+    expect(isTrackingReminderSystemEvent('order.system.label_reminder'), isTrue);
+    expect(
+      isTrackingReminderSystemEvent('order.system.carrier_scan_reminder'),
+      isTrue,
+    );
+    expect(isTrackingReminderSystemEvent('order.system.created'), isFalse);
+    expect(isTrackingReminderSystemEvent(null), isFalse);
+  });
 }

@@ -938,6 +938,7 @@ class L10n {
     'seller_orders.arranged_delivery': 'Livraison a convenir',
     'seller_orders.cancelled': 'Commande annulee. L\'acheteur a ete informe.',
     'seller_orders.delete_button': 'Annuler',
+    'seller_orders.confirm_cancel_button': 'Confirmer l\'annulation',
     'seller_orders.delete_confirm':
         'Cette action annulera la commande et informera l\'acheteur.',
     'seller_orders.delete_title': 'Annuler la commande',
@@ -1921,6 +1922,7 @@ class L10n {
     'seller_orders.arranged_delivery': 'التوصيل يُتفق عليه',
     'seller_orders.cancelled': 'تم إلغاء الطلب وإبلاغ المشتري.',
     'seller_orders.delete_button': 'إلغاء',
+    'seller_orders.confirm_cancel_button': 'تأكيد الإلغاء',
     'seller_orders.delete_confirm': 'هذا الإجراء سيُلغي الطلب ويُبلغ المشتري.',
     'seller_orders.delete_title': 'إلغاء الطلب',
     'seller_orders.cancel_blocked_label':

@@ -51,3 +51,13 @@ String? arrangedDeliverySystemMessageKey(String? i18nKey) {
       return i18nKey;
   }
 }
+
+bool isTrackingReminderSystemEvent(String? i18nKey) {
+  switch (i18nKey) {
+    case 'order.system.label_reminder':
+    case 'order.system.carrier_scan_reminder':
+      return true;
+    default:
+      return false;
+  }
+}
