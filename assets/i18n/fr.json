@@ -389,7 +389,7 @@
   "fulfillment.delivery_local": "Coursier local",
   "fulfillment.delivery_mode": "Mode de livraison",
   "fulfillment.delivery_pickup": "Point relais / bureau poste",
-  "fulfillment.error_courier_credentials_invalid": "Le compte {courier} n'est plus valide. Mettez à jour le token dans Paramètres transporteurs puis réessayez. Détail: {error}",
+  "fulfillment.error_courier_credentials_invalid": "Le compte {courier} n'est plus valide. Mettez à jour le token dans Paramètres transporteurs puis réessayez.",
   "fulfillment.error_courier_rate_limited": "Le transporteur répond trop souvent. Réessayez dans quelques secondes.",
   "fulfillment.error_missing_courier_settings": "Aucun identifiant transporteur valide n'est enregistré pour {courier}.",
   "fulfillment.error_select_courier": "Selectionnez un transporteur",

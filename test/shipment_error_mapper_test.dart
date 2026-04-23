@@ -2,19 +2,36 @@ import 'package:dzmarket/src/utils/shipment_error_mapper.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('parses shipment error payload from JSON string', () {
+    final parsed = parseShipmentErrorPayload(
+      '{"ok":false,"error_code":"courier_credentials_invalid","message":"courier_credentials_invalid"}',
+    );
+
+    expect(parsed, isNotNull);
+    expect(parsed?['error_code'], 'courier_credentials_invalid');
+  });
+
   test('maps invalid courier credentials to actionable message', () {
     final message = mapCreateShipmentError(
       locale: 'fr',
       data: {
         'error_code': 'courier_credentials_invalid',
         'message': 'courier_credentials_invalid',
-        'detail': 'Token invalide',
+        'detail': {
+          'error': {
+            'message': 'API ID and/or Token are wrong',
+            'code': 401,
+            'description': 'Unauthorized',
+          },
+        },
       },
       courierName: 'Yalidine Express',
     );
 
     expect(message, contains('Yalidine Express'));
     expect(message, contains('Paramètres transporteurs'));
+    expect(message, isNot(contains('API ID and/or Token are wrong')));
+    expect(message, isNot(contains('{error}')));
   });
 
   test('maps missing courier settings to explicit message', () {

@@ -971,22 +971,39 @@ class ShippingService {
       if (shippingCost != null) 'shipping_cost': shippingCost,
       if (selection != null) 'selection': selection,
     };
-    final response = await RateLimiter.instance.run(
-      'shipments.create.edge',
-      () => supabase.functions.invoke(
-        SupabaseOptions.createShipmentFunction,
-        body: body,
-      ),
-    );
+    final locale = LocaleService.instance.locale.value?.languageCode ?? 'fr';
+    late FunctionResponse response;
+    try {
+      response = await RateLimiter.instance.run(
+        'shipments.create.edge',
+        () => supabase.functions.invoke(
+          SupabaseOptions.createShipmentFunction,
+          body: body,
+        ),
+      );
+    } on FunctionException catch (e) {
+      final data = parseShipmentErrorPayload(e.details) ??
+          <String, dynamic>{
+            'message': _summarizeFunctionException(e),
+          };
+      final rawMessage = data['message']?.toString() ?? 'Shipment failed';
+      if (rawMessage == 'zr_phone_invalid') {
+        throw StateError(L10n.trLocale(locale, 'checkout.error_zr_phone'));
+      }
+      throw StateError(
+        mapCreateShipmentError(
+          locale: locale,
+          data: data,
+          courierName: safeCourierName,
+        ),
+      );
+    }
     final data = response.data;
     if (data is Map && data['ok'] == false) {
       final rawMessage = data['message']?.toString() ?? 'Shipment failed';
       if (rawMessage == 'zr_phone_invalid') {
-        final locale =
-            LocaleService.instance.locale.value?.languageCode ?? 'fr';
         throw StateError(L10n.trLocale(locale, 'checkout.error_zr_phone'));
       }
-      final locale = LocaleService.instance.locale.value?.languageCode ?? 'fr';
       throw StateError(
         mapCreateShipmentError(
           locale: locale,
@@ -1027,6 +1044,24 @@ class ShippingService {
       return map;
     }
     return {'ok': true};
+  }
+
+  String _summarizeFunctionException(FunctionException error) {
+    final parsed = parseShipmentErrorPayload(error.details);
+    if (parsed != null) {
+      final detail = parsed['detail'];
+      if (detail != null) {
+        final text = detail.toString().trim();
+        if (text.isNotEmpty) return text;
+      }
+      final message = parsed['message']?.toString().trim();
+      if (message != null && message.isNotEmpty) return message;
+    }
+    final detailText = error.details?.toString().trim();
+    if (detailText != null && detailText.isNotEmpty) return detailText;
+    final reason = error.reasonPhrase?.trim();
+    if (reason != null && reason.isNotEmpty) return reason;
+    return 'Shipment failed';
   }
 
   Future<void> _postOrderSystemMessage({

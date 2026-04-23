@@ -436,7 +436,7 @@ class L10n {
     'fulfillment.delivery_mode': 'Mode de livraison',
     'fulfillment.delivery_pickup': 'Point relais / bureau poste',
     'fulfillment.error_courier_credentials_invalid':
-        'Le compte {courier} n\'est plus valide. Mettez à jour le token dans Paramètres transporteurs puis réessayez. Détail: {error}',
+        'Le compte {courier} n\'est plus valide. Mettez à jour le token dans Paramètres transporteurs puis réessayez.',
     'fulfillment.error_courier_rate_limited':
         'Le transporteur répond trop souvent. Réessayez dans quelques secondes.',
     'fulfillment.error_missing_courier_settings':
@@ -1438,7 +1438,7 @@ class L10n {
     'fulfillment.delivery_mode': 'طريقة التوصيل',
     'fulfillment.delivery_pickup': 'نقطة استلام / مكتب بريد',
     'fulfillment.error_courier_credentials_invalid':
-        'لم تعد بيانات {courier} صالحة. حدّث الرمز من إعدادات النقل ثم أعد المحاولة. التفاصيل: {error}',
+        'لم تعد بيانات {courier} صالحة. حدّث الرمز من إعدادات النقل ثم أعد المحاولة.',
     'fulfillment.error_courier_rate_limited':
         'شركة الشحن تطبق حد طلبات مؤقت. أعد المحاولة بعد قليل.',
     'fulfillment.error_missing_courier_settings':

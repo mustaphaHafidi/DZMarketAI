@@ -389,7 +389,7 @@
   "fulfillment.delivery_local": "ساعي محلي",
   "fulfillment.delivery_mode": "طريقة التوصيل",
   "fulfillment.delivery_pickup": "نقطة استلام / مكتب بريد",
-  "fulfillment.error_courier_credentials_invalid": "لم تعد بيانات {courier} صالحة. حدّث الرمز من إعدادات النقل ثم أعد المحاولة. التفاصيل: {error}",
+  "fulfillment.error_courier_credentials_invalid": "لم تعد بيانات {courier} صالحة. حدّث الرمز من إعدادات النقل ثم أعد المحاولة.",
   "fulfillment.error_courier_rate_limited": "شركة الشحن تطبق حد طلبات مؤقت. أعد المحاولة بعد قليل.",
   "fulfillment.error_missing_courier_settings": "لا توجد بيانات صالحة محفوظة لشركة {courier}.",
   "fulfillment.error_select_courier": "اختر شركة الشحن",

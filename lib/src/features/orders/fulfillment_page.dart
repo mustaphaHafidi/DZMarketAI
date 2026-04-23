@@ -206,11 +206,26 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _error = e.toString());
+        setState(() => _error = _formatFulfillmentError(e));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  String _formatFulfillmentError(Object error) {
+    final raw = switch (error) {
+      StateError _ => error.message.toString().trim(),
+      _ => error.toString().trim(),
+    };
+    final cleaned = raw
+        .replaceFirst(RegExp(r'^Bad state:\s*'), '')
+        .replaceFirst(RegExp(r'^Exception:\s*'), '')
+        .trim();
+    if (cleaned.isEmpty || cleaned.startsWith('FunctionException(')) {
+      return L10n.tr(context, 'common.error');
+    }
+    return cleaned;
   }
 
   @override
