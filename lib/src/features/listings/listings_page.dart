@@ -1421,6 +1421,11 @@ class _ListingsPageState extends State<ListingsPage> {
   }
 
   Future<void> _openAddListing(BuildContext context) async {
+    if (supabase.auth.currentUser == null) {
+      final from = Uri.encodeComponent('/?tab=listings');
+      context.go('/sign-in?from=$from');
+      return;
+    }
     await Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => const AddListingPage()));
