@@ -24,6 +24,7 @@ import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/utils/bool_utils.dart';
+import 'package:dzmarket/src/utils/detail_layout_utils.dart';
 import 'package:dzmarket/src/utils/ios_public_browse_policy.dart';
 import 'package:dzmarket/src/utils/product_share_url.dart';
 import 'package:dzmarket/src/widgets/user_avatar.dart';
@@ -245,7 +246,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           .eq('id', safeProductId)
           .maybeSingle(),
     );
-    final isOwner = userId != null && data != null && data['owner_id'] == userId;
+    final isOwner =
+        userId != null && data != null && data['owner_id'] == userId;
     final isArchived = data?['is_archived'] as bool? ?? false;
     final moderationStatus = data?['moderation_status']?.toString();
     final isPubliclyVisible =
@@ -1588,15 +1590,27 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   @override
   Widget build(BuildContext context) {
     final formatter = NumberFormat.currency(locale: 'fr_DZ', symbol: 'DA');
-    final screenWidth = MediaQuery.sizeOf(context).width;
+    final screenSize = MediaQuery.sizeOf(context);
+    final screenWidth = screenSize.width;
     final wideDesktopLayout = screenWidth >= 1200;
-    final useWebSafeDetailLayout = kIsWeb;
-    final centeredContentWidth = wideDesktopLayout ? 1080.0 : double.infinity;
-    final heroExpandedHeight = wideDesktopLayout ? 320.0 : 390.0;
+    final useWideDetailLayout = shouldUseWideDetailLayout(
+      screenSize: screenSize,
+      isWeb: kIsWeb,
+    );
+    final centeredContentWidth = wideDesktopLayout
+        ? 1080.0
+        : useWideDetailLayout
+        ? 920.0
+        : double.infinity;
+    final heroExpandedHeight = wideDesktopLayout
+        ? 320.0
+        : useWideDetailLayout
+        ? 340.0
+        : 390.0;
 
     Widget contentShell(Widget child, {required EdgeInsetsGeometry padding}) {
       final paddedChild = Padding(padding: padding, child: child);
-      if (!wideDesktopLayout) {
+      if (!useWideDetailLayout) {
         return paddedChild;
       }
       return Center(
@@ -1721,7 +1735,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
     List<Widget> buildHeroActions() {
       return [
-        if (useWebSafeDetailLayout && heroImages.length > 1) buildHeroCounter(),
+        if (useWideDetailLayout && heroImages.length > 1) buildHeroCounter(),
         _topOverlayIconButton(
           icon: Icons.share,
           onPressed: _shareCurrentProduct,
@@ -1733,7 +1747,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
     Widget buildHeroSection() {
       final imagePrefs = NetworkPreferencesService.instance;
-      final heroChild = useWebSafeDetailLayout
+      final heroChild = useWideDetailLayout
           ? Stack(
               fit: StackFit.expand,
               children: [
@@ -2095,7 +2109,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     );
 
     return Scaffold(
-      body: useWebSafeDetailLayout
+      body: useWideDetailLayout
           ? SafeArea(
               bottom: false,
               child: SingleChildScrollView(
@@ -2408,7 +2422,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 ),
               ],
             ),
-      bottomNavigationBar: kIsWeb
+      bottomNavigationBar: useWideDetailLayout
           ? null
           : SafeArea(
               child: Container(
