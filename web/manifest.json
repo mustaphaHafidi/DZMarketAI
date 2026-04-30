@@ -1,11 +1,11 @@
 {
-    "name": "dzmarket",
-    "short_name": "dzmarket",
+    "name": "DZMarket",
+    "short_name": "DZMarket",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#eaf5ea",
     "theme_color": "#eaf5ea",
-    "description": "A new Flutter project.",
+    "description": "Marketplace algerienne pour acheter, vendre et gerer la livraison plus simplement.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

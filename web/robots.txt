@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /auth/callback
+Disallow: /auth/call
+Disallow: /auth-email/
+
+Sitemap: https://www.dzmarket.pro/sitemap.xml

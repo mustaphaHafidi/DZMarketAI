@@ -10,6 +10,7 @@ import 'package:dzmarket/src/features/chat/order_chat_gate_page.dart';
 import 'package:dzmarket/src/features/home/home_shell.dart';
 import 'package:dzmarket/src/features/legal/legal_page.dart';
 import 'package:dzmarket/src/features/listings/product_detail_page.dart';
+import 'package:dzmarket/src/features/marketing/web_marketing_landing_page.dart';
 import 'package:dzmarket/src/features/notifications/notifications_page.dart';
 import 'package:dzmarket/src/features/orders/seller_orders_page.dart';
 import 'package:dzmarket/src/features/orders/shipments_dashboard_page.dart';
@@ -18,6 +19,7 @@ import 'package:dzmarket/src/features/profile/my_listings_page.dart';
 import 'package:dzmarket/src/features/profile/seller_dashboard_page.dart';
 import 'package:dzmarket/src/features/tracking/map_tracking_page.dart';
 import 'package:dzmarket/src/utils/ios_public_browse_policy.dart';
+import 'package:dzmarket/src/utils/web_host_context.dart';
 import 'package:dzmarket/src/widgets/guest_browse_gate.dart';
 import 'package:dzmarket/src/widgets/web_frame.dart';
 import 'package:flutter/material.dart';
@@ -123,6 +125,10 @@ GoRouter createRouter({List<NavigatorObserver> observers = const []}) {
             resetting ||
             inLegal ||
             callback ||
+            shouldShowMarketingLanding(
+              matchedLocation: state.matchedLocation,
+              uri: state.uri,
+            ) ||
             isAnonymousRouteAllowed(
               matchedLocation: state.matchedLocation,
               uri: state.uri,
@@ -256,18 +262,21 @@ GoRouter createRouter({List<NavigatorObserver> observers = const []}) {
       GoRoute(
         path: '/product/:id',
         name: 'product',
-        builder: (context, state) =>
-            GuestBrowseGate(
-              returnPath: state.uri.toString(),
-              child: ProductDetailPage(
-                productId: state.pathParameters['id'] ?? '',
-              ),
-            ),
+        builder: (context, state) => GuestBrowseGate(
+          returnPath: state.uri.toString(),
+          child: ProductDetailPage(productId: state.pathParameters['id'] ?? ''),
+        ),
       ),
       GoRoute(
         path: '/',
         pageBuilder: (context, state) {
           final tab = state.uri.queryParameters['tab'] ?? 'listings';
+          if (shouldShowMarketingLanding(
+            matchedLocation: state.matchedLocation,
+            uri: state.uri,
+          )) {
+            return const NoTransitionPage(child: WebMarketingLandingPage());
+          }
           return NoTransitionPage(
             child: GuestBrowseGate(
               returnPath: state.uri.toString(),

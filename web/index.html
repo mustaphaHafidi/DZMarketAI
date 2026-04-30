@@ -1,38 +1,131 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="DZMarket est une marketplace algérienne pour acheter, vendre, discuter et gérer la livraison plus simplement.">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <meta name="google-site-verification" content="MaGUl7EHdatjLYOUModjeB46fOCI4k0in8_kiiNTLyI">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="DZMarket">
+  <meta property="og:title" content="DZMarket | Marketplace algérienne simple">
+  <meta property="og:description" content="Achetez, vendez et gérez la livraison plus simplement en Algérie avec DZMarket.">
+  <meta property="og:image" content="https://www.dzmarket.pro/icons/Icon-512.png">
+  <meta property="og:url" content="https://www.dzmarket.pro/">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="DZMarket | Marketplace algérienne simple">
+  <meta name="twitter:description" content="Achetez, vendez et gérez la livraison plus simplement en Algérie avec DZMarket.">
+  <meta name="twitter:image" content="https://www.dzmarket.pro/icons/Icon-512.png">
+  <link id="canonical-link" rel="canonical" href="https://www.dzmarket.pro/">
 
-  <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="dzmarket">
+  <meta name="apple-mobile-web-app-title" content="DZMarket">
   <link rel="apple-touch-icon" href="icons/Icon-192.png?v=20260216">
 
-  <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png?v=20260216"/>
 
-  <title>dzmarket</title>
+  <title>DZMarket | Marketplace algérienne simple</title>
   <link rel="manifest" href="manifest.json">
+  <script>
+    (function () {
+      var host = (window.location.hostname || '').toLowerCase();
+      var path = window.location.pathname || '/';
+      var isMarketingHost = host === 'www.dzmarket.pro' || host === 'dzmarket.pro';
+      var baseHost = isMarketingHost ? 'https://www.dzmarket.pro' : 'https://app.dzmarket.pro';
+
+      function setMeta(attr, key, value) {
+        var selector = attr + '="' + key + '"';
+        var tag = document.head.querySelector('meta[' + selector + ']');
+        if (!tag) {
+          tag = document.createElement('meta');
+          tag.setAttribute(attr, key);
+          document.head.appendChild(tag);
+        }
+        tag.setAttribute('content', value);
+      }
+
+      function routeTitle() {
+        if (isMarketingHost && path === '/') {
+          return 'DZMarket | Marketplace algérienne pour acheter, vendre et livrer';
+        }
+        if (path.indexOf('/sign-in') === 0) return 'Connexion | DZMarket';
+        if (path.indexOf('/sign-up') === 0) return 'Inscription | DZMarket';
+        if (path.indexOf('/product/') === 0) return 'Annonce | DZMarket';
+        return 'DZMarket App | Achat, vente et livraison en Algérie';
+      }
+
+      function routeDescription() {
+        if (isMarketingHost && path === '/') {
+          return 'DZMarket est une marketplace algérienne pour acheter, vendre, discuter et gérer la livraison plus simplement.';
+        }
+        if (path.indexOf('/sign-in') === 0) {
+          return 'Connectez-vous à DZMarket pour acheter, vendre, chatter et suivre vos livraisons en Algérie.';
+        }
+        if (path.indexOf('/sign-up') === 0) {
+          return 'Créez votre compte DZMarket pour publier des annonces, discuter et configurer la livraison.';
+        }
+        return 'DZMarket simplifie l achat, la vente, le chat et la livraison en Algérie.';
+      }
+
+      var title = routeTitle();
+      var description = routeDescription();
+      var canonical = baseHost + path;
+
+      document.title = title;
+      setMeta('name', 'description', description);
+      setMeta('name', 'robots', 'index,follow,max-image-preview:large');
+      setMeta('property', 'og:type', 'website');
+      setMeta('property', 'og:site_name', 'DZMarket');
+      setMeta('property', 'og:title', title);
+      setMeta('property', 'og:description', description);
+      setMeta('property', 'og:url', canonical);
+      setMeta('property', 'og:image', baseHost + '/icons/Icon-512.png');
+      setMeta('name', 'twitter:card', 'summary_large_image');
+      setMeta('name', 'twitter:title', title);
+      setMeta('name', 'twitter:description', description);
+      setMeta('name', 'twitter:image', baseHost + '/icons/Icon-512.png');
+
+      var canonicalLink = document.getElementById('canonical-link');
+      if (canonicalLink) canonicalLink.setAttribute('href', canonical);
+
+      var schema = {
+        '@context': 'https://schema.org',
+        '@type': 'Organization',
+        name: 'DZMarket',
+        url: isMarketingHost ? 'https://www.dzmarket.pro/' : 'https://app.dzmarket.pro/',
+        logo: baseHost + '/icons/Icon-512.png',
+        sameAs: [
+          'https://www.facebook.com/DZMarketpro',
+          'https://www.youtube.com/@DZMarketpro',
+          'https://apps.apple.com/dz/app/dzmarket/id6760047432',
+          'https://play.google.com/store/apps/details?id=com.dzmarket.app'
+        ],
+        description: 'Marketplace algérienne pour acheter, vendre et gérer la livraison plus simplement.'
+      };
+
+      var existing = document.getElementById('org-jsonld');
+      if (!existing) {
+        existing = document.createElement('script');
+        existing.type = 'application/ld+json';
+        existing.id = 'org-jsonld';
+        document.head.appendChild(existing);
+      }
+      existing.textContent = JSON.stringify(schema);
+    })();
+  </script>
 </head>
 <body>
+  <noscript>
+    <main style="max-width:960px;margin:40px auto;padding:24px;font-family:Arial,sans-serif;color:#173b2d;">
+      <h1>DZMarket</h1>
+      <p>Marketplace algérienne pour acheter, vendre et gérer la livraison plus simplement.</p>
+      <p dir="rtl">منصة جزائرية للبيع والشراء مع دردشة مدمجة وتوصيل أسهل متابعة.</p>
+      <p><a href="https://app.dzmarket.pro/">Ouvrir l'application web</a></p>
+    </main>
+  </noscript>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

@@ -89,6 +89,11 @@ flutter:
     - assets/i18n/ar.json
     - assets/branding/dzmarket_logo.svg
     - assets/branding/dzmarket_logo_ui.svg
+    - marketing/google-play-assets/app-icon/dzmarket_app_icon_512.png
+    - marketing/facebook-assets/dzmarket_android_launch_promo_v2.png
+    - marketing/facebook-assets/dzmarket_iphone_launch_promo_v2.png
+    - marketing/web-tutorial/final/fr/01_discover_fr.png
+    - marketing/web-tutorial/final/fr/04_delivery_fr.png
     - logos/
 
   # To add assets to your application, add an assets section, like this:
