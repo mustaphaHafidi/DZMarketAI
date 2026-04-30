@@ -5,6 +5,7 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="DZMarket est une marketplace algérienne pour acheter, vendre, discuter et gérer la livraison plus simplement.">
   <meta name="robots" content="index,follow,max-image-preview:large">
   <meta name="google-site-verification" content="MaGUl7EHdatjLYOUModjeB46fOCI4k0in8_kiiNTLyI">
@@ -29,6 +30,411 @@
 
   <title>DZMarket | Marketplace algérienne simple</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    :root {
+      --dz-bg: #f3faf5;
+      --dz-card: #ffffff;
+      --dz-ink: #153d2d;
+      --dz-muted: #587064;
+      --dz-green: #2d9b5b;
+      --dz-green-dark: #197244;
+      --dz-line: #d8e8de;
+      --dz-soft: #e7f4e8;
+      --dz-shadow: 0 24px 80px rgba(20, 77, 48, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--dz-bg);
+      color: var(--dz-ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body.dz-flutter-loading #marketing-landing,
+    body.dz-app-host #marketing-landing {
+      display: none;
+    }
+
+    #marketing-landing {
+      min-height: 100vh;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 16% 8%, rgba(67, 177, 107, 0.16), transparent 34%),
+        radial-gradient(circle at 84% 18%, rgba(255, 255, 255, 0.9), transparent 30%),
+        linear-gradient(180deg, #f4fbf6 0%, #eef8ef 100%);
+    }
+
+    .dz-shell {
+      width: min(1180px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+
+    .dz-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 22px 0 8px;
+    }
+
+    .dz-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--dz-ink);
+      font-size: 24px;
+      font-weight: 900;
+      text-decoration: none;
+    }
+
+    .dz-brand img {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      box-shadow: 0 14px 28px rgba(22, 99, 55, 0.22);
+      object-fit: cover;
+      transform: scale(1.18);
+    }
+
+    .dz-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .dz-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      padding: 0 18px;
+      border: 1px solid var(--dz-line);
+      border-radius: 999px;
+      color: var(--dz-ink);
+      background: rgba(255, 255, 255, 0.76);
+      font-weight: 800;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .dz-btn-primary {
+      border-color: var(--dz-green);
+      background: linear-gradient(135deg, var(--dz-green), var(--dz-green-dark));
+      color: #ffffff;
+      box-shadow: 0 18px 34px rgba(45, 155, 91, 0.25);
+    }
+
+    .dz-hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.03fr) minmax(360px, 0.97fr);
+      gap: 44px;
+      align-items: center;
+      padding: 68px 0 52px;
+    }
+
+    .dz-eyebrow {
+      display: inline-flex;
+      margin-bottom: 18px;
+      padding: 8px 14px;
+      border: 1px solid var(--dz-line);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.72);
+      color: #315c48;
+      font-size: 14px;
+      font-weight: 850;
+    }
+
+    .dz-hero h1 {
+      margin: 0;
+      max-width: 760px;
+      font-size: clamp(44px, 7vw, 84px);
+      line-height: 0.92;
+      letter-spacing: -0.07em;
+      color: var(--dz-ink);
+    }
+
+    .dz-lead {
+      max-width: 680px;
+      margin: 24px 0 0;
+      color: #3f5c4f;
+      font-size: clamp(18px, 2.2vw, 22px);
+      line-height: 1.65;
+    }
+
+    .dz-ar {
+      direction: rtl;
+      max-width: 680px;
+      margin: 16px 0 0;
+      color: #2c5442;
+      font-size: 18px;
+      line-height: 1.75;
+    }
+
+    .dz-cta-row,
+    .dz-store-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 28px;
+    }
+
+    .dz-store {
+      border-color: #c8dccf;
+      background: #ffffff;
+    }
+
+    .dz-proof {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 28px;
+    }
+
+    .dz-proof article,
+    .dz-card,
+    .dz-final {
+      border: 1px solid var(--dz-line);
+      border-radius: 28px;
+      background: rgba(255, 255, 255, 0.82);
+      box-shadow: 0 14px 44px rgba(24, 80, 48, 0.08);
+    }
+
+    .dz-proof article {
+      padding: 18px;
+    }
+
+    .dz-proof strong {
+      display: block;
+      font-size: 24px;
+    }
+
+    .dz-proof span {
+      display: block;
+      margin-top: 4px;
+      color: var(--dz-muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .dz-visual {
+      position: relative;
+      min-height: 610px;
+    }
+
+    .dz-phone {
+      position: absolute;
+      overflow: hidden;
+      border: 10px solid #13261d;
+      border-radius: 38px;
+      background: #ffffff;
+      box-shadow: var(--dz-shadow);
+    }
+
+    .dz-phone-main {
+      top: 0;
+      right: 92px;
+      width: 250px;
+      transform: rotate(2deg);
+      z-index: 2;
+    }
+
+    .dz-phone-secondary {
+      top: 94px;
+      right: 0;
+      width: 216px;
+      transform: rotate(-5deg);
+      opacity: 0.96;
+      z-index: 1;
+    }
+
+    .dz-phone img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .dz-float {
+      position: absolute;
+      left: 0;
+      bottom: 64px;
+      max-width: 310px;
+      padding: 22px;
+      border: 1px solid var(--dz-line);
+      border-radius: 28px;
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 20px 60px rgba(29, 86, 52, 0.13);
+      z-index: 3;
+    }
+
+    .dz-float strong {
+      display: block;
+      font-size: 19px;
+    }
+
+    .dz-float span {
+      display: block;
+      margin-top: 8px;
+      color: var(--dz-muted);
+      line-height: 1.55;
+    }
+
+    .dz-section {
+      padding: 38px 0;
+    }
+
+    .dz-section h2 {
+      margin: 0 0 18px;
+      font-size: clamp(30px, 4vw, 46px);
+      line-height: 1.02;
+      letter-spacing: -0.045em;
+    }
+
+    .dz-grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .dz-card {
+      padding: 26px;
+    }
+
+    .dz-card h3 {
+      margin: 0 0 10px;
+      font-size: 21px;
+    }
+
+    .dz-card p {
+      margin: 0;
+      color: var(--dz-muted);
+      font-size: 16px;
+      line-height: 1.65;
+    }
+
+    .dz-screens {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .dz-screen {
+      overflow: hidden;
+      border: 1px solid var(--dz-line);
+      border-radius: 32px;
+      background: #ffffff;
+      box-shadow: 0 18px 52px rgba(20, 77, 48, 0.1);
+    }
+
+    .dz-screen img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .dz-final {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 22px;
+      margin: 34px 0 56px;
+      padding: 30px;
+    }
+
+    .dz-final p {
+      max-width: 700px;
+      margin: 8px 0 0;
+      color: var(--dz-muted);
+      font-size: 17px;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 920px) {
+      .dz-hero,
+      .dz-grid-3,
+      .dz-screens {
+        grid-template-columns: 1fr;
+      }
+
+      .dz-hero {
+        padding-top: 40px;
+      }
+
+      .dz-visual {
+        min-height: 520px;
+      }
+
+      .dz-phone-main {
+        right: 96px;
+      }
+
+      .dz-proof {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .dz-final {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .dz-shell {
+        width: min(100% - 28px, 1180px);
+      }
+
+      .dz-header {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .dz-actions,
+      .dz-cta-row,
+      .dz-store-row {
+        width: 100%;
+      }
+
+      .dz-btn {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+
+      .dz-hero {
+        gap: 24px;
+      }
+
+      .dz-visual {
+        min-height: 440px;
+      }
+
+      .dz-phone-main {
+        right: 70px;
+        width: 194px;
+      }
+
+      .dz-phone-secondary {
+        top: 80px;
+        width: 168px;
+      }
+
+      .dz-float {
+        left: 0;
+        right: 0;
+        bottom: 18px;
+        max-width: none;
+      }
+
+      .dz-proof {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
   <script>
     (function () {
       var host = (window.location.hostname || '').toLowerCase();
@@ -118,6 +524,99 @@
   </script>
 </head>
 <body>
+  <main id="marketing-landing">
+    <header class="dz-shell dz-header">
+      <a class="dz-brand" href="https://www.dzmarket.pro/" aria-label="DZMarket">
+        <img src="/assets/marketing/google-play-assets/app-icon/dzmarket_app_icon_512.png" alt="" width="48" height="48">
+        <span>DZMarket</span>
+      </a>
+      <nav class="dz-actions" aria-label="Navigation principale">
+        <a class="dz-btn" href="https://app.dzmarket.pro/sign-up">Créer un compte</a>
+        <a class="dz-btn dz-btn-primary" href="https://app.dzmarket.pro/">Ouvrir l'app web</a>
+      </nav>
+    </header>
+
+    <section class="dz-shell dz-hero">
+      <div>
+        <span class="dz-eyebrow">Marketplace algérienne simple pour acheter, vendre et livrer.</span>
+        <h1>Achetez, vendez et livrez plus simplement en Algérie.</h1>
+        <p class="dz-lead">DZMarket regroupe les annonces, le chat, les commandes et le suivi transporteur dans une expérience claire pour les acheteurs et les vendeurs.</p>
+        <p class="dz-ar">منصة جزائرية للبيع والشراء مع دردشة مدمجة، أوامر واضحة، وتوصيل أسهل متابعة.</p>
+
+        <div class="dz-cta-row">
+          <a class="dz-btn dz-btn-primary" href="https://app.dzmarket.pro/">Ouvrir l'app web</a>
+          <a class="dz-btn" href="https://app.dzmarket.pro/sign-up">Créer un compte vendeur</a>
+        </div>
+        <div class="dz-store-row" aria-label="Télécharger DZMarket">
+          <a class="dz-btn dz-store" href="https://apps.apple.com/dz/app/dzmarket/id6760047432" target="_blank" rel="noopener">App Store</a>
+          <a class="dz-btn dz-store" href="https://play.google.com/store/apps/details?id=com.dzmarket.app" target="_blank" rel="noopener">Google Play</a>
+          <a class="dz-btn dz-store" href="https://www.facebook.com/DZMarketpro" target="_blank" rel="noopener">Facebook</a>
+        </div>
+
+        <div class="dz-proof" aria-label="Points forts DZMarket">
+          <article><strong>FR / AR</strong><span>Interface adaptée au français et à l'arabe.</span></article>
+          <article><strong>Chat</strong><span>Discussion directe entre acheteur et vendeur.</span></article>
+          <article><strong>Commandes</strong><span>Statuts et historique plus lisibles.</span></article>
+          <article><strong>Livraison</strong><span>Bordereaux et tracking centralisés.</span></article>
+        </div>
+      </div>
+
+      <div class="dz-visual" aria-hidden="true">
+        <div class="dz-phone dz-phone-main">
+          <img src="/assets/marketing/facebook-assets/dzmarket_android_launch_promo_v2.png" alt="">
+        </div>
+        <div class="dz-phone dz-phone-secondary">
+          <img src="/assets/marketing/facebook-assets/dzmarket_iphone_launch_promo_v2.png" alt="">
+        </div>
+        <div class="dz-float">
+          <strong>Moins de chaos après la vente</strong>
+          <span>Le vendeur garde le chat, la commande, le bordereau et le suivi au même endroit.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="dz-shell dz-section">
+      <h2>Une app pensée pour le commerce local.</h2>
+      <div class="dz-grid-3">
+        <article class="dz-card">
+          <h3>Acheter clairement</h3>
+          <p>Parcourez les annonces, ouvrez une fiche lisible, contactez le vendeur et suivez la commande.</p>
+        </article>
+        <article class="dz-card">
+          <h3>Vendre sans désordre</h3>
+          <p>Publiez vos produits, centralisez les messages et gardez une trace claire des ventes.</p>
+        </article>
+        <article class="dz-card">
+          <h3>Configurer la livraison</h3>
+          <p>Ajoutez vos comptes transporteurs, générez les bordereaux et suivez les statuts depuis DZMarket.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="dz-shell dz-section">
+      <h2>Web, Android et iPhone.</h2>
+      <div class="dz-screens">
+        <figure class="dz-screen">
+          <img src="/assets/marketing/web-tutorial/final/fr/01_discover_fr.png" alt="Page d'annonces DZMarket">
+        </figure>
+        <figure class="dz-screen">
+          <img src="/assets/marketing/web-tutorial/final/fr/04_delivery_fr.png" alt="Configuration livraison DZMarket">
+        </figure>
+      </div>
+    </section>
+
+    <section class="dz-shell dz-final">
+      <div>
+        <h2>Commencez sur le web, continuez sur mobile.</h2>
+        <p>DZMarket est disponible sur le web, iPhone et Android. Retrouvez aussi nos tutoriels pour publier une annonce et configurer les sociétés de livraison.</p>
+      </div>
+      <div class="dz-actions">
+        <a class="dz-btn dz-btn-primary" href="https://app.dzmarket.pro/">Ouvrir</a>
+        <a class="dz-btn" href="https://www.youtube.com/@DZMarketpro" target="_blank" rel="noopener">YouTube</a>
+      </div>
+    </section>
+  </main>
+
   <noscript>
     <main style="max-width:960px;margin:40px auto;padding:24px;font-family:Arial,sans-serif;color:#173b2d;">
       <h1>DZMarket</h1>
@@ -126,6 +625,25 @@
       <p><a href="https://app.dzmarket.pro/">Ouvrir l'application web</a></p>
     </main>
   </noscript>
-  <script src="flutter_bootstrap.js" async></script>
+  <script>
+    (function () {
+      var host = (window.location.hostname || '').toLowerCase();
+      var path = window.location.pathname || '/';
+      var isMarketingRoot = (host === 'www.dzmarket.pro' || host === 'dzmarket.pro') && path === '/';
+      if (isMarketingRoot) {
+        return;
+      }
+      document.body.classList.add('dz-app-host', 'dz-flutter-loading');
+      var landing = document.getElementById('marketing-landing');
+      if (landing) landing.remove();
+      var script = document.createElement('script');
+      script.src = 'flutter_bootstrap.js';
+      script.async = true;
+      script.addEventListener('load', function () {
+        document.body.classList.remove('dz-flutter-loading');
+      });
+      document.body.appendChild(script);
+    })();
+  </script>
 </body>
 </html>
