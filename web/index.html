@@ -233,6 +233,10 @@
       line-height: 1.75;
     }
 
+    body[data-landing-lang="fr"] .dz-ar {
+      display: none;
+    }
+
     .dz-cta-row,
     .dz-store-row {
       display: flex;
@@ -646,7 +650,10 @@
       </a>
       <div class="dz-lang-switch" role="group" aria-label="Langue de la page">
         <button type="button" data-lang-button="fr" onclick="window.dzSetLandingLang && window.dzSetLandingLang('fr')" aria-pressed="true">Français</button>
-        <button type="button" data-lang-button="ar" onclick="window.dzSetLandingLang && window.dzSetLandingLang('ar')" aria-pressed="false">العربية</button>
+        <button type="button" data-lang-button="ar" onclick="window.dzSetLandingLang && window.dzSetLandingLang('ar')" aria-pressed="false">
+          <span class="dz-lang-fr">Arabe</span>
+          <span class="dz-lang-ar">العربية</span>
+        </button>
       </div>
       <nav class="dz-actions" aria-label="Navigation principale">
         <a class="dz-btn" href="https://app.dzmarket.pro/sign-up">
@@ -668,14 +675,13 @@
         </span>
         <h1>
           <span class="dz-lang-fr">Achetez, vendez et livrez plus simplement en Algérie.</span>
-          <span class="dz-lang-ar">اشترِ، بع، وسلّم بسهولة أكبر في الجزائر.</span>
+          <span class="dz-lang-ar">اشتري وبع بسهولة أكبر في الجزائر.</span>
         </h1>
         <p class="dz-lead">
           <span class="dz-lang-fr">DZMarket regroupe les annonces, le chat, les commandes et le suivi transporteur dans une expérience claire pour les acheteurs et les vendeurs.</span>
           <span class="dz-lang-ar">تجمع DZMarket الإعلانات، الدردشة، الطلبات وتتبع شركات التوصيل في تجربة واضحة للمشترين والبائعين.</span>
         </p>
         <p class="dz-ar">
-          <span class="dz-lang-fr">منصة جزائرية للبيع والشراء مع دردشة مدمجة، أوامر واضحة، وتوصيل أسهل متابعة.</span>
           <span class="dz-lang-ar">كل ما تحتاجه للبيع والشراء في مكان واحد: إعلان واضح، دردشة مباشرة، طلبات منظمة، وتتبع للتوصيل.</span>
         </p>
 
