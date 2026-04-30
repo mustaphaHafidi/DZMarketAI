@@ -4,7 +4,7 @@ class WebFrame extends StatelessWidget {
   const WebFrame({
     super.key,
     required this.child,
-    this.maxWidth = 1400,
+    this.maxWidth = 1760,
     this.padding = const EdgeInsets.symmetric(horizontal: 16),
     this.applyMediaQuery = true,
   });
@@ -34,13 +34,8 @@ class WebFrame extends StatelessWidget {
               )
             : framed;
         return DecoratedBox(
-          decoration: const BoxDecoration(
-            color: Color(0xFFF2FAF3),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFFF2FAF3), Color(0xFFEAF6EC), Color(0xFFF7FBF8)],
-            ),
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
           ),
           child: Padding(
             padding: padding,

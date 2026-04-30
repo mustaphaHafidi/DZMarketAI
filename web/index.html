@@ -57,8 +57,34 @@
     }
 
     body.dz-flutter-loading #marketing-landing,
-    body.dz-app-host #marketing-landing {
+    body.dz-app-host #marketing-landing,
+    html.dz-app-host-preload #marketing-landing {
       display: none;
+    }
+
+    .dz-lang-ar {
+      display: none;
+    }
+
+    body[data-landing-lang="fr"] .dz-lang-ar,
+    body[data-landing-lang="ar"] .dz-lang-fr {
+      display: none !important;
+    }
+
+    body[data-landing-lang="ar"] .dz-lang-ar {
+      display: inline !important;
+    }
+
+    body[data-landing-lang="ar"] #marketing-landing {
+      direction: rtl;
+      text-align: right;
+    }
+
+    body[data-landing-lang="ar"] .dz-brand,
+    body[data-landing-lang="ar"] .dz-actions,
+    body[data-landing-lang="ar"] .dz-cta-row,
+    body[data-landing-lang="ar"] .dz-store-row {
+      direction: rtl;
     }
 
     #marketing-landing {
@@ -107,6 +133,36 @@
       flex-wrap: wrap;
       gap: 10px;
       justify-content: flex-end;
+    }
+
+    .dz-lang-switch {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid var(--dz-line);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.7);
+    }
+
+    .dz-lang-switch button {
+      min-height: 34px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 999px;
+      color: var(--dz-muted);
+      background: transparent;
+      cursor: pointer;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 850;
+    }
+
+    body[data-landing-lang="fr"] .dz-lang-switch button[data-lang-button="fr"],
+    body[data-landing-lang="ar"] .dz-lang-switch button[data-lang-button="ar"] {
+      color: #ffffff;
+      background: var(--dz-green);
+      box-shadow: 0 8px 18px rgba(45, 155, 91, 0.2);
     }
 
     .dz-btn {
@@ -400,6 +456,14 @@
         width: 100%;
       }
 
+      .dz-lang-switch {
+        width: 100%;
+      }
+
+      .dz-lang-switch button {
+        flex: 1;
+      }
+
       .dz-btn {
         flex: 1 1 auto;
         min-width: 0;
@@ -441,6 +505,9 @@
       var path = window.location.pathname || '/';
       var isMarketingHost = host === 'www.dzmarket.pro' || host === 'dzmarket.pro';
       var baseHost = isMarketingHost ? 'https://www.dzmarket.pro' : 'https://app.dzmarket.pro';
+      if (!isMarketingHost || path !== '/') {
+        document.documentElement.classList.add('dz-app-host-preload');
+      }
 
       function setMeta(attr, key, value) {
         var selector = attr + '="' + key + '"';
@@ -523,29 +590,103 @@
     })();
   </script>
 </head>
-<body>
+<body data-landing-lang="fr">
+  <script>
+    (function () {
+      var host = (window.location.hostname || '').toLowerCase();
+      var path = window.location.pathname || '/';
+      var isMarketingRoot = (host === 'www.dzmarket.pro' || host === 'dzmarket.pro') && path === '/';
+      if (!isMarketingRoot) {
+        return;
+      }
+      var params = new URLSearchParams(window.location.search || '');
+      var requested = params.get('lang');
+      var saved = null;
+      try {
+        saved = window.localStorage.getItem('dzmarket_landing_lang');
+      } catch (_) {}
+      var browserLang = (navigator.language || '').toLowerCase().startsWith('ar') ? 'ar' : 'fr';
+      var initial = requested === 'ar' || requested === 'fr' ? requested : (saved || browserLang);
+
+      function applyLandingLang(lang) {
+        var resolved = lang === 'ar' ? 'ar' : 'fr';
+        document.body.setAttribute('data-landing-lang', resolved);
+        document.documentElement.lang = resolved;
+        document.documentElement.dir = resolved === 'ar' ? 'rtl' : 'ltr';
+        var landing = document.getElementById('marketing-landing');
+        if (landing) {
+          landing.lang = resolved;
+          landing.dir = resolved === 'ar' ? 'rtl' : 'ltr';
+        }
+        document.querySelectorAll('[data-lang-button]').forEach(function (button) {
+          var active = button.getAttribute('data-lang-button') === resolved;
+          button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+        document.title = resolved === 'ar'
+          ? 'DZMarket | سوق جزائري بسيط للبيع والشراء والتوصيل'
+          : 'DZMarket | Marketplace algérienne pour acheter, vendre et livrer';
+        try {
+          window.localStorage.setItem('dzmarket_landing_lang', resolved);
+        } catch (_) {}
+      }
+
+      window.dzSetLandingLang = applyLandingLang;
+      applyLandingLang(initial);
+      document.addEventListener('DOMContentLoaded', function () {
+        applyLandingLang(document.body.getAttribute('data-landing-lang') || initial);
+      });
+    })();
+  </script>
   <main id="marketing-landing">
     <header class="dz-shell dz-header">
       <a class="dz-brand" href="https://www.dzmarket.pro/" aria-label="DZMarket">
         <img src="/assets/marketing/google-play-assets/app-icon/dzmarket_app_icon_512.png" alt="" width="48" height="48">
         <span>DZMarket</span>
       </a>
+      <div class="dz-lang-switch" role="group" aria-label="Langue de la page">
+        <button type="button" data-lang-button="fr" onclick="window.dzSetLandingLang && window.dzSetLandingLang('fr')" aria-pressed="true">Français</button>
+        <button type="button" data-lang-button="ar" onclick="window.dzSetLandingLang && window.dzSetLandingLang('ar')" aria-pressed="false">العربية</button>
+      </div>
       <nav class="dz-actions" aria-label="Navigation principale">
-        <a class="dz-btn" href="https://app.dzmarket.pro/sign-up">Créer un compte</a>
-        <a class="dz-btn dz-btn-primary" href="https://app.dzmarket.pro/">Ouvrir l'app web</a>
+        <a class="dz-btn" href="https://app.dzmarket.pro/sign-up">
+          <span class="dz-lang-fr">Créer un compte</span>
+          <span class="dz-lang-ar">إنشاء حساب</span>
+        </a>
+        <a class="dz-btn dz-btn-primary" href="https://app.dzmarket.pro/">
+          <span class="dz-lang-fr">Se connecter</span>
+          <span class="dz-lang-ar">تسجيل الدخول</span>
+        </a>
       </nav>
     </header>
 
     <section class="dz-shell dz-hero">
       <div>
-        <span class="dz-eyebrow">Marketplace algérienne simple pour acheter, vendre et livrer.</span>
-        <h1>Achetez, vendez et livrez plus simplement en Algérie.</h1>
-        <p class="dz-lead">DZMarket regroupe les annonces, le chat, les commandes et le suivi transporteur dans une expérience claire pour les acheteurs et les vendeurs.</p>
-        <p class="dz-ar">منصة جزائرية للبيع والشراء مع دردشة مدمجة، أوامر واضحة، وتوصيل أسهل متابعة.</p>
+        <span class="dz-eyebrow">
+          <span class="dz-lang-fr">Marketplace algérienne simple pour acheter, vendre et livrer.</span>
+          <span class="dz-lang-ar">منصة جزائرية بسيطة للبيع والشراء والتوصيل.</span>
+        </span>
+        <h1>
+          <span class="dz-lang-fr">Achetez, vendez et livrez plus simplement en Algérie.</span>
+          <span class="dz-lang-ar">اشترِ، بع، وسلّم بسهولة أكبر في الجزائر.</span>
+        </h1>
+        <p class="dz-lead">
+          <span class="dz-lang-fr">DZMarket regroupe les annonces, le chat, les commandes et le suivi transporteur dans une expérience claire pour les acheteurs et les vendeurs.</span>
+          <span class="dz-lang-ar">تجمع DZMarket الإعلانات، الدردشة، الطلبات وتتبع شركات التوصيل في تجربة واضحة للمشترين والبائعين.</span>
+        </p>
+        <p class="dz-ar">
+          <span class="dz-lang-fr">منصة جزائرية للبيع والشراء مع دردشة مدمجة، أوامر واضحة، وتوصيل أسهل متابعة.</span>
+          <span class="dz-lang-ar">كل ما تحتاجه للبيع والشراء في مكان واحد: إعلان واضح، دردشة مباشرة، طلبات منظمة، وتتبع للتوصيل.</span>
+        </p>
 
         <div class="dz-cta-row">
-          <a class="dz-btn dz-btn-primary" href="https://app.dzmarket.pro/">Ouvrir l'app web</a>
-          <a class="dz-btn" href="https://app.dzmarket.pro/sign-up">Créer un compte vendeur</a>
+          <a class="dz-btn dz-btn-primary" href="https://app.dzmarket.pro/">
+            <span class="dz-lang-fr">Accéder à DZMarket</span>
+            <span class="dz-lang-ar">الدخول إلى DZMarket</span>
+          </a>
+          <a class="dz-btn" href="https://app.dzmarket.pro/sign-up">
+            <span class="dz-lang-fr">Créer un compte vendeur</span>
+            <span class="dz-lang-ar">إنشاء حساب بائع</span>
+          </a>
         </div>
         <div class="dz-store-row" aria-label="Télécharger DZMarket">
           <a class="dz-btn dz-store" href="https://apps.apple.com/dz/app/dzmarket/id6760047432" target="_blank" rel="noopener">App Store</a>
@@ -554,10 +695,26 @@
         </div>
 
         <div class="dz-proof" aria-label="Points forts DZMarket">
-          <article><strong>FR / AR</strong><span>Interface adaptée au français et à l'arabe.</span></article>
-          <article><strong>Chat</strong><span>Discussion directe entre acheteur et vendeur.</span></article>
-          <article><strong>Commandes</strong><span>Statuts et historique plus lisibles.</span></article>
-          <article><strong>Livraison</strong><span>Bordereaux et tracking centralisés.</span></article>
+          <article>
+            <strong>FR / AR</strong>
+            <span class="dz-lang-fr">Interface adaptée au français et à l'arabe.</span>
+            <span class="dz-lang-ar">واجهة مناسبة للعربية والفرنسية.</span>
+          </article>
+          <article>
+            <strong><span class="dz-lang-fr">Chat</span><span class="dz-lang-ar">دردشة</span></strong>
+            <span class="dz-lang-fr">Discussion directe entre acheteur et vendeur.</span>
+            <span class="dz-lang-ar">تواصل مباشر بين المشتري والبائع.</span>
+          </article>
+          <article>
+            <strong><span class="dz-lang-fr">Commandes</span><span class="dz-lang-ar">طلبات</span></strong>
+            <span class="dz-lang-fr">Statuts et historique plus lisibles.</span>
+            <span class="dz-lang-ar">حالات وسجل طلبات أوضح.</span>
+          </article>
+          <article>
+            <strong><span class="dz-lang-fr">Livraison</span><span class="dz-lang-ar">توصيل</span></strong>
+            <span class="dz-lang-fr">Bordereaux et tracking centralisés.</span>
+            <span class="dz-lang-ar">وصلات شحن وتتبع في مكان واحد.</span>
+          </article>
         </div>
       </div>
 
@@ -569,32 +726,51 @@
           <img src="/assets/marketing/facebook-assets/dzmarket_iphone_launch_promo_v2.png" alt="">
         </div>
         <div class="dz-float">
-          <strong>Moins de chaos après la vente</strong>
-          <span>Le vendeur garde le chat, la commande, le bordereau et le suivi au même endroit.</span>
+          <strong>
+            <span class="dz-lang-fr">Moins de chaos après la vente</span>
+            <span class="dz-lang-ar">تنظيم أفضل بعد البيع</span>
+          </strong>
+          <span class="dz-lang-fr">Le vendeur garde le chat, la commande, le bordereau et le suivi au même endroit.</span>
+          <span class="dz-lang-ar">يحتفظ البائع بالدردشة، الطلب، وصل الشحن والتتبع في نفس المكان.</span>
         </div>
       </div>
     </section>
 
     <section class="dz-shell dz-section">
-      <h2>Une app pensée pour le commerce local.</h2>
+      <h2>
+        <span class="dz-lang-fr">Une app pensée pour le commerce local.</span>
+        <span class="dz-lang-ar">تطبيق مصمم للتجارة المحلية.</span>
+      </h2>
       <div class="dz-grid-3">
         <article class="dz-card">
-          <h3>Acheter clairement</h3>
-          <p>Parcourez les annonces, ouvrez une fiche lisible, contactez le vendeur et suivez la commande.</p>
+          <h3><span class="dz-lang-fr">Acheter clairement</span><span class="dz-lang-ar">شراء أوضح</span></h3>
+          <p>
+            <span class="dz-lang-fr">Parcourez les annonces, ouvrez une fiche lisible, contactez le vendeur et suivez la commande.</span>
+            <span class="dz-lang-ar">تصفح الإعلانات، افتح صفحة منتج واضحة، تواصل مع البائع وتابع الطلب.</span>
+          </p>
         </article>
         <article class="dz-card">
-          <h3>Vendre sans désordre</h3>
-          <p>Publiez vos produits, centralisez les messages et gardez une trace claire des ventes.</p>
+          <h3><span class="dz-lang-fr">Vendre sans désordre</span><span class="dz-lang-ar">بيع بدون فوضى</span></h3>
+          <p>
+            <span class="dz-lang-fr">Publiez vos produits, centralisez les messages et gardez une trace claire des ventes.</span>
+            <span class="dz-lang-ar">انشر منتجاتك، اجمع الرسائل في مكان واحد، واحتفظ بسجل واضح للمبيعات.</span>
+          </p>
         </article>
         <article class="dz-card">
-          <h3>Configurer la livraison</h3>
-          <p>Ajoutez vos comptes transporteurs, générez les bordereaux et suivez les statuts depuis DZMarket.</p>
+          <h3><span class="dz-lang-fr">Configurer la livraison</span><span class="dz-lang-ar">إعداد التوصيل</span></h3>
+          <p>
+            <span class="dz-lang-fr">Ajoutez vos comptes transporteurs, générez les bordereaux et suivez les statuts depuis DZMarket.</span>
+            <span class="dz-lang-ar">أضف حسابات شركات التوصيل، أنشئ وصلات الشحن وتابع الحالات من DZMarket.</span>
+          </p>
         </article>
       </div>
     </section>
 
     <section class="dz-shell dz-section">
-      <h2>Web, Android et iPhone.</h2>
+      <h2>
+        <span class="dz-lang-fr">Web, Android et iPhone.</span>
+        <span class="dz-lang-ar">على الويب، أندرويد وآيفون.</span>
+      </h2>
       <div class="dz-screens">
         <figure class="dz-screen">
           <img src="/assets/marketing/web-tutorial/final/fr/01_discover_fr.png" alt="Page d'annonces DZMarket">
@@ -607,11 +783,20 @@
 
     <section class="dz-shell dz-final">
       <div>
-        <h2>Commencez sur le web, continuez sur mobile.</h2>
-        <p>DZMarket est disponible sur le web, iPhone et Android. Retrouvez aussi nos tutoriels pour publier une annonce et configurer les sociétés de livraison.</p>
+        <h2>
+          <span class="dz-lang-fr">Commencez sur le web, continuez sur mobile.</span>
+          <span class="dz-lang-ar">ابدأ من الويب، وواصل من الهاتف.</span>
+        </h2>
+        <p>
+          <span class="dz-lang-fr">DZMarket est disponible sur le web, iPhone et Android. Retrouvez aussi nos tutoriels pour publier une annonce et configurer les sociétés de livraison.</span>
+          <span class="dz-lang-ar">DZMarket متوفر على الويب، آيفون وأندرويد. تجدون أيضا شروحات لنشر إعلان وإعداد شركات التوصيل.</span>
+        </p>
       </div>
       <div class="dz-actions">
-        <a class="dz-btn dz-btn-primary" href="https://app.dzmarket.pro/">Ouvrir</a>
+        <a class="dz-btn dz-btn-primary" href="https://app.dzmarket.pro/">
+          <span class="dz-lang-fr">Accéder</span>
+          <span class="dz-lang-ar">الدخول</span>
+        </a>
         <a class="dz-btn" href="https://www.youtube.com/@DZMarketpro" target="_blank" rel="noopener">YouTube</a>
       </div>
     </section>
