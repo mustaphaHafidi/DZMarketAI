@@ -86,6 +86,18 @@ void main() {
     expect(find.text('العربية'), findsOneWidget);
   });
 
+  testWidgets('Sign-in password keyboard action submits the form', (
+    tester,
+  ) async {
+    await _pumpRoute(tester, initialLocation: '/sign-in');
+
+    await tester.enterText(find.byType(TextField).at(1), 'password123');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+
+    expect(find.text('Veuillez saisir votre email.'), findsOneWidget);
+  });
+
   testWidgets('Sign-up page switches from FR to AR', (tester) async {
     await _pumpRoute(tester, initialLocation: '/sign-up');
 
@@ -97,5 +109,17 @@ void main() {
 
     expect(find.text('أنشئ حسابك للشراء والبيع'), findsOneWidget);
     expect(find.text('العربية'), findsOneWidget);
+  });
+
+  testWidgets('Sign-up password keyboard action submits the form', (
+    tester,
+  ) async {
+    await _pumpRoute(tester, initialLocation: '/sign-up');
+
+    await tester.enterText(find.byType(TextField).at(3), 'password123');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+
+    expect(find.text('Veuillez saisir votre email.'), findsOneWidget);
   });
 }

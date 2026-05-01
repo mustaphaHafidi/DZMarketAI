@@ -18,6 +18,10 @@ class _SignUpPageState extends State<SignUpPage> {
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _nameFocusNode = FocusNode();
+  final _emailFocusNode = FocusNode();
+  final _phoneFocusNode = FocusNode();
+  final _passwordFocusNode = FocusNode();
   bool _loading = false;
   bool _existingAccountError = false;
   String? _error;
@@ -30,6 +34,10 @@ class _SignUpPageState extends State<SignUpPage> {
     _passwordController.dispose();
     _nameController.dispose();
     _phoneController.dispose();
+    _nameFocusNode.dispose();
+    _emailFocusNode.dispose();
+    _phoneFocusNode.dispose();
+    _passwordFocusNode.dispose();
     super.dispose();
   }
 
@@ -54,10 +62,26 @@ class _SignUpPageState extends State<SignUpPage> {
       _existingAccountError = false;
     });
     try {
-      final email = InputSanitizer.sanitizeEmail(_emailController.text);
-      final password = InputSanitizer.sanitizePassword(
-        _passwordController.text,
-      );
+      final rawEmail = _emailController.text.trim();
+      if (rawEmail.isEmpty) {
+        throw FormatException(
+          _t(
+            'auth.error_email_required',
+            fallback: 'Veuillez saisir votre email.',
+          ),
+        );
+      }
+      final email = InputSanitizer.sanitizeEmail(rawEmail);
+      final rawPassword = _passwordController.text;
+      if (rawPassword.trim().isEmpty) {
+        throw FormatException(
+          _t(
+            'auth.error_password_required',
+            fallback: 'Veuillez saisir votre mot de passe.',
+          ),
+        );
+      }
+      final password = InputSanitizer.sanitizePassword(rawPassword);
       final fullName = InputSanitizer.sanitizeOptionalText(
         _nameController.text,
         maxLength: 80,
@@ -116,7 +140,7 @@ class _SignUpPageState extends State<SignUpPage> {
         ),
       );
     } on FormatException catch (e) {
-      final message = e.message;
+      final message = _mapFormatError(e);
       setState(() {
         _error = message;
         _existingAccountError = _isExistingAccountError(message);
@@ -143,6 +167,20 @@ class _SignUpPageState extends State<SignUpPage> {
     return message == localized ||
         message.toLowerCase().contains('already registered') ||
         message.toLowerCase().contains('already exists');
+  }
+
+  String _mapFormatError(FormatException error) {
+    switch (error.message) {
+      case 'Invalid email.':
+        return _t('auth.error_invalid_email', fallback: 'Email invalide.');
+      case 'Password too short.':
+        return _t(
+          'auth.error_password_too_short',
+          fallback: 'Mot de passe trop court (minimum 8 caracteres).',
+        );
+      default:
+        return error.message;
+    }
   }
 
   String _mapUiError(Object error) {
@@ -284,6 +322,10 @@ class _SignUpPageState extends State<SignUpPage> {
                               children: [
                                 TextField(
                                   controller: _nameController,
+                                  focusNode: _nameFocusNode,
+                                  textInputAction: TextInputAction.next,
+                                  onSubmitted: (_) =>
+                                      _emailFocusNode.requestFocus(),
                                   decoration: InputDecoration(
                                     labelText: _t(
                                       'auth.full_name',
@@ -301,7 +343,11 @@ class _SignUpPageState extends State<SignUpPage> {
                                 const SizedBox(height: 12),
                                 TextField(
                                   controller: _emailController,
+                                  focusNode: _emailFocusNode,
                                   keyboardType: TextInputType.emailAddress,
+                                  textInputAction: TextInputAction.next,
+                                  onSubmitted: (_) =>
+                                      _phoneFocusNode.requestFocus(),
                                   textAlign: TextAlign.left,
                                   decoration: InputDecoration(
                                     labelText: _t(
@@ -316,7 +362,11 @@ class _SignUpPageState extends State<SignUpPage> {
                                 const SizedBox(height: 12),
                                 TextField(
                                   controller: _phoneController,
+                                  focusNode: _phoneFocusNode,
                                   keyboardType: TextInputType.phone,
+                                  textInputAction: TextInputAction.next,
+                                  onSubmitted: (_) =>
+                                      _passwordFocusNode.requestFocus(),
                                   decoration: InputDecoration(
                                     labelText: _t(
                                       'auth.phone_optional',
@@ -335,7 +385,14 @@ class _SignUpPageState extends State<SignUpPage> {
                                 const SizedBox(height: 12),
                                 TextField(
                                   controller: _passwordController,
+                                  focusNode: _passwordFocusNode,
                                   obscureText: true,
+                                  textInputAction: TextInputAction.done,
+                                  onSubmitted: (_) {
+                                    if (!_loading) {
+                                      _signUp();
+                                    }
+                                  },
                                   decoration: InputDecoration(
                                     labelText: _t(
                                       'auth.password',

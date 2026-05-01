@@ -15,6 +15,8 @@ class SignInPage extends StatefulWidget {
 class _SignInPageState extends State<SignInPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _emailFocusNode = FocusNode();
+  final _passwordFocusNode = FocusNode();
   bool _loading = false;
   bool _resending = false;
   bool _initializedFromQuery = false;
@@ -50,6 +52,8 @@ class _SignInPageState extends State<SignInPage> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _emailFocusNode.dispose();
+    _passwordFocusNode.dispose();
     super.dispose();
   }
 
@@ -318,7 +322,11 @@ class _SignInPageState extends State<SignInPage> {
                               children: [
                                 TextField(
                                   controller: _emailController,
+                                  focusNode: _emailFocusNode,
                                   keyboardType: TextInputType.emailAddress,
+                                  textInputAction: TextInputAction.next,
+                                  onSubmitted: (_) =>
+                                      _passwordFocusNode.requestFocus(),
                                   textAlign: TextAlign.left,
                                   decoration: InputDecoration(
                                     labelText: _t(
@@ -333,7 +341,14 @@ class _SignInPageState extends State<SignInPage> {
                                 const SizedBox(height: 12),
                                 TextField(
                                   controller: _passwordController,
+                                  focusNode: _passwordFocusNode,
                                   obscureText: true,
+                                  textInputAction: TextInputAction.done,
+                                  onSubmitted: (_) {
+                                    if (!_loading) {
+                                      _signIn();
+                                    }
+                                  },
                                   decoration: InputDecoration(
                                     labelText: _t(
                                       'auth.password',
