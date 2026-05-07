@@ -66,6 +66,7 @@ jobs:
           returns_count=$(jq -r '.returns // 0' "$RESPONSE_FILE")
           scanned=$(jq -r '.returns_metrics.orders_scanned // 0' "$RESPONSE_FILE")
           api_failures=$(jq -r '.returns_metrics.courier_api_failures // 0' "$RESPONSE_FILE")
+          time_budget_exhausted=$(jq -r '.returns_metrics.time_budget_exhausted // false' "$RESPONSE_FILE")
           sync_error=$(jq -r '.returns_metrics.sync_error // ""' "$RESPONSE_FILE")
           if [ "$sync_error" = "null" ]; then sync_error=""; fi
 
@@ -75,11 +76,11 @@ jobs:
           if [ -n "$sync_error" ]; then hard_alert=true; fi
 
           zero_anomaly=false
-          if [ "$scanned" -ge "$RETURNS_ZERO_MIN_SCANNED" ] && [ "$returns_count" -eq 0 ]; then
+          if [ "$time_budget_exhausted" != "true" ] && [ "$scanned" -ge "$RETURNS_ZERO_MIN_SCANNED" ] && [ "$returns_count" -eq 0 ]; then
             zero_anomaly=true
           fi
 
-          summary="jobs_failed=${jobs_failed}, api_failures=${api_failures}, returns=${returns_count}, scanned=${scanned}, sync_error=${sync_error:-none}"
+          summary="jobs_failed=${jobs_failed}, api_failures=${api_failures}, returns=${returns_count}, scanned=${scanned}, time_budget_exhausted=${time_budget_exhausted}, sync_error=${sync_error:-none}"
           echo "jobs_failed=$jobs_failed" >> "$GITHUB_OUTPUT"
           echo "returns_count=$returns_count" >> "$GITHUB_OUTPUT"
           echo "orders_scanned=$scanned" >> "$GITHUB_OUTPUT"

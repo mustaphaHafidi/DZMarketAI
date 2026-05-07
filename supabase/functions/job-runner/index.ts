@@ -83,7 +83,9 @@ const flattenKeys = (value: unknown, out: string[]) => {
 
 const detectReturnFromText = (text: string) => {
   const lower = text.toLowerCase();
-  if (lower.includes("non reclam") || lower.includes("not claimed")) return "not_claimed";
+  if (lower.includes("non reclam") || lower.includes("not claimed")) {
+    return "not_claimed";
+  }
   if (lower.includes("refus")) return "refused";
   if (
     lower.includes("return_in_transit") ||
@@ -195,6 +197,7 @@ type ReturnsSyncMetrics = {
   courier_api_calls: number;
   courier_api_failures: number;
   tracking_updates: number;
+  time_budget_exhausted: boolean;
   stats_refresh_error: boolean;
   sync_error: string | null;
 };
@@ -207,6 +210,7 @@ const emptyReturnsMetrics = (): ReturnsSyncMetrics => ({
   courier_api_calls: 0,
   courier_api_failures: 0,
   tracking_updates: 0,
+  time_budget_exhausted: false,
   stats_refresh_error: false,
   sync_error: null,
 });
@@ -226,13 +230,14 @@ const consumeRateLimit = async (
   return data === true;
 };
 
-const sleep = (ms: number) =>
-  new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const parseRetryAfterMs = (value: string | null) => {
   if (!value) return null;
   const seconds = Number(value);
-  if (Number.isFinite(seconds) && seconds > 0) return Math.min(seconds * 1000, 15000);
+  if (Number.isFinite(seconds) && seconds > 0) {
+    return Math.min(seconds * 1000, 15000);
+  }
   const dateMs = Date.parse(value);
   if (Number.isFinite(dateMs)) {
     const delta = dateMs - Date.now();
@@ -248,12 +253,16 @@ const fetchWithRetry = async (
   url: string,
   init: RequestInit,
   maxAttempts = 4,
+  timeoutMs = parseEnvInt("FETCH_TIMEOUT_MS", 15000, 1000, 120000),
 ) => {
   let resp: Response;
   let lastError: unknown = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      resp = await fetch(url, init);
+      resp = await fetch(url, { ...init, signal: controller.signal });
+      clearTimeout(timeoutId);
       if (!isRetryableStatus(resp.status) || attempt === maxAttempts) {
         return resp;
       }
@@ -262,6 +271,7 @@ const fetchWithRetry = async (
       const backoff = Math.min(300 * 2 ** (attempt - 1), 5000);
       await sleep((retryAfterMs ?? backoff) + jitter);
     } catch (error) {
+      clearTimeout(timeoutId);
       lastError = error;
       if (attempt === maxAttempts) break;
       const jitter = Math.floor(Math.random() * 120);
@@ -269,7 +279,9 @@ const fetchWithRetry = async (
       await sleep(backoff + jitter);
     }
   }
-  throw lastError instanceof Error ? lastError : new Error("network_retry_failed");
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("network_retry_failed");
 };
 
 type CarrierRateWindow = { limit: number; seconds: number };
@@ -315,7 +327,19 @@ const fetchJson = async (
   const allowed = await enforceCourierSyncLimit(supabase, carrierCode);
   if (!allowed) return { ok: false, data: null };
   try {
-    const resp = await fetchWithRetry(url, { method: "GET", headers });
+    const attempts = parseEnvInt("COURIER_FETCH_ATTEMPTS", 1, 1, 4);
+    const timeoutMs = parseEnvInt(
+      "COURIER_FETCH_TIMEOUT_MS",
+      4000,
+      1000,
+      30000,
+    );
+    const resp = await fetchWithRetry(
+      url,
+      { method: "GET", headers },
+      attempts,
+      timeoutMs,
+    );
     if (!resp.ok) return { ok: false, data: null };
     return { ok: true, data: await resp.json() };
   } catch {
@@ -325,7 +349,11 @@ const fetchJson = async (
 
 const ecotrackBaseUrls = () => {
   const envValue = (Deno.env.get("ECOTRACK_BASE_URL") ?? "").trim();
-  const candidates = [envValue, "https://api.ecotrack.dz", "https://ovred.ecotrack.dz"];
+  const candidates = [
+    envValue,
+    "https://api.ecotrack.dz",
+    "https://ovred.ecotrack.dz",
+  ];
   const seen = new Set<string>();
   return candidates.filter((v) => {
     const normalized = v.replace(/\/+$/, "");
@@ -384,17 +412,29 @@ const syncBuyerReturns = async (
   since.setMonth(since.getMonth() - 12);
   const maxOrders = parseEnvInt("RETURNS_SYNC_MAX_ORDERS", 500, 20, 5000);
   const pageSize = parseEnvInt("RETURNS_SYNC_PAGE_SIZE", 100, 20, 500);
+  const deadlineMs = Date.now() +
+    parseEnvInt("RETURNS_SYNC_TIME_BUDGET_MS", 30000, 5000, 50000);
   const maxBatches = Math.ceil(maxOrders / pageSize) + 1;
   let inserted = 0;
   let scanned = 0;
-  const settingsCache = new Map<string, { api_key: string; api_secret: string } | null>();
+  const settingsCache = new Map<
+    string,
+    { api_key: string; api_secret: string } | null
+  >();
+  const hasTimeBudget = () => Date.now() + 1500 < deadlineMs;
 
   for (let batch = 0; batch < maxBatches && scanned < maxOrders; batch++) {
+    if (!hasTimeBudget()) {
+      metrics.time_budget_exhausted = true;
+      break;
+    }
     const from = batch * pageSize;
     const to = from + pageSize - 1;
     const { data: orders, error: ordersError } = await supabase
       .from("orders")
-      .select("id,buyer_id,seller_id,courier_id,courier_name,tracking_number,created_at")
+      .select(
+        "id,buyer_id,seller_id,courier_id,courier_name,tracking_number,created_at",
+      )
       .not("tracking_number", "is", null)
       .gte("created_at", since.toISOString())
       .order("created_at", { ascending: false })
@@ -428,12 +468,16 @@ const syncBuyerReturns = async (
 
     const pending = orderList.filter((order) => {
       const orderId = Number(order?.id);
-      return order?.tracking_number && Number.isFinite(orderId) && !existingOrders.has(orderId);
+      return order?.tracking_number && Number.isFinite(orderId) &&
+        !existingOrders.has(orderId);
     });
     metrics.pending_orders += pending.length;
     if (pending.length === 0) continue;
 
-    const missingPairs = new Map<string, { sellerId: string; courierId: string }>();
+    const missingPairs = new Map<
+      string,
+      { sellerId: string; courierId: string }
+    >();
     for (const order of pending) {
       const sellerId = order.seller_id?.toString() ?? "";
       const courierId = order.courier_id?.toString() ?? "";
@@ -445,8 +489,12 @@ const syncBuyerReturns = async (
     }
 
     if (missingPairs.size > 0) {
-      const sellerIds = Array.from(new Set(Array.from(missingPairs.values()).map((v) => v.sellerId)));
-      const courierIds = Array.from(new Set(Array.from(missingPairs.values()).map((v) => v.courierId)));
+      const sellerIds = Array.from(
+        new Set(Array.from(missingPairs.values()).map((v) => v.sellerId)),
+      );
+      const courierIds = Array.from(
+        new Set(Array.from(missingPairs.values()).map((v) => v.courierId)),
+      );
 
       const { data: settings, error: settingsError } = await supabase
         .from("seller_delivery_settings")
@@ -468,10 +516,15 @@ const syncBuyerReturns = async (
     }
 
     for (const order of pending) {
+      if (!hasTimeBudget()) {
+        metrics.time_budget_exhausted = true;
+        break;
+      }
       const courierId = order.courier_id ?? "";
       const courierName = order.courier_name ?? "";
       const normalized = normalizeCourier(`${courierId} ${courierName}`);
-      const settings = settingsCache.get(`${order.seller_id}:${courierId}`) ?? null;
+      const settings = settingsCache.get(`${order.seller_id}:${courierId}`) ??
+        null;
       if (!settings) continue;
 
       const tracking = order.tracking_number?.toString() ?? "";
@@ -483,7 +536,9 @@ const syncBuyerReturns = async (
         const response = await fetchJson(
           supabase,
           "yalidine",
-          `https://api.yalidine.app/v1/histories/${encodeURIComponent(tracking)}`,
+          `https://api.yalidine.app/v1/histories/${
+            encodeURIComponent(tracking)
+          }`,
           {
             "X-API-ID": settings.api_key,
             "X-API-TOKEN": settings.api_secret,
@@ -498,9 +553,11 @@ const syncBuyerReturns = async (
           const response = await fetchJson(
             supabase,
             "ecotrack",
-            `${base.replace(/\/+$/, "")}/api/v1/get/tracking/info?tracking=${encodeURIComponent(
-              tracking,
-            )}`,
+            `${base.replace(/\/+$/, "")}/api/v1/get/tracking/info?tracking=${
+              encodeURIComponent(
+                tracking,
+              )
+            }`,
             {
               Authorization: `Bearer ${settings.api_key}`,
               Accept: "application/json",
@@ -515,7 +572,9 @@ const syncBuyerReturns = async (
         const response = await fetchJson(
           supabase,
           "zrexpress",
-          `https://api.zrexpress.app/api/v1/parcels/${encodeURIComponent(tracking)}`,
+          `https://api.zrexpress.app/api/v1/parcels/${
+            encodeURIComponent(tracking)
+          }`,
           {
             "X-Api-Key": settings.api_key,
             "X-Tenant": settings.api_secret,
@@ -531,7 +590,9 @@ const syncBuyerReturns = async (
           let response = await fetchJson(
             supabase,
             "guepex",
-            `${base.replace(/\/+$/, "")}/v1/histories/${encodeURIComponent(tracking)}`,
+            `${base.replace(/\/+$/, "")}/v1/histories/${
+              encodeURIComponent(tracking)
+            }`,
             {
               "X-API-ID": settings.api_key,
               "X-API-TOKEN": settings.api_secret,
@@ -542,7 +603,9 @@ const syncBuyerReturns = async (
             response = await fetchJson(
               supabase,
               "guepex",
-              `${base.replace(/\/+$/, "")}/v1/histories?tracking=${encodeURIComponent(tracking)}`,
+              `${base.replace(/\/+$/, "")}/v1/histories?tracking=${
+                encodeURIComponent(tracking)
+              }`,
               {
                 "X-API-ID": settings.api_key,
                 "X-API-TOKEN": settings.api_secret,
@@ -591,13 +654,14 @@ const syncBuyerReturns = async (
       const trackingStatus = detectTrackingStatus(trackingData);
       if (trackingStatus) {
         metrics.tracking_updates += 1;
-        const isReturn =
-          trackingStatus === "returned_to_sender" ||
+        const isReturn = trackingStatus === "returned_to_sender" ||
           trackingStatus === "not_claimed" ||
           trackingStatus === "refused";
         const eventKey = `order:${order.id}:tracking:${trackingStatus}`;
         const payload = {
-          i18n_key: isReturn ? "order.system.returned" : "order.system.tracking",
+          i18n_key: isReturn
+            ? "order.system.returned"
+            : "order.system.tracking",
           status: trackingStatus,
           status_i18n: `order.status.${trackingStatus}`,
           tracking_number: tracking,
@@ -618,29 +682,32 @@ const syncBuyerReturns = async (
         try {
           const { data: shipmentRow } = await supabase
             .from("shipments")
-            .select("events,status,tracking_number,carrier,option,delivery_mode,label_url")
+            .select(
+              "events,status,tracking_number,carrier,option,delivery_mode,label_url",
+            )
             .eq("order_id", Number(order.id))
             .maybeSingle();
 
-          const existingEvents = (shipmentRow?.events as unknown as Array<Record<string, unknown>>) ?? [];
+          const existingEvents = (shipmentRow?.events as unknown as Array<
+            Record<string, unknown>
+          >) ?? [];
           const eventExists = existingEvents.some((e) => {
             const key = e?.key as string | undefined;
             const status = e?.status as string | undefined;
-            return key === `status:${trackingStatus}` || status === trackingStatus;
+            return key === `status:${trackingStatus}` ||
+              status === trackingStatus;
           });
-          const updatedEvents = eventExists
-            ? existingEvents
-            : [
-                ...existingEvents,
-                {
-                  key: `status:${trackingStatus}`,
-                  status: trackingStatus,
-                  title: trackingStatus,
-                  i18n_key: `order.status.${trackingStatus}`,
-                  description: courierName || courierId || "",
-                  at: new Date().toISOString(),
-                },
-              ];
+          const updatedEvents = eventExists ? existingEvents : [
+            ...existingEvents,
+            {
+              key: `status:${trackingStatus}`,
+              status: trackingStatus,
+              title: trackingStatus,
+              i18n_key: `order.status.${trackingStatus}`,
+              description: courierName || courierId || "",
+              at: new Date().toISOString(),
+            },
+          ];
 
           if (shipmentRow) {
             await supabase
@@ -696,7 +763,9 @@ const sendLabelReminders = async (
 
   const { data: orders, error: ordersError } = await supabase
     .from("orders")
-    .select("id,status,label_url,tracking_number,created_at,delivery_method,shipping_option")
+    .select(
+      "id,status,label_url,tracking_number,created_at,delivery_method,shipping_option",
+    )
     .in("status", ["pending", "paid"])
     .gte("created_at", olderThan)
     .lt("created_at", newerThan)
@@ -742,8 +811,7 @@ const sendLabelReminders = async (
       continue;
     }
 
-    const hasOrderLabel =
-      textValue(order?.label_url) !== "" ||
+    const hasOrderLabel = textValue(order?.label_url) !== "" ||
       textValue(order?.tracking_number) !== "";
     const shipment = shipmentByOrder.get(orderId);
     const hasShipmentLabel = shipment != null &&
@@ -790,7 +858,9 @@ const hasCarrierProgressEvent = (events: unknown) => {
     ).toLowerCase();
     if (!status) continue;
     if (isFinalShipmentStatus(status)) return true;
-    if (status !== "pending" && status !== "validated" && status !== "shipped") {
+    if (
+      status !== "pending" && status !== "validated" && status !== "shipped"
+    ) {
       return true;
     }
   }
@@ -829,7 +899,12 @@ const sendCarrierScanReminders = async (
   const metrics = emptyCarrierScanReminderMetrics();
   const now = Date.now();
   const olderThan = new Date(now - 4 * 24 * 60 * 60 * 1000).toISOString();
-  const maxOrders = parseEnvInt("CARRIER_SCAN_REMINDER_MAX_ORDERS", 500, 20, 5000);
+  const maxOrders = parseEnvInt(
+    "CARRIER_SCAN_REMINDER_MAX_ORDERS",
+    500,
+    20,
+    5000,
+  );
   const queries = [
     {
       select: "order_id,status,label_url,tracking_number,created_at,events",
@@ -849,12 +924,17 @@ const sendCarrierScanReminders = async (
   ];
 
   const isMissingColumnError = (
-    error: { code?: string; message?: string; details?: string; hint?: string } | null,
+    error:
+      | { code?: string; message?: string; details?: string; hint?: string }
+      | null,
   ) => {
     if (!error) return false;
-    const blob = `${error.message ?? ""} ${error.details ?? ""} ${error.hint ?? ""}`.toLowerCase();
+    const blob = `${error.message ?? ""} ${error.details ?? ""} ${
+      error.hint ?? ""
+    }`.toLowerCase();
     return blob.includes("column") &&
-      (blob.includes("events") || blob.includes("updated_at") || blob.includes("created_at"));
+      (blob.includes("events") || blob.includes("updated_at") ||
+        blob.includes("created_at"));
   };
 
   let shipments: Array<Record<string, unknown>> = [];
@@ -904,7 +984,12 @@ const sendCarrierScanReminders = async (
     "id,status,created_at,delivery_method,shipping_option",
   ];
   let ordersData: Array<Record<string, unknown>> = [];
-  let ordersError: { code?: string; message?: string; details?: string; hint?: string } | null = null;
+  let ordersError: {
+    code?: string;
+    message?: string;
+    details?: string;
+    hint?: string;
+  } | null = null;
   for (const selectCols of orderSelects) {
     const res = await supabase
       .from("orders")
@@ -963,7 +1048,9 @@ const sendCarrierScanReminders = async (
       continue;
     }
     const anchorMs = Date.parse(anchorAt);
-    if (!Number.isFinite(anchorMs) || anchorMs > now - 4 * 24 * 60 * 60 * 1000) {
+    if (
+      !Number.isFinite(anchorMs) || anchorMs > now - 4 * 24 * 60 * 60 * 1000
+    ) {
       metrics.skipped_recent += 1;
       continue;
     }
@@ -1012,7 +1099,9 @@ const sendCarrierScanReminders = async (
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
   if (req.method !== "POST") {
     return jsonResponse({ ok: false, message: "Method not allowed" }, 405);
   }
@@ -1032,9 +1121,15 @@ serve(async (req) => {
     global: { headers: { Authorization: auth } },
   });
 
+  const createShipmentLimit = parseEnvInt(
+    "JOB_RUNNER_CREATE_SHIPMENT_LIMIT",
+    1,
+    0,
+    10,
+  );
   const { data: jobs, error } = await supabase.rpc("claim_jobs", {
     p_type: "create_shipment",
-    p_limit: 5,
+    p_limit: createShipmentLimit,
   });
   if (error) {
     return jsonResponse({ ok: false, message: error.message }, 500);
@@ -1057,7 +1152,8 @@ serve(async (req) => {
           },
           body: JSON.stringify(payload),
         },
-        3,
+        1,
+        parseEnvInt("CREATE_SHIPMENT_JOB_TIMEOUT_MS", 15000, 5000, 45000),
       );
       const body = await resp.text();
       const ok = resp.ok;
@@ -1099,7 +1195,10 @@ serve(async (req) => {
     carrierScanRemindersSent = 0;
   }
   try {
-    const { data: cancelledCount } = await supabase.rpc("cancel_stale_orders", {});
+    const { data: cancelledCount } = await supabase.rpc(
+      "cancel_stale_orders",
+      {},
+    );
     if (typeof cancelledCount === "number") cancelled = cancelledCount;
   } catch (_) {
     // Do not fail job runner if cancellation fails
@@ -1111,7 +1210,9 @@ serve(async (req) => {
   }
 
   try {
-    const envRetention = Number(Deno.env.get("APP_ERRORS_RETENTION_DAYS") ?? "30");
+    const envRetention = Number(
+      Deno.env.get("APP_ERRORS_RETENTION_DAYS") ?? "30",
+    );
     const retentionDays = Number.isFinite(envRetention) && envRetention > 0
       ? Math.floor(envRetention)
       : 30;
@@ -1138,4 +1239,3 @@ serve(async (req) => {
     results,
   });
 });
-
