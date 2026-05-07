@@ -11,6 +11,7 @@ on:
 
 jobs:
   run:
+    if: github.event_name != 'schedule' || github.repository == 'mustaphaHafidi/DZmarket'
     runs-on: ubuntu-latest
     env:
       JOB_ERRORS_MAX: "0"
