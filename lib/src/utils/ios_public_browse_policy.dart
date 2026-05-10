@@ -1,9 +1,10 @@
 import 'package:flutter/foundation.dart';
 
-bool allowsIosAnonymousBrowse({
-  TargetPlatform? platform,
-  bool? isWebOverride,
-}) {
+bool allowsAnonymousBrowse({TargetPlatform? platform, bool? isWebOverride}) {
+  return true;
+}
+
+bool allowsIosAnonymousBrowse({TargetPlatform? platform, bool? isWebOverride}) {
   final isWeb = isWebOverride ?? kIsWeb;
   if (isWeb) return false;
   return (platform ?? defaultTargetPlatform) == TargetPlatform.iOS;
@@ -19,7 +20,7 @@ bool isAnonymousRouteAllowed({
   TargetPlatform? platform,
   bool? isWebOverride,
 }) {
-  if (!allowsIosAnonymousBrowse(
+  if (!allowsAnonymousBrowse(
     platform: platform,
     isWebOverride: isWebOverride,
   )) {
@@ -31,5 +32,6 @@ bool isAnonymousRouteAllowed({
     return true;
   }
 
-  return matchedLocation == '/product/:id';
+  return matchedLocation == '/product/:id' ||
+      matchedLocation.startsWith('/product/');
 }

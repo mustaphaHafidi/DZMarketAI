@@ -25,7 +25,6 @@ import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/utils/bool_utils.dart';
 import 'package:dzmarket/src/utils/detail_layout_utils.dart';
-import 'package:dzmarket/src/utils/ios_public_browse_policy.dart';
 import 'package:dzmarket/src/utils/product_share_url.dart';
 import 'package:dzmarket/src/widgets/user_avatar.dart';
 import 'package:flutter/foundation.dart';
@@ -331,16 +330,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     final userId = supabase.auth.currentUser?.id;
     if (_product == null) return;
     if (userId == null) {
-      if (allowsIosAnonymousBrowse()) {
-        _redirectGuestToSignIn();
-        return;
-      }
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(L10n.tr(context, 'chat.contact_login_required')),
-        ),
-      );
+      _redirectGuestToSignIn();
       return;
     }
     final newContactText = sendIntroMessage
@@ -733,17 +723,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (_isOwner) return;
     if (_product == null) return;
     if (supabase.auth.currentUser?.id == null) {
-      if (allowsIosAnonymousBrowse()) {
-        _redirectGuestToSignIn();
-        return;
-      }
-      _showInfoSnack(
-        L10n.tr(
-          context,
-          'checkout.login_required',
-          fallback: 'Connectez-vous pour acheter cet article.',
-        ),
-      );
+      _redirectGuestToSignIn();
       return;
     }
     if ((_product?.stockQuantity ?? 0) <= 0 || _product?.isArchived == true) {
@@ -1359,6 +1339,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       );
       return;
     }
+    if (supabase.auth.currentUser?.id == null) {
+      _redirectGuestToSignIn();
+      return;
+    }
     final minOffer = InputSanitizer.offerMinAmountFromBasePrice(
       _product?.price,
     );
@@ -1494,17 +1478,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   void _promptLoginForFavorites() {
-    if (allowsIosAnonymousBrowse()) {
-      _redirectGuestToSignIn();
-      return;
-    }
-    _showInfoSnack(
-      L10n.tr(
-        context,
-        'listing.favorite_login_required',
-        fallback: 'Connectez-vous pour ajouter aux favoris.',
-      ),
-    );
+    _redirectGuestToSignIn();
   }
 
   Future<void> _toggleFavoriteWithFeedback(bool currentIsFavorite) async {
@@ -1580,6 +1554,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   Future<void> _openSellerProfile() async {
     final product = _product;
     if (product == null) return;
+    if (supabase.auth.currentUser?.id == null) {
+      _redirectGuestToSignIn();
+      return;
+    }
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => PublicProfilePage(userId: product.ownerId),

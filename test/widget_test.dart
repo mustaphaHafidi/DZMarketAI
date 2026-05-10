@@ -21,11 +21,18 @@ void main() {
     );
   });
 
-  testWidgets('Shows sign-in screen by default', (WidgetTester tester) async {
+  testWidgets('Shows public browse screen by default', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(const MyApp());
     await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
 
-    expect(find.text('DZMarket'), findsWidgets);
-    expect(find.text('Se connecter'), findsOneWidget);
+    expect(
+      find.text('Parcourez librement. Connectez-vous pour agir.'),
+      findsOneWidget,
+    );
+    expect(find.text('Se connecter'), findsWidgets);
   });
 }

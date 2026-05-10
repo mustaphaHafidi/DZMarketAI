@@ -3,8 +3,34 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('allowsAnonymousBrowse', () {
+    test('enabled on every platform', () {
+      expect(
+        allowsAnonymousBrowse(
+          platform: TargetPlatform.iOS,
+          isWebOverride: false,
+        ),
+        isTrue,
+      );
+      expect(
+        allowsAnonymousBrowse(
+          platform: TargetPlatform.android,
+          isWebOverride: false,
+        ),
+        isTrue,
+      );
+      expect(
+        allowsAnonymousBrowse(
+          platform: TargetPlatform.iOS,
+          isWebOverride: true,
+        ),
+        isTrue,
+      );
+    });
+  });
+
   group('allowsIosAnonymousBrowse', () {
-    test('enabled only on native iOS', () {
+    test('legal gate remains enabled only on native iOS', () {
       expect(
         allowsIosAnonymousBrowse(
           platform: TargetPlatform.iOS,
@@ -30,7 +56,7 @@ void main() {
   });
 
   group('isAnonymousRouteAllowed', () {
-    test('allows listings root on native iOS', () {
+    test('allows listings root for anonymous users', () {
       expect(
         isAnonymousRouteAllowed(
           matchedLocation: '/',
@@ -49,9 +75,18 @@ void main() {
         ),
         isTrue,
       );
+      expect(
+        isAnonymousRouteAllowed(
+          matchedLocation: '/',
+          uri: Uri.parse('/?tab=listings'),
+          platform: TargetPlatform.android,
+          isWebOverride: false,
+        ),
+        isTrue,
+      );
     });
 
-    test('blocks chat and profile tabs on native iOS', () {
+    test('blocks chat and profile tabs for anonymous users', () {
       expect(
         isAnonymousRouteAllowed(
           matchedLocation: '/',
@@ -72,7 +107,7 @@ void main() {
       );
     });
 
-    test('allows product detail on native iOS only', () {
+    test('allows product detail for anonymous users', () {
       expect(
         isAnonymousRouteAllowed(
           matchedLocation: '/product/:id',
@@ -84,12 +119,21 @@ void main() {
       );
       expect(
         isAnonymousRouteAllowed(
+          matchedLocation: '/product/42',
+          uri: Uri.parse('/product/42'),
+          platform: TargetPlatform.android,
+          isWebOverride: false,
+        ),
+        isTrue,
+      );
+      expect(
+        isAnonymousRouteAllowed(
           matchedLocation: '/product/:id',
           uri: Uri.parse('/product/42'),
           platform: TargetPlatform.android,
           isWebOverride: false,
         ),
-        isFalse,
+        isTrue,
       );
     });
   });

@@ -119,7 +119,7 @@ class _Header extends StatelessWidget {
               FilledButton.icon(
                 onPressed: onOpenApp,
                 icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                label: const Text("Ouvrir l'app"),
+                label: const Text("Ouvrir l'app web"),
                 style: _ButtonStyles.primary,
               ),
             ],
@@ -192,7 +192,7 @@ class _HeroText extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _Badge(label: 'Marketplace algérienne'),
+        const _Badge(label: 'Site officiel DZMarket'),
         const SizedBox(height: 22),
         Text(
           'Achetez, vendez et livrez plus simplement en Algérie.',
@@ -205,7 +205,7 @@ class _HeroText extends StatelessWidget {
         ),
         const SizedBox(height: 18),
         const Text(
-          'Une app pensée pour les vendeurs et acheteurs algériens : annonces, chat, commandes, livraison et suivi au même endroit.',
+          "Cette page présente DZMarket. Pour parcourir les annonces, acheter, vendre ou discuter, ouvrez l'application web.",
           style: TextStyle(
             color: _Colors.body,
             fontSize: 19,
@@ -214,10 +214,12 @@ class _HeroText extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
+        const _OfficialSiteNote(),
+        const SizedBox(height: 12),
         const Directionality(
           textDirection: TextDirection.rtl,
           child: Text(
-            'منصة جزائرية للبيع والشراء مع دردشة مدمجة، طلبات واضحة، وتوصيل أسهل متابعة.',
+            'هذه الصفحة هي الموقع الرسمي لـ DZMarket. لتصفح الإعلانات أو الشراء أو البيع أو الدردشة، افتح تطبيق الويب.',
             style: TextStyle(
               color: _Colors.body,
               fontSize: 18,
@@ -234,7 +236,7 @@ class _HeroText extends StatelessWidget {
             FilledButton.icon(
               onPressed: onOpenApp,
               icon: const Icon(Icons.travel_explore_rounded, size: 20),
-              label: const Text("Ouvrir l'app web"),
+              label: const Text('Voir les annonces'),
               style: _ButtonStyles.primaryLarge,
             ),
             _StoreButton(
@@ -250,6 +252,42 @@ class _HeroText extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+class _OfficialSiteNote extends StatelessWidget {
+  const _OfficialSiteNote();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE6F7EA),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFC8E4D0)),
+      ),
+      child: const Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: 'www.dzmarket.pro',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+            TextSpan(text: ' présente DZMarket. '),
+            TextSpan(
+              text: 'app.dzmarket.pro',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+            TextSpan(
+              text:
+                  ' contient les annonces, le chat, les achats et les ventes.',
+            ),
+          ],
+        ),
+        style: TextStyle(color: Color(0xFF234D3B), fontSize: 15, height: 1.55),
+      ),
     );
   }
 }
@@ -554,7 +592,7 @@ class _FinalCta extends StatelessWidget {
                 ),
                 SizedBox(height: 8),
                 Text(
-                  'Disponible sur le web, iPhone et Android. Retrouvez aussi les tutoriels sur Facebook et YouTube.',
+                  "Ouvrez l'application web pour voir les annonces, puis retrouvez aussi DZMarket sur iPhone, Android, Facebook et YouTube.",
                   style: TextStyle(
                     color: Color(0xFFDDEBE2),
                     fontSize: 16,
@@ -569,7 +607,7 @@ class _FinalCta extends StatelessWidget {
             runSpacing: 10,
             children: [
               _DarkAction(
-                label: 'Web',
+                label: 'App web',
                 icon: Icons.open_in_new_rounded,
                 onTap: onOpenApp,
               ),

@@ -141,6 +141,13 @@ class L10n {
     'auth.sign_up.toast_thanks':
         'Merci pour votre inscription sur DZMarket. Vérifiez votre email pour confirmer votre compte.',
     'auth.signin_prompt': 'Connectez-vous pour accéder à vos commandes.',
+    'browse.guest_banner.body':
+        'Les annonces sont visibles sans compte. La connexion est demandee uniquement pour acheter, discuter, vendre ou sauvegarder.',
+    'browse.guest_banner.chip_browse': 'Annonces publiques',
+    'browse.guest_banner.chip_chat': 'Chat avec connexion',
+    'browse.guest_banner.chip_delivery': 'Suivi livraison',
+    'browse.guest_banner.title':
+        'Parcourez librement. Connectez-vous pour agir.',
     'buyer.fallback': 'Acheteur',
     'category.beauty': 'Beauté & Santé',
     'category.beauty-fragrance': 'Parfums',
@@ -741,8 +748,7 @@ class L10n {
     'order.stock_unavailable': 'Stock indisponible',
     'order.system.cancelled':
         'Commande annulee automatiquement (inactivite vendeur).',
-    'order.system.cancelled_by_seller':
-        'Commande annulee par le vendeur.',
+    'order.system.cancelled_by_seller': 'Commande annulee par le vendeur.',
     'order.system.created':
         'Commande enregistree, en attente de validation vendeur.',
     'order.system.label_reminder':
@@ -1170,6 +1176,12 @@ class L10n {
     'auth.sign_up.toast_thanks':
         'شكرًا لتسجيلك في DZMarket. يرجى تأكيد بريدك الإلكتروني.',
     'auth.signin_prompt': 'يرجى تسجيل الدخول لعرض طلباتك.',
+    'browse.guest_banner.body':
+        'الإعلانات مرئية بدون حساب. تسجيل الدخول مطلوب فقط للشراء أو الدردشة أو البيع أو الحفظ.',
+    'browse.guest_banner.chip_browse': 'إعلانات عامة',
+    'browse.guest_banner.chip_chat': 'الدردشة بتسجيل الدخول',
+    'browse.guest_banner.chip_delivery': 'تتبع التوصيل',
+    'browse.guest_banner.title': 'تصفح بحرية. سجّل الدخول للتفاعل.',
     'buyer.fallback': 'المشتري',
     'category.beauty': 'الجمال والصحة',
     'category.beauty-fragrance': 'عطور',
@@ -1954,8 +1966,7 @@ class L10n {
     'seller_orders.delete_title': 'إلغاء الطلب',
     'seller_orders.cancel_blocked_label':
         'لا يمكن إلغاء الطلب بعد إنشاء البوليصة.',
-    'seller_orders.cancel_not_allowed':
-        'فقط بائع هذا الطلب يمكنه إلغاؤه.',
+    'seller_orders.cancel_not_allowed': 'فقط بائع هذا الطلب يمكنه إلغاؤه.',
     'seller_orders.empty': 'لا توجد مبيعات حاليًا.',
     'seller_orders.generate_label': 'إنشاء البوليصة',
     'seller_orders.login_required': 'يرجى تسجيل الدخول لعرض مبيعاتك.',

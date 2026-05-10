@@ -10,6 +10,7 @@ import 'package:dzmarket/src/services/category_service.dart';
 import 'package:dzmarket/src/services/connectivity_service.dart';
 import 'package:dzmarket/src/services/favorite_service.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
+import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:dzmarket/src/services/product_service.dart';
 import 'package:dzmarket/src/services/saved_search_service.dart';
@@ -128,22 +129,31 @@ class _ListingsPageState extends State<ListingsPage> {
     final userId = supabase.auth.currentUser?.id;
     final screenWidth = MediaQuery.of(context).size.width;
     final crossAxisCount = switch (screenWidth) {
-      >= 1500 => 5,
-      >= 1180 => 4,
-      >= 820 => 3,
-      _ => 2,
+      >= 1600 => 5,
+      >= 1240 => 4,
+      >= 900 => 3,
+      >= 360 => 2,
+      _ => 1,
     };
     final gridAspectRatio = switch (crossAxisCount) {
       >= 4 => 0.83,
       3 => 0.79,
-      _ => screenWidth >= 600 ? 0.75 : 0.6,
+      2 => screenWidth >= 700 ? 0.78 : 0.74,
+      _ => 1.05,
     };
+    final isCompactMobile = screenWidth < 640;
+
+    final sellLabel = L10n.tr(context, 'listing.sell');
 
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
         titleSpacing: 0,
         title: Padding(
-          padding: const EdgeInsets.only(right: 8),
+          padding: const EdgeInsetsDirectional.fromSTEB(12, 0, 12, 0),
           child: _SearchBar(
             controller: _searchController,
             onChanged: _onSearchChanged,
@@ -180,6 +190,7 @@ class _ListingsPageState extends State<ListingsPage> {
                   _FilterPill(
                     icon: Icons.tune,
                     label: _allFiltersLabel(context),
+                    compact: isCompactMobile,
                     onPressed: () => _showFilters(context),
                   ),
                   const SizedBox(width: 8),
@@ -193,17 +204,22 @@ class _ListingsPageState extends State<ListingsPage> {
                               orElse: () => {'id': _category},
                             ),
                           ),
+                    compact: isCompactMobile,
                     onPressed: () => _openCategoryQuick(context),
                   ),
                   const SizedBox(width: 8),
                   _FilterPill(
                     label: _formatPriceQuickLabel(context),
+                    compact: isCompactMobile,
                     onPressed: () => _openPriceQuick(context),
                   ),
                   const SizedBox(width: 8),
                   FilterChip(
                     label: Text(L10n.tr(context, 'listing.filters.nearby')),
                     selected: _nearbyOnly,
+                    visualDensity: isCompactMobile
+                        ? VisualDensity.compact
+                        : VisualDensity.standard,
                     onSelected: (value) {
                       if (_buyerWilaya == null || _buyerWilaya!.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -228,6 +244,9 @@ class _ListingsPageState extends State<ListingsPage> {
                     label: Text(
                       L10n.tr(context, 'listing.quick.new', fallback: 'Neuf'),
                     ),
+                    visualDensity: isCompactMobile
+                        ? VisualDensity.compact
+                        : VisualDensity.standard,
                     onSelected: (value) {
                       setState(() => _quickNewOnly = value);
                       _refresh();
@@ -243,6 +262,9 @@ class _ListingsPageState extends State<ListingsPage> {
                         fallback: 'Livraison',
                       ),
                     ),
+                    visualDensity: isCompactMobile
+                        ? VisualDensity.compact
+                        : VisualDensity.standard,
                     onSelected: (value) {
                       setState(() => _quickDeliveryOnly = value);
                     },
@@ -251,6 +273,8 @@ class _ListingsPageState extends State<ListingsPage> {
               ),
             ),
           ),
+          if (userId == null)
+            _GuestValueBanner(onSignIn: () => _goToSignIn('/?tab=listings')),
           ValueListenableBuilder<bool>(
             valueListenable: ConnectivityService.instance.isOnline,
             builder: (context, isOnline, _) {
@@ -321,11 +345,20 @@ class _ListingsPageState extends State<ListingsPage> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openAddListing(context),
-        label: Text(L10n.tr(context, 'listing.sell')),
-        icon: const Icon(Icons.add),
-      ),
+      floatingActionButton: isCompactMobile
+          ? FloatingActionButton.small(
+              onPressed: () => _openAddListing(context),
+              tooltip: sellLabel,
+              child: const Icon(Icons.add),
+            )
+          : FloatingActionButton.extended(
+              onPressed: () => _openAddListing(context),
+              label: Text(sellLabel),
+              icon: const Icon(Icons.add),
+              extendedPadding: const EdgeInsetsDirectional.symmetric(
+                horizontal: 20,
+              ),
+            ),
     );
   }
 
@@ -442,10 +475,7 @@ class _ListingsPageState extends State<ListingsPage> {
     }
 
     if (!mounted || _activeQueryKey != key) return;
-    if (failed &&
-        wasEmpty &&
-        !offline &&
-        attempt < _maxInitialLoadAttempts) {
+    if (failed && wasEmpty && !offline && attempt < _maxInitialLoadAttempts) {
       await Future<void>.delayed(const Duration(milliseconds: 700));
       if (!mounted || _activeQueryKey != key) return;
       return _refresh(attempt: attempt + 1);
@@ -599,9 +629,10 @@ class _ListingsPageState extends State<ListingsPage> {
     final showLoader = _loading && _products.isNotEmpty;
     final itemCount = filtered.length + (showLoader ? 1 : 0);
     return Padding(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
       child: GridView.builder(
         controller: _scrollController,
+        padding: const EdgeInsets.only(bottom: 96),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: crossAxisCount,
           childAspectRatio: childAspectRatio,
@@ -625,6 +656,13 @@ class _ListingsPageState extends State<ListingsPage> {
                     productId: product.id,
                     isFav: currentIsFavorite,
                   ),
+            onFavoriteRequiresLogin: () => _showSignInRequired(
+              L10n.tr(
+                context,
+                'listing.favorite_login_required',
+                fallback: 'Connectez-vous pour ajouter aux favoris.',
+              ),
+            ),
           );
         },
       ),
@@ -696,9 +734,9 @@ class _ListingsPageState extends State<ListingsPage> {
   bool _looksMojibake(String value) {
     if (value.isEmpty) return false;
     if (_looksKeyLikeToken(value)) return true;
-    if (value.contains('\uFFFD') || value.contains('�')) return true;
-    if (value.contains('Ã') ||
-        value.contains('Â') ||
+    if (value.contains('\uFFFD') || value.contains('ï¿½')) return true;
+    if (value.contains('Ãƒ') ||
+        value.contains('Ã‚') ||
         value.contains('\u00C3') ||
         value.contains('\u00C2')) {
       return true;
@@ -1238,7 +1276,7 @@ class _ListingsPageState extends State<ListingsPage> {
       return L10n.tr(context, 'listing.filters.price_quick');
     }
     if (min != null && max != null) {
-      return '${min.toStringAsFixed(0)}–${max.toStringAsFixed(0)} DA';
+      return '${min.toStringAsFixed(0)}-${max.toStringAsFixed(0)} DA';
     }
     if (min != null) {
       return '${L10n.tr(context, 'listing.filters.min_price')}: ${min.toStringAsFixed(0)}';
@@ -1422,13 +1460,375 @@ class _ListingsPageState extends State<ListingsPage> {
 
   Future<void> _openAddListing(BuildContext context) async {
     if (supabase.auth.currentUser == null) {
-      final from = Uri.encodeComponent('/?tab=listings');
-      context.go('/sign-in?from=$from');
+      _goToSignIn('/?tab=listings');
       return;
     }
     await Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => const AddListingPage()));
+  }
+
+  void _goToSignIn(String fromPath) {
+    final from = Uri.encodeComponent(fromPath);
+    context.go('/sign-in?from=$from');
+  }
+
+  void _showSignInRequired(String message) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        action: SnackBarAction(
+          label: L10n.tr(context, 'auth.sign_in.cta', fallback: 'Se connecter'),
+          onPressed: () => _goToSignIn('/?tab=listings'),
+        ),
+      ),
+    );
+  }
+}
+
+class _GuestValueBanner extends StatelessWidget {
+  const _GuestValueBanner({required this.onSignIn});
+
+  final VoidCallback onSignIn;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isCompact = MediaQuery.sizeOf(context).width < 720;
+    final isPhone = MediaQuery.sizeOf(context).width < 640;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(12, 0, 12, isPhone ? 6 : 8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.primaryContainer.withValues(alpha: 0.28),
+          borderRadius: BorderRadius.circular(isPhone ? 18 : 20),
+          border: Border.all(
+            color: theme.colorScheme.primary.withValues(alpha: 0.16),
+          ),
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: isPhone ? 12 : 14,
+            vertical: isPhone ? 10 : 12,
+          ),
+          child: isCompact
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _GuestValueCopy(compact: isPhone),
+                    SizedBox(height: isPhone ? 8 : 10),
+                    _GuestCompactActionStrip(onSignIn: onSignIn),
+                  ],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Expanded(child: _GuestValueCopy()),
+                    const SizedBox(width: 16),
+                    Flexible(
+                      child: Align(
+                        alignment: AlignmentDirectional.centerEnd,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            _GuestActionRow(onSignIn: onSignIn),
+                            const SizedBox(height: 10),
+                            const _GuestValueChips(),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GuestValueCopy extends StatelessWidget {
+  const _GuestValueCopy({this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          L10n.tr(
+            context,
+            'browse.guest_banner.title',
+            fallback: 'Parcourez librement. Connectez-vous pour agir.',
+          ),
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontSize: compact ? 15 : null,
+            height: compact ? 1.15 : null,
+            fontWeight: FontWeight.w800,
+          ),
+          maxLines: compact ? 2 : null,
+          overflow: compact ? TextOverflow.ellipsis : TextOverflow.visible,
+        ),
+        SizedBox(height: compact ? 3 : 4),
+        Text(
+          L10n.tr(
+            context,
+            'browse.guest_banner.body',
+            fallback:
+                'Les annonces sont visibles sans compte. La connexion est demandee uniquement pour acheter, discuter, vendre ou sauvegarder.',
+          ),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            height: compact ? 1.2 : null,
+          ),
+          maxLines: compact ? 2 : null,
+          overflow: compact ? TextOverflow.ellipsis : TextOverflow.visible,
+        ),
+      ],
+    );
+  }
+}
+
+class _GuestCompactActionStrip extends StatelessWidget {
+  const _GuestCompactActionStrip({required this.onSignIn});
+
+  final VoidCallback onSignIn;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _GuestSignInButton(onSignIn: onSignIn, compact: true),
+          const SizedBox(width: 8),
+          const _GuestLanguageSwitch(compact: true),
+        ],
+      ),
+    );
+  }
+}
+
+class _GuestActionRow extends StatelessWidget {
+  const _GuestActionRow({required this.onSignIn});
+
+  final VoidCallback onSignIn;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      alignment: WrapAlignment.end,
+      children: [
+        _GuestSignInButton(onSignIn: onSignIn),
+        const _GuestLanguageSwitch(),
+      ],
+    );
+  }
+}
+
+class _GuestSignInButton extends StatelessWidget {
+  const _GuestSignInButton({required this.onSignIn, this.compact = false});
+
+  final VoidCallback onSignIn;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return FilledButton.icon(
+      onPressed: onSignIn,
+      icon: Icon(Icons.login_rounded, size: compact ? 16 : 18),
+      label: Text(
+        L10n.tr(context, 'auth.sign_in.cta', fallback: 'Se connecter'),
+      ),
+      style: FilledButton.styleFrom(
+        backgroundColor: theme.colorScheme.primary,
+        foregroundColor: theme.colorScheme.onPrimary,
+        elevation: 2,
+        shadowColor: theme.colorScheme.primary.withValues(alpha: 0.28),
+        visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 12 : 16,
+          vertical: compact ? 8 : 11,
+        ),
+      ),
+    );
+  }
+}
+
+class _GuestLanguageSwitch extends StatelessWidget {
+  const _GuestLanguageSwitch({this.compact = false});
+
+  final bool compact;
+
+  Future<void> _setLocale(String code) async {
+    await LocaleService.instance.setLocale(code);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ValueListenableBuilder<Locale?>(
+      valueListenable: LocaleService.instance.locale,
+      builder: (context, locale, _) {
+        final lang = locale?.languageCode ?? 'fr';
+        return Semantics(
+          label: L10n.tr(context, 'profile.language', fallback: 'Langue'),
+          child: Container(
+            padding: EdgeInsets.all(compact ? 3 : 4),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface.withValues(alpha: 0.92),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: theme.colorScheme.primary.withValues(alpha: 0.16),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _GuestLanguageChip(
+                  label: L10n.tr(
+                    context,
+                    'profile.lang_fr',
+                    fallback: 'Français',
+                  ),
+                  selected: lang == 'fr',
+                  onPressed: () => _setLocale('fr'),
+                  compact: compact,
+                ),
+                _GuestLanguageChip(
+                  label: L10n.tr(
+                    context,
+                    'profile.lang_ar',
+                    fallback: 'العربية',
+                  ),
+                  selected: lang == 'ar',
+                  onPressed: () => _setLocale('ar'),
+                  compact: compact,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _GuestLanguageChip extends StatelessWidget {
+  const _GuestLanguageChip({
+    required this.label,
+    required this.selected,
+    required this.onPressed,
+    this.compact = false,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onPressed;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: selected ? null : onPressed,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 10 : 12,
+            vertical: compact ? 6 : 7,
+          ),
+          decoration: BoxDecoration(
+            color: selected ? theme.colorScheme.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: selected
+                  ? theme.colorScheme.onPrimary
+                  : theme.colorScheme.primary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GuestValueChips extends StatelessWidget {
+  const _GuestValueChips();
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _GuestValueChip(
+          icon: Icons.visibility_outlined,
+          translationKey: 'browse.guest_banner.chip_browse',
+          fallback: 'Annonces publiques',
+        ),
+        _GuestValueChip(
+          icon: Icons.chat_bubble_outline,
+          translationKey: 'browse.guest_banner.chip_chat',
+          fallback: 'Chat avec connexion',
+        ),
+        _GuestValueChip(
+          icon: Icons.local_shipping_outlined,
+          translationKey: 'browse.guest_banner.chip_delivery',
+          fallback: 'Suivi livraison',
+        ),
+      ],
+    );
+  }
+}
+
+class _GuestValueChip extends StatelessWidget {
+  const _GuestValueChip({
+    required this.icon,
+    required this.translationKey,
+    required this.fallback,
+  });
+
+  final IconData icon;
+  final String translationKey;
+  final String fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: theme.colorScheme.primary),
+          const SizedBox(width: 6),
+          Text(
+            L10n.tr(context, translationKey, fallback: fallback),
+            style: theme.textTheme.labelMedium,
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -1501,12 +1901,14 @@ class _ProductCard extends StatefulWidget {
     required this.currency,
     required this.isFavorite,
     required this.onFavoriteToggle,
+    required this.onFavoriteRequiresLogin,
   });
 
   final Product product;
   final NumberFormat currency;
   final bool isFavorite;
   final Future<void> Function(bool currentIsFavorite)? onFavoriteToggle;
+  final VoidCallback onFavoriteRequiresLogin;
 
   @override
   State<_ProductCard> createState() => _ProductCardState();
@@ -1532,7 +1934,11 @@ class _ProductCardState extends State<_ProductCard> {
 
   Future<void> _handleFavoriteToggle() async {
     final callback = widget.onFavoriteToggle;
-    if (callback == null || _favoriteBusy) return;
+    if (_favoriteBusy) return;
+    if (callback == null) {
+      widget.onFavoriteRequiresLogin();
+      return;
+    }
     final currentIsFavorite = _favoriteOverride ?? widget.isFavorite;
     final nextIsFavorite = !currentIsFavorite;
     setState(() {
@@ -1578,7 +1984,7 @@ class _ProductCardState extends State<_ProductCard> {
     final metadataStyle = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.outline,
     );
-    final isCompactCard = MediaQuery.of(context).size.width < 430;
+    final isCompactCard = MediaQuery.of(context).size.width < 640;
     final badges = <Widget>[
       if (widget.product.deliveryOptions.contains('cod'))
         _CardMiniBadge(
@@ -1607,6 +2013,7 @@ class _ProductCardState extends State<_ProductCard> {
     final visibleBadges = badges.take(isCompactCard ? 1 : 2).toList();
     final hiddenBadgesCount = badges.length - visibleBadges.length;
     final isDesktopCard = MediaQuery.of(context).size.width >= 900;
+    final imageFit = BoxFit.cover;
     final displayIsFavorite = _favoriteOverride ?? widget.isFavorite;
 
     return MouseRegion(
@@ -1648,7 +2055,7 @@ class _ProductCardState extends State<_ProductCard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    flex: isDesktopCard ? 12 : 11,
+                    flex: isDesktopCard ? 12 : (isCompactCard ? 14 : 12),
                     child: ClipRRect(
                       borderRadius: const BorderRadius.only(
                         topLeft: Radius.circular(22),
@@ -1660,6 +2067,7 @@ class _ProductCardState extends State<_ProductCard> {
                             child: _ListingCardImage(
                               imageUrls: displayableImages,
                               imagePrefs: imagePrefs,
+                              fit: imageFit,
                             ),
                           ),
                           Positioned(
@@ -1689,29 +2097,15 @@ class _ProductCardState extends State<_ProductCard> {
                             left: 10,
                             child: Row(
                               children: [
-                                IconButton(
-                                  onPressed: widget.onFavoriteToggle == null
+                                _CardFavoriteButton(
+                                  onPressed: _favoriteBusy
                                       ? null
                                       : _handleFavoriteToggle,
-                                  icon: Icon(
-                                    displayIsFavorite
-                                        ? Icons.favorite
-                                        : Icons.favorite_border,
-                                    color: displayIsFavorite
-                                        ? Colors.white
-                                        : theme.colorScheme.onSurface,
-                                  ),
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: displayIsFavorite
-                                        ? Colors.redAccent.withValues(
-                                            alpha: 0.96,
-                                          )
-                                        : theme.colorScheme.surface.withValues(
-                                            alpha: 0.94,
-                                          ),
-                                  ),
+                                  isFavorite: displayIsFavorite,
+                                  theme: theme,
                                 ),
-                                if (widget.product.imageUrls.length > 1) ...[
+                                if (!isCompactCard &&
+                                    widget.product.imageUrls.length > 1) ...[
                                   const SizedBox(width: 8),
                                   Container(
                                     padding: const EdgeInsets.symmetric(
@@ -1719,7 +2113,9 @@ class _ProductCardState extends State<_ProductCard> {
                                       vertical: 5,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: Colors.black.withValues(alpha: 0.52),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.52,
+                                      ),
                                       borderRadius: BorderRadius.circular(999),
                                     ),
                                     child: Text(
@@ -1738,8 +2134,8 @@ class _ProductCardState extends State<_ProductCard> {
                           if (widget.product.condition != null &&
                               widget.product.condition!.isNotEmpty)
                             Positioned(
-                              left: 10,
                               bottom: 10,
+                              left: 10,
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 10,
@@ -1750,7 +2146,10 @@ class _ProductCardState extends State<_ProductCard> {
                                   borderRadius: BorderRadius.circular(999),
                                 ),
                                 child: Text(
-                                  widget.product.condition!,
+                                  _conditionValueLabel(
+                                    context,
+                                    widget.product.condition!,
+                                  ),
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 11,
@@ -1764,50 +2163,41 @@ class _ProductCardState extends State<_ProductCard> {
                     ),
                   ),
                   Expanded(
-                    flex: isDesktopCard ? 8 : 9,
+                    flex: isDesktopCard ? 9 : (isCompactCard ? 7 : 8),
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                      padding: EdgeInsets.fromLTRB(
+                        isCompactCard ? 14 : 16,
+                        isCompactCard ? 10 : 14,
+                        isCompactCard ? 14 : 16,
+                        isCompactCard ? 10 : 14,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             widget.product.title,
-                            maxLines: 2,
+                            maxLines: isCompactCard ? 1 : 2,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              height: 1.15,
+                              fontWeight: FontWeight.w800,
+                              fontSize: isCompactCard ? 15 : null,
                             ),
                           ),
-                          if (widget.product.brand != null &&
-                              widget.product.brand!.isNotEmpty) ...[
-                            const SizedBox(height: 5),
-                            Text(
-                              widget.product.size != null &&
-                                      widget.product.size!.trim().isNotEmpty
-                                  ? '${widget.product.brand} • ${widget.product.size}'
-                                  : widget.product.brand!,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: metadataStyle,
-                            ),
-                          ],
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
                           Row(
                             children: [
                               Icon(
-                                Icons.place_outlined,
-                                size: 15,
+                                Icons.location_on_outlined,
+                                size: 16,
                                 color: theme.colorScheme.outline,
                               ),
-                              const SizedBox(width: 4),
+                              const SizedBox(width: 3),
                               Expanded(
                                 child: Text(
                                   widget.product.locationWilaya ??
                                       L10n.tr(
                                         context,
                                         'listing.location_unknown',
-                                        fallback: 'Localisation inconnue',
                                       ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -1817,18 +2207,19 @@ class _ProductCardState extends State<_ProductCard> {
                             ],
                           ),
                           const Spacer(),
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: [
-                              ...visibleBadges,
-                              if (hiddenBadgesCount > 0)
-                                _CardMiniBadge(
-                                  icon: Icons.add_circle_outline,
-                                  label: '+$hiddenBadgesCount',
-                                ),
-                            ],
-                          ),
+                          if (visibleBadges.isNotEmpty)
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                ...visibleBadges,
+                                if (hiddenBadgesCount > 0)
+                                  _CardMiniBadge(
+                                    icon: Icons.add_circle_outline,
+                                    label: '+$hiddenBadgesCount',
+                                  ),
+                              ],
+                            ),
                         ],
                       ),
                     ),
@@ -1836,6 +2227,57 @@ class _ProductCardState extends State<_ProductCard> {
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _conditionValueLabel(BuildContext context, String value) {
+    switch (value) {
+      case 'new':
+        return L10n.tr(context, 'condition.new');
+      case 'used':
+        return L10n.tr(context, 'condition.used');
+      case 'like_new':
+        return L10n.tr(context, 'condition.like_new');
+      default:
+        return value;
+    }
+  }
+}
+
+class _CardFavoriteButton extends StatelessWidget {
+  const _CardFavoriteButton({
+    required this.onPressed,
+    required this.isFavorite,
+    required this.theme,
+  });
+
+  final VoidCallback? onPressed;
+  final bool isFavorite;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    final backgroundColor = isFavorite
+        ? Colors.redAccent.withValues(alpha: 0.96)
+        : theme.colorScheme.surface.withValues(alpha: 0.94);
+    final foregroundColor = isFavorite
+        ? Colors.white
+        : theme.colorScheme.onSurface;
+    return Material(
+      color: backgroundColor,
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onPressed,
+        child: SizedBox.square(
+          dimension: 44,
+          child: Icon(
+            isFavorite ? Icons.favorite : Icons.favorite_border,
+            color: foregroundColor,
           ),
         ),
       ),
@@ -1879,10 +2321,12 @@ class _ListingCardImage extends StatefulWidget {
   const _ListingCardImage({
     required this.imageUrls,
     required this.imagePrefs,
+    required this.fit,
   });
 
   final List<String> imageUrls;
   final NetworkPreferencesService imagePrefs;
+  final BoxFit fit;
 
   @override
   State<_ListingCardImage> createState() => _ListingCardImageState();
@@ -1903,7 +2347,7 @@ class _ListingCardImageState extends State<_ListingCardImage> {
     return CachedNetworkImage(
       key: ValueKey(currentUrl),
       imageUrl: currentUrl,
-      fit: BoxFit.cover,
+      fit: widget.fit,
       memCacheWidth: widget.imagePrefs.listImageMemCacheWidth,
       fadeInDuration: widget.imagePrefs.imageFadeInDuration,
       fadeOutDuration: widget.imagePrefs.imageFadeOutDuration,
@@ -2079,17 +2523,25 @@ class _SearchBar extends StatelessWidget {
 }
 
 class _FilterPill extends StatelessWidget {
-  const _FilterPill({required this.label, this.icon, this.onPressed});
+  const _FilterPill({
+    required this.label,
+    this.icon,
+    this.onPressed,
+    this.compact = false,
+  });
 
   final String label;
   final IconData? icon;
   final VoidCallback? onPressed;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return ActionChip(
-      avatar: icon == null ? null : Icon(icon, size: 18),
-      label: Text(label),
+      avatar: icon == null ? null : Icon(icon, size: compact ? 16 : 18),
+      label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+      visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+      labelPadding: EdgeInsets.symmetric(horizontal: compact ? 2 : 4),
       onPressed: onPressed,
     );
   }
@@ -2155,14 +2607,20 @@ class _GridSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final crossAxisCount = width >= 900
+        ? 3
+        : width >= 360
+        ? 2
+        : 1;
     return Padding(
       padding: const EdgeInsets.all(12),
       child: GridView.builder(
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: crossAxisCount,
           mainAxisSpacing: 12,
           crossAxisSpacing: 12,
-          childAspectRatio: 0.72,
+          childAspectRatio: crossAxisCount == 1 ? 1.05 : 0.72,
         ),
         itemCount: 6,
         itemBuilder: (context, index) {
