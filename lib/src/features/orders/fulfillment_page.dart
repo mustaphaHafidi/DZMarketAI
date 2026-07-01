@@ -6,6 +6,7 @@ import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/utils/delivery_mode_utils.dart';
+import 'package:dzmarket/src/utils/shipment_error_mapper.dart';
 import 'package:flutter/material.dart';
 
 class FulfillmentPage extends StatefulWidget {
@@ -78,10 +79,7 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
             ),
           ),
           const SizedBox(height: 2),
-          Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -104,7 +102,9 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
   Future<void> _loadOrderDefaults() async {
     final orderRow = await supabase
         .from(SupabaseTables.orders)
-        .select('courier_id,courier_name,delivery_method,shipping_option,status')
+        .select(
+          'courier_id,courier_name,delivery_method,shipping_option,status',
+        )
         .eq('id', widget.orderId)
         .maybeSingle();
     if (orderRow is Map<String, dynamic>) {
@@ -143,13 +143,10 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
     final updated = List<Map<String, dynamic>>.from(list);
     if (_selectedCourierId != null &&
         updated.every((c) => c['id']?.toString() != _selectedCourierId)) {
-      updated.insert(
-        0,
-        {
-          'id': _selectedCourierId,
-          'name': _selectedCourierName ?? placeholder,
-        },
-      );
+      updated.insert(0, {
+        'id': _selectedCourierId,
+        'name': _selectedCourierName ?? placeholder,
+      });
     }
     if (_selectedCourierId == null && updated.isNotEmpty) {
       _selectedCourierId = updated.first['id'].toString();
@@ -164,15 +161,21 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
 
   Future<void> _fulfill() async {
     if (_arrangedDelivery) {
-      setState(() => _error = L10n.tr(context, 'fulfillment.arranged_no_label'));
+      setState(
+        () => _error = L10n.tr(context, 'fulfillment.arranged_no_label'),
+      );
       return;
     }
     if (_orderCancelled) {
-      setState(() => _error = L10n.tr(context, 'fulfillment.order_cancelled_blocked'));
+      setState(
+        () => _error = L10n.tr(context, 'fulfillment.order_cancelled_blocked'),
+      );
       return;
     }
     if (_selectedCourierId == null || _selectedCourierName == null) {
-      setState(() => _error = L10n.tr(context, 'fulfillment.error_select_courier'));
+      setState(
+        () => _error = L10n.tr(context, 'fulfillment.error_select_courier'),
+      );
       return;
     }
     setState(() {
@@ -222,6 +225,47 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
         .replaceFirst(RegExp(r'^Bad state:\s*'), '')
         .replaceFirst(RegExp(r'^Exception:\s*'), '')
         .trim();
+    final lower = cleaned.toLowerCase();
+    final parsedPayload = parseShipmentErrorPayload(cleaned);
+    if (parsedPayload != null) {
+      return mapCreateShipmentError(
+        locale: Localizations.localeOf(context).languageCode,
+        data: parsedPayload,
+        courierName: _selectedCourierName ?? 'transporteur',
+      );
+    }
+    final amountMatch = RegExp(r'(\d{3,})').allMatches(cleaned).lastOrNull;
+    final amountMax = amountMatch?.group(1) ?? '150000';
+    if (lower == 'parcel_cod_amount_out_of_range' ||
+        lower.contains('parcel_cod_amount_out_of_range') ||
+        lower.contains('cod_amount_out_of_range') ||
+        lower.contains('amount must be less') ||
+        lower.contains('montant ne peut') ||
+        lower.contains('supérieure à 150000')) {
+      return L10n.tr(
+        context,
+        'checkout.error_cod_amount_max',
+        params: {'max': amountMax},
+      );
+    }
+    if (lower == 'courier_credentials_invalid' ||
+        lower.contains('invalid api key')) {
+      return L10n.tr(
+        context,
+        'fulfillment.error_courier_credentials_invalid',
+        params: {'courier': _selectedCourierName ?? 'transporteur'},
+      );
+    }
+    if (lower == 'missing_courier_settings') {
+      return L10n.tr(
+        context,
+        'fulfillment.error_missing_courier_settings',
+        params: {'courier': _selectedCourierName ?? 'transporteur'},
+      );
+    }
+    if (lower == 'courier_rate_limited') {
+      return L10n.tr(context, 'fulfillment.error_courier_rate_limited');
+    }
     if (cleaned.isEmpty || cleaned.startsWith('FunctionException(')) {
       return L10n.tr(context, 'common.error');
     }
@@ -230,11 +274,13 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
 
   @override
   Widget build(BuildContext context) {
-    final courierDisplay = _selectedCourierName ??
-        _couriers.firstWhere(
-          (c) => c['id']?.toString() == _selectedCourierId,
-          orElse: () => const <String, dynamic>{},
-        )['name']
+    final courierDisplay =
+        _selectedCourierName ??
+        _couriers
+            .firstWhere(
+              (c) => c['id']?.toString() == _selectedCourierId,
+              orElse: () => const <String, dynamic>{},
+            )['name']
             ?.toString() ??
         L10n.tr(context, 'fulfillment.not_specified');
 
@@ -247,7 +293,9 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
             padding: const EdgeInsets.all(10),
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.error.withValues(alpha: 0.08),
+              color: Theme.of(
+                context,
+              ).colorScheme.error.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
@@ -262,7 +310,9 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
             padding: const EdgeInsets.all(10),
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+              color: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
@@ -281,9 +331,9 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(
-                    alpha: 0.35,
-                  ),
+              color: Theme.of(
+                context,
+              ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: Theme.of(context).colorScheme.outlineVariant,
@@ -423,11 +473,7 @@ class _FulfillmentPageState extends State<FulfillmentPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          L10n.tr(
-            context,
-            'fulfillment.title',
-            params: {'id': widget.orderId},
-          ),
+          L10n.tr(context, 'fulfillment.title', params: {'id': widget.orderId}),
         ),
       ),
       body: _loading

@@ -285,7 +285,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         'profiles.wilaya.seller',
         () => supabase
             .from('profiles')
-            .select('wilaya, full_name, avatar_url, email, is_public')
+            .select('wilaya, full_name, avatar_url, is_public')
             .eq('id', data['owner_id'])
             .maybeSingle(),
       );
@@ -326,23 +326,22 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     });
   }
 
-  Future<void> _contactSeller({bool sendIntroMessage = true}) async {
+  Future<void> _contactSeller({bool sendIntroMessage = false}) async {
     final userId = supabase.auth.currentUser?.id;
     if (_product == null) return;
     if (userId == null) {
       _redirectGuestToSignIn();
       return;
     }
-    final newContactText = sendIntroMessage
-        ? L10n.tr(context, 'chat.new_contact')
-        : null;
     final repo = ChatRepository();
     final conv = await repo.ensureConversation(
       productId: _product!.id,
       buyerId: userId,
       sellerId: _product!.ownerId,
     );
-    if (sendIntroMessage && newContactText != null) {
+    if (!mounted) return;
+    if (sendIntroMessage) {
+      final newContactText = L10n.tr(context, 'chat.new_contact');
       // Try to send a hello message; ignore duplicate/race errors.
       try {
         await repo.sendMessage(conv.id, newContactText);
@@ -1990,7 +1989,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           _SellerRowFixed(
             ownerId: _product!.ownerId,
             sellerName: _sellerProfile?['full_name']?.toString(),
-            sellerEmail: _sellerProfile?['email']?.toString(),
             sellerAvatar: _sellerProfile?['avatar_url']?.toString(),
             sellerIsPublic: sellerIsPublic,
             onContact: _contactSeller,
@@ -2074,7 +2072,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           _SellerRowFixed(
             ownerId: _product!.ownerId,
             sellerName: _sellerProfile?['full_name']?.toString(),
-            sellerEmail: _sellerProfile?['email']?.toString(),
             sellerAvatar: _sellerProfile?['avatar_url']?.toString(),
             sellerIsPublic: sellerIsPublic,
             onContact: _contactSeller,
@@ -2214,7 +2211,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           _SellerRowFixed(
             ownerId: _product!.ownerId,
             sellerName: _sellerProfile?['full_name']?.toString(),
-            sellerEmail: _sellerProfile?['email']?.toString(),
             sellerAvatar: _sellerProfile?['avatar_url']?.toString(),
             sellerIsPublic: sellerIsPublic,
             onContact: _contactSeller,
@@ -2374,7 +2370,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         _SellerRowFixed(
                           ownerId: _product!.ownerId,
                           sellerName: _sellerProfile?['full_name']?.toString(),
-                          sellerEmail: _sellerProfile?['email']?.toString(),
                           sellerAvatar: _sellerProfile?['avatar_url']
                               ?.toString(),
                           sellerIsPublic: sellerIsPublic,
@@ -3031,6 +3026,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
     final height = int.tryParse(_heightCtrl.text.trim());
     final width = int.tryParse(_widthCtrl.text.trim());
     final length = int.tryParse(_lengthCtrl.text.trim());
+    final price = double.tryParse(_priceCtrl.text.trim());
     final declaredValue = double.tryParse(_declaredValueCtrl.text.trim());
     return ShippingService.validateParcel(
       rules: _parcelRules,
@@ -3039,6 +3035,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
       widthCm: width,
       lengthCm: length,
       declaredValue: declaredValue,
+      codAmount: price,
       insuranceActive: _insuranceActive,
     );
   }
@@ -3083,6 +3080,13 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
         return L10n.tr(
           context,
           'checkout.error_declared_value_max',
+          params: validation.params,
+          fallback: L10n.tr(context, 'checkout.error_price_required'),
+        );
+      case 'cod_amount_max':
+        return L10n.tr(
+          context,
+          'checkout.error_cod_amount_max',
           params: validation.params,
           fallback: L10n.tr(context, 'checkout.error_price_required'),
         );
@@ -3138,6 +3142,14 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
           context,
           'checkout.parcel_limits_declared_value',
           params: {'max': _parcelRules.maxDeclaredValue.toStringAsFixed(0)},
+        ),
+      ),
+      _buildRuleChip(
+        context,
+        L10n.tr(
+          context,
+          'checkout.parcel_limits_cod',
+          params: {'max': _parcelRules.maxCodAmount.toStringAsFixed(0)},
         ),
       ),
     ];
@@ -4204,7 +4216,6 @@ class _SellerRowFixed extends StatelessWidget {
   const _SellerRowFixed({
     required this.ownerId,
     this.sellerName,
-    this.sellerEmail,
     this.sellerAvatar,
     this.sellerIsPublic = false,
     this.onContact,
@@ -4213,7 +4224,6 @@ class _SellerRowFixed extends StatelessWidget {
 
   final String ownerId;
   final String? sellerName;
-  final String? sellerEmail;
   final String? sellerAvatar;
   final bool sellerIsPublic;
   final VoidCallback? onContact;
@@ -4240,9 +4250,8 @@ class _SellerRowFixed extends StatelessWidget {
             (sellerIsPublic || isTruthyFlag(profileRow?['is_public']));
         final displayName = (sellerName?.trim().isNotEmpty ?? false)
             ? sellerName!.trim()
-            : (sellerEmail?.trim().isNotEmpty ?? false)
-            ? sellerEmail!.trim()
             : fallbackName;
+        final hasSellerName = sellerName?.trim().isNotEmpty ?? false;
 
         final card = Container(
           padding: const EdgeInsets.all(12),
@@ -4263,8 +4272,7 @@ class _SellerRowFixed extends StatelessWidget {
                   UserAvatar(
                     radius: 20,
                     avatarUrl: sellerAvatar,
-                    fullName: sellerName,
-                    email: sellerEmail,
+                    fullName: hasSellerName ? sellerName : null,
                     fontSize: 12,
                     iconSize: 18,
                   ),

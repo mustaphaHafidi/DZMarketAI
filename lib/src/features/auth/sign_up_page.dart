@@ -2,6 +2,7 @@ import 'package:dzmarket/src/services/auth_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/locale_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -215,6 +216,37 @@ class _SignUpPageState extends State<SignUpPage> {
   void _goToSignInWithEmail(String email) {
     final query = Uri(path: '/sign-in', queryParameters: {'email': email});
     context.go(query.toString());
+  }
+
+  Future<void> _signInWithGoogle() async {
+    if (!AuthService.instance.supportsGoogleSignIn) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+      _status = null;
+      _existingAccountError = false;
+    });
+    try {
+      final from = GoRouterState.of(context).uri.queryParameters['from'];
+      await AuthService.instance.signInWithGoogle(nextPath: from);
+      if (!mounted || kIsWeb) return;
+      final target = (from != null && from.isNotEmpty)
+          ? Uri.tryParse(from)
+          : null;
+      context.go(target?.toString() ?? '/');
+    } on FormatException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.message;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = _mapUiError(e);
+      });
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
@@ -475,6 +507,19 @@ class _SignUpPageState extends State<SignUpPage> {
                                           ),
                                         ),
                                 ),
+                                if (AuthService.instance.supportsGoogleSignIn)
+                                  OutlinedButton.icon(
+                                    onPressed: _loading
+                                        ? null
+                                        : _signInWithGoogle,
+                                    icon: const Icon(Icons.login),
+                                    label: Text(
+                                      _t(
+                                        'auth.google_cta',
+                                        fallback: 'Continuer avec Google',
+                                      ),
+                                    ),
+                                  ),
                                 TextButton(
                                   onPressed: _loading
                                       ? null

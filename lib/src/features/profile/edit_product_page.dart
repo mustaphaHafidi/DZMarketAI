@@ -6,7 +6,9 @@ import 'package:dzmarket/src/models/product.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/product_service.dart';
+import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/storage_service.dart';
+import 'package:dzmarket/src/services/supabase_service.dart';
 
 class EditProductPage extends StatefulWidget {
   const EditProductPage({super.key, required this.product});
@@ -232,6 +234,91 @@ class _EditProductPageState extends State<EditProductPage> {
           L10n.tr(context, 'checkout.error_price_required'),
         );
       }
+      final sellerId = supabase.auth.currentUser?.id;
+      if (sellerId != null) {
+        final enabledCouriers = await ShippingService()
+            .fetchEnabledCouriersForSeller(sellerId);
+        final parcelRules = enabledCouriers.isNotEmpty
+            ? await ShippingService.aggregateParcelRulesAsync(enabledCouriers)
+            : CourierParcelRules.generic;
+        if (!mounted) return;
+        final validation = ShippingService.validateParcel(
+          rules: parcelRules,
+          weightKg: weight,
+          heightCm: height,
+          widthCm: width,
+          lengthCm: length,
+          declaredValue: declaredValue,
+          codAmount: price.toDouble(),
+          insuranceActive: _insuranceActive,
+        );
+        if (validation != null) {
+          switch (validation.code) {
+            case 'weight_range':
+              throw FormatException(
+                L10n.tr(
+                  context,
+                  'checkout.error_weight_range',
+                  params: validation.params,
+                ),
+              );
+            case 'height_max':
+              throw FormatException(
+                L10n.tr(
+                  context,
+                  'checkout.error_height_max',
+                  params: validation.params,
+                  fallback: L10n.tr(context, 'checkout.error_height_invalid'),
+                ),
+              );
+            case 'width_max':
+              throw FormatException(
+                L10n.tr(
+                  context,
+                  'checkout.error_width_max',
+                  params: validation.params,
+                  fallback: L10n.tr(context, 'checkout.error_width_invalid'),
+                ),
+              );
+            case 'length_max':
+              throw FormatException(
+                L10n.tr(
+                  context,
+                  'checkout.error_length_max',
+                  params: validation.params,
+                  fallback: L10n.tr(context, 'checkout.error_length_invalid'),
+                ),
+              );
+            case 'volume_max':
+              throw FormatException(
+                L10n.tr(
+                  context,
+                  'checkout.error_volume_max',
+                  params: validation.params,
+                  fallback: L10n.tr(context, 'checkout.error_length_invalid'),
+                ),
+              );
+            case 'cod_amount_max':
+              throw FormatException(
+                L10n.tr(
+                  context,
+                  'checkout.error_cod_amount_max',
+                  params: {'max': validation.params['max'] ?? '150000'},
+                ),
+              );
+            case 'declared_value_max':
+              throw FormatException(
+                L10n.tr(
+                  context,
+                  'checkout.error_declared_value_max',
+                  params: {'max': validation.params['max'] ?? ''},
+                ),
+              );
+            default:
+              throw FormatException(L10n.tr(context, 'common.error'));
+          }
+        }
+      }
       final deliveryOptions = <String>[
         if (_deliveryCod) 'cod',
         if (_deliveryPickup) 'pickup',
@@ -248,6 +335,7 @@ class _EditProductPageState extends State<EditProductPage> {
       final uploaded = bytes.isEmpty
           ? <String>[]
           : await StorageService().uploadImages(files: bytes, fileNames: names);
+      if (!mounted) return;
       final allImages = [..._existingImages, ...uploaded];
       final imageUrl = allImages.isNotEmpty ? allImages.first : null;
       await ProductService().updateProduct(

@@ -279,6 +279,8 @@ class L10n {
     'checkout.error_commune_required': 'Commune requise.',
     'checkout.error_daira_required': 'Daïra requise.',
     'checkout.error_declared_value_max': 'Valeur declaree max {max} DA.',
+    'checkout.error_cod_amount_max':
+        'Montant COD max {max} DA pour ce transporteur.',
     'checkout.error_height_invalid': 'Hauteur invalide.',
     'checkout.error_height_max': 'Hauteur max {max} cm.',
     'checkout.error_length_invalid': 'Longueur invalide.',
@@ -324,6 +326,7 @@ class L10n {
     'checkout.overweight_label': 'Dépassement {kg} kg: {value}',
     'checkout.package_details': 'Détails du colis',
     'checkout.parcel_limits_declared_value': 'Valeur déclarée max {max} DA',
+    'checkout.parcel_limits_cod': 'Montant COD max {max} DA',
     'checkout.parcel_limits_dimensions': 'Max H/L/l {h}/{w}/{l} cm',
     'checkout.parcel_limits_overweight': 'Surcharge dès {kg} kg',
     'checkout.parcel_limits_title': 'Limites transporteur',
@@ -1311,6 +1314,8 @@ class L10n {
     'checkout.error_commune_required': 'البلدية مطلوبة.',
     'checkout.error_daira_required': 'الدائرة مطلوبة.',
     'checkout.error_declared_value_max': 'القيمة المصرح بها القصوى {max} دج.',
+    'checkout.error_cod_amount_max':
+        '\u0627\u0644\u062d\u062f \u0627\u0644\u0623\u0642\u0635\u0649 \u0644\u0645\u0628\u0644\u063a COD \u0644\u062f\u0649 \u0634\u0631\u0643\u0629 \u0627\u0644\u0634\u062d\u0646 \u0647\u0648 {max} \u062f\u062c.',
     'checkout.error_height_invalid': 'ارتفاع غير صالح.',
     'checkout.error_height_max': 'الارتفاع الأقصى {max} سم.',
     'checkout.error_length_invalid': 'طول غير صالح.',
@@ -1355,6 +1360,7 @@ class L10n {
     'checkout.overweight_label': 'تجاوز {kg} كغ: {value}',
     'checkout.package_details': 'تفاصيل الطرد',
     'checkout.parcel_limits_declared_value': 'أقصى قيمة مصرح بها {max} دج',
+    'checkout.parcel_limits_cod': 'الحد الأقصى لمبلغ COD {max} دج',
     'checkout.parcel_limits_dimensions':
         'الحد الأقصى الارتفاع/العرض/الطول {h}/{w}/{l} سم',
     'checkout.parcel_limits_overweight': 'الوزن الزائد ابتداءً من {kg} كغ',

@@ -48,6 +48,21 @@ void main() {
     expect(message, contains('Aucun identifiant'));
   });
 
+  test('maps COD amount limit to friendly message', () {
+    final message = mapCreateShipmentError(
+      locale: 'fr',
+      data: {
+        'error_code': 'parcel_cod_amount_out_of_range',
+        'message': 'parcel_cod_amount_out_of_range',
+        'details': {'max': 150000, 'value': 20000000},
+      },
+      courierName: 'ZR Express',
+    );
+
+    expect(message, contains('150000'));
+    expect(message, isNot(contains('parcel_cod_amount_out_of_range')));
+  });
+
   test('keeps unknown shipment errors unchanged', () {
     const raw = 'Unexpected carrier error';
     final message = mapCreateShipmentError(

@@ -968,6 +968,7 @@ type CourierParcelRules = {
   maxLengthCm: number;
   maxVolumeCm3: number;
   maxDeclaredValue: number;
+  maxCodAmount: number;
 };
 
 type ParcelValidationError = {
@@ -983,12 +984,13 @@ const genericParcelRules: CourierParcelRules = {
   maxLengthCm: 200,
   maxVolumeCm3: 8000000,
   maxDeclaredValue: 99999999,
+  maxCodAmount: 99999999,
 };
 
 const parcelRulesForCourier = (normalizedCourier: string): CourierParcelRules => {
   if (normalizedCourier.includes("yalidine")) return genericParcelRules;
-  if (normalizedCourier.includes("ecotrack")) return genericParcelRules;
-  if (normalizedCourier.includes("zrexpress")) return genericParcelRules;
+  if (normalizedCourier.includes("ecotrack")) return { ...genericParcelRules, maxCodAmount: 150000 };
+  if (normalizedCourier.includes("zrexpress")) return { ...genericParcelRules, maxCodAmount: 150000 };
   if (normalizedCourier.includes("guepex")) return genericParcelRules;
   return genericParcelRules;
 };
@@ -1022,7 +1024,7 @@ const loadParcelRulesForCourier = async (
       .from("courier_parcel_rules")
       .select(
         "min_weight_kg,max_weight_kg,max_height_cm,max_width_cm," +
-          "max_length_cm,max_volume_cm3,max_declared_value",
+          "max_length_cm,max_volume_cm3,max_declared_value,max_cod_amount",
       )
       .eq("courier_code", courierCode)
       .maybeSingle();
@@ -1038,6 +1040,10 @@ const loadParcelRulesForCourier = async (
         (data as Record<string, unknown>).max_declared_value,
         fallback.maxDeclaredValue,
       ),
+      maxCodAmount: numberValue(
+        (data as Record<string, unknown>).max_cod_amount,
+        fallback.maxCodAmount,
+      ),
     };
   } catch {
     return fallback;
@@ -1051,6 +1057,7 @@ const validateParcelAgainstRules = ({
   widthCm,
   lengthCm,
   declaredValue,
+  codAmount,
   insuranceActive,
 }: {
   rules: CourierParcelRules;
@@ -1059,6 +1066,7 @@ const validateParcelAgainstRules = ({
   widthCm: number;
   lengthCm: number;
   declaredValue: number;
+  codAmount: number;
   insuranceActive: boolean;
 }): ParcelValidationError | null => {
   if (weightKg < rules.minWeightKg || weightKg > rules.maxWeightKg) {
@@ -1090,6 +1098,12 @@ const validateParcelAgainstRules = ({
     return {
       message: "parcel_volume_out_of_range",
       details: { max: rules.maxVolumeCm3, value: volume },
+    };
+  }
+  if (codAmount > 0 && codAmount > rules.maxCodAmount) {
+    return {
+      message: "parcel_cod_amount_out_of_range",
+      details: { max: rules.maxCodAmount, value: codAmount },
     };
   }
   if (
@@ -1429,6 +1443,7 @@ serve(async (req) => {
       widthCm: width,
       lengthCm: length,
       declaredValue,
+      codAmount: price,
       insuranceActive,
     });
     if (validationError) {
@@ -1612,6 +1627,7 @@ serve(async (req) => {
       widthCm: width,
       lengthCm: length,
       declaredValue,
+      codAmount: price,
       insuranceActive,
     });
     if (validationError) {
@@ -1858,6 +1874,7 @@ serve(async (req) => {
         widthCm: width,
         lengthCm: length,
         declaredValue,
+        codAmount: price,
         insuranceActive,
       });
       if (validationError) {
@@ -2170,6 +2187,7 @@ serve(async (req) => {
       widthCm: width,
       lengthCm: length,
       declaredValue,
+      codAmount: price,
       insuranceActive,
     });
     if (validationError) {

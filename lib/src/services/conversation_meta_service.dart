@@ -50,6 +50,14 @@ class ConversationMeta {
 class ConversationMetaService {
   static final Map<String, ConversationMeta> _cache = {};
 
+  String _safeParticipantName(
+    Map<String, dynamic>? profile,
+    String fallback,
+  ) {
+    final fullName = profile?['full_name']?.toString().trim() ?? '';
+    return fullName.isNotEmpty ? fullName : fallback;
+  }
+
   ConversationMeta? fromRoomId(String roomId) {
     if (!roomId.startsWith('product:')) return null;
     final parts = roomId.split(':');
@@ -108,7 +116,7 @@ class ConversationMetaService {
       'conversation.profiles',
       () => supabase
           .from(SupabaseTables.profiles)
-          .select('id,full_name,email,avatar_url')
+          .select('id,full_name,avatar_url')
           .filter('id', 'in', _inList(userIds.toList())),
     );
 
@@ -128,14 +136,8 @@ class ConversationMetaService {
       final product = productMap[base.productId];
       final sellerProfile = profileMap[base.sellerId];
       final buyerProfile = profileMap[base.buyerId];
-      final sellerName =
-          (sellerProfile?['full_name'] as String?)?.trim().isNotEmpty == true
-          ? sellerProfile!['full_name'] as String
-          : (sellerProfile?['email'] as String? ?? sellerFallback);
-      final buyerName =
-          (buyerProfile?['full_name'] as String?)?.trim().isNotEmpty == true
-          ? buyerProfile!['full_name'] as String
-          : (buyerProfile?['email'] as String? ?? buyerFallback);
+      final sellerName = _safeParticipantName(sellerProfile, sellerFallback);
+      final buyerName = _safeParticipantName(buyerProfile, buyerFallback);
       final meta = ConversationMeta(
         roomId: base.roomId,
         productId: base.productId,
@@ -195,7 +197,7 @@ class ConversationMetaService {
       'conversation.profiles',
       () => supabase
           .from(SupabaseTables.profiles)
-          .select('id,full_name,email,avatar_url')
+          .select('id,full_name,avatar_url')
           .filter('id', 'in', _inList(userIds.toList())),
     );
 
@@ -215,14 +217,8 @@ class ConversationMetaService {
       final product = productMap[room.productId];
       final sellerProfile = profileMap[room.sellerId];
       final buyerProfile = profileMap[room.buyerId];
-      final sellerName =
-          (sellerProfile?['full_name'] as String?)?.trim().isNotEmpty == true
-          ? sellerProfile!['full_name'] as String
-          : (sellerProfile?['email'] as String? ?? sellerFallback);
-      final buyerName =
-          (buyerProfile?['full_name'] as String?)?.trim().isNotEmpty == true
-          ? buyerProfile!['full_name'] as String
-          : (buyerProfile?['email'] as String? ?? buyerFallback);
+      final sellerName = _safeParticipantName(sellerProfile, sellerFallback);
+      final buyerName = _safeParticipantName(buyerProfile, buyerFallback);
       final meta = ConversationMeta(
         roomId: room.roomId,
         productId: room.productId!,
@@ -283,7 +279,7 @@ class ConversationMetaService {
       'conversation.profiles',
       () => supabase
           .from(SupabaseTables.profiles)
-          .select('id,full_name,email,avatar_url')
+          .select('id,full_name,avatar_url')
           .filter('id', 'in', _inList(userIds.toList())),
     );
 
@@ -307,14 +303,8 @@ class ConversationMetaService {
       final buyerProfile = conv.buyerId != null
           ? profileMap[conv.buyerId]
           : null;
-      final sellerName =
-          (sellerProfile?['full_name'] as String?)?.trim().isNotEmpty == true
-          ? sellerProfile!['full_name'] as String
-          : (sellerProfile?['email'] as String? ?? sellerFallback);
-      final buyerName =
-          (buyerProfile?['full_name'] as String?)?.trim().isNotEmpty == true
-          ? buyerProfile!['full_name'] as String
-          : (buyerProfile?['email'] as String? ?? buyerFallback);
+      final sellerName = _safeParticipantName(sellerProfile, sellerFallback);
+      final buyerName = _safeParticipantName(buyerProfile, buyerFallback);
       final meta = ConversationMeta(
         roomId: conv.id,
         productId: conv.productId!,

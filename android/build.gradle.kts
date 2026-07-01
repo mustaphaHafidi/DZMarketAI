@@ -19,6 +19,15 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
+subprojects {
+    configurations.configureEach {
+        // firebase_messaging already ships the Firebase Instance ID receiver.
+        // ML Kit image labeling still pulls the legacy firebase-iid artifact,
+        // which causes duplicate classes on Android debug/release builds.
+        exclude(group = "com.google.firebase", module = "firebase-iid")
+    }
+}
+
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }

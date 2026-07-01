@@ -6,18 +6,18 @@
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Site officiel DZMarket. Accédez à la marketplace algérienne pour voir les annonces, acheter, vendre, discuter et suivre la livraison.">
+  <meta name="description" content="DZMarket, marketplace algérienne pour acheter, vendre, discuter et suivre la livraison. Voir les annonces, publier une annonce et ouvrir l'application web.">
   <meta name="robots" content="index,follow,max-image-preview:large">
   <meta name="google-site-verification" content="MaGUl7EHdatjLYOUModjeB46fOCI4k0in8_kiiNTLyI">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="DZMarket">
   <meta property="og:title" content="DZMarket | Site officiel">
-  <meta property="og:description" content="Découvrez DZMarket et ouvrez l'application web pour voir les annonces, acheter, vendre et discuter.">
+  <meta property="og:description" content="DZMarket permet de voir les annonces, publier un produit, discuter et suivre la livraison en Algérie.">
   <meta property="og:image" content="https://www.dzmarket.pro/icons/Icon-512.png">
   <meta property="og:url" content="https://www.dzmarket.pro/">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="DZMarket | Site officiel">
-  <meta name="twitter:description" content="Découvrez DZMarket et ouvrez l'application web pour voir les annonces, acheter, vendre et discuter.">
+  <meta name="twitter:description" content="DZMarket permet de voir les annonces, publier un produit, discuter et suivre la livraison en Algérie.">
   <meta name="twitter:image" content="https://www.dzmarket.pro/icons/Icon-512.png">
   <link id="canonical-link" rel="canonical" href="https://www.dzmarket.pro/">
 
@@ -557,7 +557,7 @@
 
       function routeDescription() {
         if (isMarketingHost && path === '/') {
-          return 'Site officiel DZMarket. Présentation de la marketplace algérienne et accès à l\'application web pour voir les annonces, acheter, vendre et discuter.';
+          return 'DZMarket, marketplace algérienne pour acheter, vendre, discuter et suivre la livraison. Voir les annonces, publier une annonce et ouvrir l\'application web.';
         }
         if (path.indexOf('/sign-in') === 0) {
           return 'Connectez-vous à DZMarket pour acheter, vendre, chatter et suivre vos livraisons en Algérie.';
@@ -601,7 +601,7 @@
           'https://apps.apple.com/dz/app/dzmarket/id6760047432',
           'https://play.google.com/store/apps/details?id=com.dzmarket.app'
         ],
-        description: 'Marketplace algérienne pour acheter, vendre et gérer la livraison plus simplement.'
+        description: 'Marketplace algérienne pour acheter, vendre, discuter et suivre la livraison.'
       };
 
       var existing = document.getElementById('org-jsonld');
@@ -623,6 +623,24 @@
       var isMarketingRoot = (host === 'www.dzmarket.pro' || host === 'dzmarket.pro') && path === '/';
       if (!isMarketingRoot) {
         return;
+      }
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations()
+          .then(function (registrations) {
+            registrations.forEach(function (registration) {
+              registration.unregister();
+            });
+          })
+          .catch(function () {});
+      }
+      if (window.caches && typeof window.caches.keys === 'function') {
+        window.caches.keys()
+          .then(function (keys) {
+            keys.forEach(function (key) {
+              window.caches.delete(key);
+            });
+          })
+          .catch(function () {});
       }
       var params = new URLSearchParams(window.location.search || '');
       var requested = params.get('lang');
@@ -677,12 +695,12 @@
       </div>
       <nav class="dz-actions" aria-label="Navigation principale">
         <a class="dz-btn" href="https://app.dzmarket.pro/sign-up">
-          <span class="dz-lang-fr">Créer un compte</span>
-          <span class="dz-lang-ar">إنشاء حساب</span>
+          <span class="dz-lang-fr">Publier une annonce</span>
+          <span class="dz-lang-ar">بيع أول منتج لك</span>
         </a>
         <a class="dz-btn dz-btn-primary" href="https://app.dzmarket.pro/">
-          <span class="dz-lang-fr">Ouvrir l'app</span>
-          <span class="dz-lang-ar">فتح التطبيق</span>
+          <span class="dz-lang-fr">Voir les annonces</span>
+          <span class="dz-lang-ar">تصفح الإعلانات الآن</span>
         </a>
       </nav>
     </header>
@@ -690,33 +708,33 @@
     <section class="dz-shell dz-hero">
       <div>
         <span class="dz-eyebrow">
-          <span class="dz-lang-fr">Marketplace algérienne simple pour acheter, vendre et livrer.</span>
-          <span class="dz-lang-ar">منصة جزائرية بسيطة للبيع والشراء والتوصيل.</span>
+          <span class="dz-lang-fr">Marketplace algérienne pour acheter, vendre, discuter et livrer.</span>
+          <span class="dz-lang-ar">سوق جزائري للبيع والشراء والدردشة والتوصيل.</span>
         </span>
         <h1>
-          <span class="dz-lang-fr">Achetez, vendez et livrez plus simplement en Algérie.</span>
-          <span class="dz-lang-ar">اشترِ وبِع بسهولة أكبر في الجزائر.</span>
+          <span class="dz-lang-fr">Achetez et vendez en Algérie avec chat, livraison et suivi.</span>
+          <span class="dz-lang-ar">بيع واشري بسهولة في الجزائر.</span>
         </h1>
         <p class="dz-lead">
-          <span class="dz-lang-fr">Cette page est le site officiel de DZMarket. Pour parcourir les annonces, acheter, vendre ou discuter, ouvrez l'application web.</span>
-          <span class="dz-lang-ar">هذه الصفحة هي الموقع الرسمي لـ DZMarket. لتصفح الإعلانات أو الشراء أو البيع أو الدردشة، افتح تطبيق الويب.</span>
+          <span class="dz-lang-fr">Trouvez un produit, contactez le vendeur, publiez une annonce et suivez la livraison depuis une seule app.</span>
+          <span class="dz-lang-ar">تصفح المنتجات، تواصل مع البائع، انشر إعلانك وتابع التوصيل من تطبيق واحد.</span>
         </p>
         <div class="dz-route-note" aria-label="Différence entre site officiel et application">
-          <span class="dz-lang-fr"><strong>www.dzmarket.pro</strong> présente DZMarket. <strong>app.dzmarket.pro</strong> contient les annonces, le chat, les achats et les ventes.</span>
-          <span class="dz-lang-ar"><strong>www.dzmarket.pro</strong> للتعريف بـ DZMarket. <strong>app.dzmarket.pro</strong> للإعلانات والدردشة والشراء والبيع.</span>
+          <span class="dz-lang-fr"><strong>www.dzmarket.pro</strong> est le site officiel. <strong>app.dzmarket.pro</strong> ouvre les annonces, le chat, les achats et la vente.</span>
+          <span class="dz-lang-ar"><strong>www.dzmarket.pro</strong> هو الموقع الرسمي. <strong>app.dzmarket.pro</strong> يفتح الإعلانات والدردشة والشراء والبيع.</span>
         </div>
         <p class="dz-ar">
-          <span class="dz-lang-ar">كل ما تحتاجه للبيع والشراء في مكان واحد: إعلان واضح، دردشة مباشرة، طلبات منظمة، وتتبع للتوصيل.</span>
+          <span class="dz-lang-ar">كل ما تحتاجه للبيع والشراء في مكان واحد: إعلان واضح، دردشة مباشرة، طلبات منظمة وتتبع للتوصيل.</span>
         </p>
 
         <div class="dz-cta-row">
           <a class="dz-btn dz-btn-primary" href="https://app.dzmarket.pro/">
-            <span class="dz-lang-fr">Voir les annonces</span>
-            <span class="dz-lang-ar">تصفح الإعلانات</span>
+            <span class="dz-lang-fr">Voir les annonces maintenant</span>
+            <span class="dz-lang-ar">تصفح الإعلانات الآن</span>
           </a>
           <a class="dz-btn" href="https://app.dzmarket.pro/sign-up">
-            <span class="dz-lang-fr">Créer un compte vendeur</span>
-            <span class="dz-lang-ar">إنشاء حساب بائع</span>
+            <span class="dz-lang-fr">Publier une annonce</span>
+            <span class="dz-lang-ar">بيع أول منتج لك</span>
           </a>
         </div>
         <div class="dz-store-row" aria-label="Télécharger DZMarket">
@@ -825,8 +843,8 @@
       </div>
       <div class="dz-actions">
         <a class="dz-btn dz-btn-primary" href="https://app.dzmarket.pro/">
-          <span class="dz-lang-fr">Ouvrir l'application web</span>
-          <span class="dz-lang-ar">فتح تطبيق الويب</span>
+          <span class="dz-lang-fr">Voir les annonces maintenant</span>
+          <span class="dz-lang-ar">تصفح الإعلانات الآن</span>
         </a>
         <a class="dz-btn" href="https://www.youtube.com/@DZMarketpro" target="_blank" rel="noopener">YouTube</a>
       </div>
@@ -836,9 +854,9 @@
   <noscript>
     <main style="max-width:960px;margin:40px auto;padding:24px;font-family:Arial,sans-serif;color:#173b2d;">
       <h1>DZMarket</h1>
-      <p>Marketplace algérienne pour acheter, vendre et gérer la livraison plus simplement.</p>
+      <p>Marketplace algérienne pour acheter, vendre, discuter et suivre la livraison.</p>
       <p dir="rtl">منصة جزائرية للبيع والشراء مع دردشة مدمجة وتوصيل أسهل متابعة.</p>
-      <p><a href="https://app.dzmarket.pro/">Ouvrir l'application web</a></p>
+      <p><a href="https://app.dzmarket.pro/">Voir les annonces maintenant</a></p>
     </main>
   </noscript>
   <script>

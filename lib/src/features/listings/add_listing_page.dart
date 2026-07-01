@@ -597,6 +597,16 @@ class _AddListingPageState extends State<AddListingPage> {
         ),
       );
     }
+    chips.add(
+      _buildRuleChip(
+        context,
+        L10n.tr(
+          context,
+          'checkout.parcel_limits_cod',
+          params: {'max': _parcelRules.maxCodAmount.toStringAsFixed(0)},
+        ),
+      ),
+    );
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 8),
@@ -819,7 +829,14 @@ class _AddListingPageState extends State<AddListingPage> {
         final height = _parseDigitsNullable(_heightCtrl.text.trim());
         final width = _parseDigitsNullable(_widthCtrl.text.trim());
         final length = _parseDigitsNullable(_lengthCtrl.text.trim());
+        double? price;
         double? declaredValue;
+        try {
+          price = InputSanitizer.parseAmount(_priceCtrl.text, min: 1);
+        } on FormatException catch (e) {
+          _setError(e.message);
+          return false;
+        }
         if (_insuranceActive && _declaredValueCtrl.text.trim().isEmpty) {
           _setError(L10n.tr(context, 'checkout.error_price_required'));
           return false;
@@ -842,6 +859,7 @@ class _AddListingPageState extends State<AddListingPage> {
           widthCm: width,
           lengthCm: length,
           declaredValue: declaredValue,
+          codAmount: price,
           insuranceActive: _insuranceActive,
         );
         if (validation != null) {
@@ -1011,6 +1029,13 @@ class _AddListingPageState extends State<AddListingPage> {
         return L10n.tr(
           context,
           'checkout.error_declared_value_max',
+          params: validation.params,
+          fallback: L10n.tr(context, 'checkout.error_price_required'),
+        );
+      case 'cod_amount_max':
+        return L10n.tr(
+          context,
+          'checkout.error_cod_amount_max',
           params: validation.params,
           fallback: L10n.tr(context, 'checkout.error_price_required'),
         );
@@ -1554,7 +1579,13 @@ class _AddListingPageState extends State<AddListingPage> {
         final height = _parseDigitsNullable(_heightCtrl.text.trim());
         final width = _parseDigitsNullable(_widthCtrl.text.trim());
         final length = _parseDigitsNullable(_lengthCtrl.text.trim());
+        double? price;
         double? declaredValue;
+        try {
+          price = InputSanitizer.parseAmount(_priceCtrl.text, min: 1);
+        } catch (_) {
+          return false;
+        }
         if (_insuranceActive && _declaredValueCtrl.text.trim().isEmpty) {
           return false;
         }
@@ -1575,6 +1606,7 @@ class _AddListingPageState extends State<AddListingPage> {
           widthCm: width,
           lengthCm: length,
           declaredValue: declaredValue,
+          codAmount: price,
           insuranceActive: _insuranceActive,
         );
         if (validation != null) return false;

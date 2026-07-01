@@ -1,6 +1,8 @@
 {
   "SUPABASE_URL": "https://your-project.supabase.co",
   "SUPABASE_ANON_KEY": "your-supabase-anon-key",
+  "GOOGLE_WEB_CLIENT_ID": "your-web-client-id.apps.googleusercontent.com",
+  "GOOGLE_IOS_CLIENT_ID": "your-ios-client-id.apps.googleusercontent.com",
   "TEST_USER_EMAIL": "buyer@example.com",
   "TEST_USER_PASSWORD": "buyer-password",
   "TEST_SELLER_USER_EMAIL": "seller@example.com",

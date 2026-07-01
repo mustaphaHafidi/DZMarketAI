@@ -19,12 +19,15 @@ class MessageService {
           .from(SupabaseTables.chatRooms)
           .select('room_id,buyer_id,seller_id')
           .eq('product_id', safeProductId)
-          .or('and(buyer_id.eq.$safeBuyerId,seller_id.eq.$safeSellerId),and(buyer_id.eq.$safeSellerId,seller_id.eq.$safeBuyerId)')
+          .or(
+            'and(buyer_id.eq.$safeBuyerId,seller_id.eq.$safeSellerId),and(buyer_id.eq.$safeSellerId,seller_id.eq.$safeBuyerId)',
+          )
           .limit(1)
           .maybeSingle(),
     );
     return row?['room_id']?.toString();
   }
+
   Stream<List<Message>> streamMessages(String roomId) {
     final safeRoomId = InputSanitizer.sanitizeId(roomId, maxLength: 120);
     return RateLimiter.instance.stream(
@@ -48,21 +51,27 @@ class MessageService {
           .order('created_at')
           .limit(limit)
           .map((rows) {
-          final latest = <String, Message>{};
-          for (final row in rows) {
-            final msg = Message.fromJson(row);
-            final existing = latest[msg.roomId];
-            if (existing == null ||
-                (msg.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0))
-                        .isAfter(existing.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0))) {
-              latest[msg.roomId] = msg;
+            final latest = <String, Message>{};
+            for (final row in rows) {
+              final msg = Message.fromJson(row);
+              final existing = latest[msg.roomId];
+              if (existing == null ||
+                  (msg.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+                      .isAfter(
+                        existing.createdAt ??
+                            DateTime.fromMillisecondsSinceEpoch(0),
+                      )) {
+                latest[msg.roomId] = msg;
+              }
             }
-          }
-          final list = latest.values.toList()
-            ..sort((a, b) => (b.createdAt ?? DateTime.now())
-                .compareTo(a.createdAt ?? DateTime.now()));
-          return list;
-        }),
+            final list = latest.values.toList()
+              ..sort(
+                (a, b) => (b.createdAt ?? DateTime.now()).compareTo(
+                  a.createdAt ?? DateTime.now(),
+                ),
+              );
+            return list;
+          }),
     );
   }
 
@@ -77,7 +86,11 @@ class MessageService {
     final safeRoomId = InputSanitizer.sanitizeId(roomId, maxLength: 120);
     final safeContent = type == MessageType.image
         ? InputSanitizer.sanitizeUrl(content, maxLength: 400)
-        : InputSanitizer.sanitizeText(content, maxLength: 800, allowNewlines: true);
+        : InputSanitizer.sanitizeText(
+            content,
+            maxLength: 800,
+            allowNewlines: true,
+          );
     if (safeContent == null || safeContent.isEmpty) {
       throw FormatException('Message required.');
     }
@@ -86,47 +99,36 @@ class MessageService {
     await RateLimiter.instance.run(
       'messages.insert',
       () => supabase.from(SupabaseTables.messages).insert({
-      'room_id': safeRoomId,
-      'content': safeContent,
-      'sender_id': userId,
-      'type': switch (type) {
-        MessageType.label => 'label',
-        MessageType.image => 'image',
-        _ => 'text',
-      },
-      'payload': safePayload,
+        'room_id': safeRoomId,
+        'content': safeContent,
+        'sender_id': userId,
+        'type': switch (type) {
+          MessageType.label => 'label',
+          MessageType.image => 'image',
+          _ => 'text',
+        },
+        'payload': safePayload,
       }),
     );
   }
 
-  /// Ensures a room exists by creating a first contact message if empty.
+  /// Legacy no-op.
+  ///
+  /// Conversations can exist without an automatic hello message.
+  /// Auto-seeding "Nouveau contact" created noisy chat entries and confused
+  /// offer/order threads that already share the same buyer/seller/product room.
   Future<void> ensureRoomWithHello(String roomId) async {
-    final userId = supabase.auth.currentUser?.id;
-    if (userId == null) return;
-    final safeRoomId = InputSanitizer.sanitizeId(roomId, maxLength: 120);
-    final existing = await RateLimiter.instance.run(
-      'messages.ensure.select',
-      () => supabase
-          .from(SupabaseTables.messages)
-          .select('id')
-          .eq('room_id', safeRoomId)
-          .limit(1)
-          .maybeSingle(),
-    );
-    if (existing != null) return;
-    await sendMessage(
-      roomId: safeRoomId,
-      content: 'Nouveau contact',
-      payload: {'type': 'contact'},
-    );
+    return;
   }
 
   Future<void> markRead(String roomId) async {
     final safeRoomId = InputSanitizer.sanitizeId(roomId, maxLength: 120);
     await RateLimiter.instance.run(
       'chat_rooms.read',
-      () =>
-          supabase.rpc('mark_chat_room_read', params: {'p_room_id': safeRoomId}),
+      () => supabase.rpc(
+        'mark_chat_room_read',
+        params: {'p_room_id': safeRoomId},
+      ),
     );
   }
 

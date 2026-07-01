@@ -138,7 +138,7 @@ class _ListingsPageState extends State<ListingsPage> {
     final gridAspectRatio = switch (crossAxisCount) {
       >= 4 => 0.83,
       3 => 0.79,
-      2 => screenWidth >= 700 ? 0.78 : 0.74,
+      2 => screenWidth >= 700 ? 0.78 : 0.66,
       _ => 1.05,
     };
     final isCompactMobile = screenWidth < 640;
@@ -1981,10 +1981,12 @@ class _ProductCardState extends State<_ProductCard> {
     );
     final imagePrefs = NetworkPreferencesService.instance;
     final theme = Theme.of(context);
+    final localeCode = Localizations.localeOf(context).languageCode;
     final metadataStyle = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.outline,
     );
     final isCompactCard = MediaQuery.of(context).size.width < 640;
+    final compactBadgeMaxWidth = isCompactCard ? 96.0 : null;
     final badges = <Widget>[
       if (widget.product.deliveryOptions.contains('cod'))
         _CardMiniBadge(
@@ -1994,11 +1996,15 @@ class _ProductCardState extends State<_ProductCard> {
             'listing.quick.delivery',
             fallback: 'Livraison',
           ),
+          maxWidth: compactBadgeMaxWidth,
         ),
       if (widget.product.deliveryOptions.contains('pickup'))
         _CardMiniBadge(
           icon: Icons.handshake_outlined,
-          label: L10n.tr(context, 'listing.detail.delivery_pickup'),
+          label: isCompactCard
+              ? (localeCode == 'ar' ? 'باتفاق' : 'Accord')
+              : L10n.tr(context, 'listing.detail.delivery_pickup'),
+          maxWidth: compactBadgeMaxWidth,
         ),
       if (widget.product.isNegotiable)
         _CardMiniBadge(
@@ -2008,11 +2014,14 @@ class _ProductCardState extends State<_ProductCard> {
             'listing.negotiable',
             fallback: 'Prix negociable',
           ),
+          maxWidth: compactBadgeMaxWidth,
         ),
     ];
     final visibleBadges = badges.take(isCompactCard ? 1 : 2).toList();
     final hiddenBadgesCount = badges.length - visibleBadges.length;
     final isDesktopCard = MediaQuery.of(context).size.width >= 900;
+    final imageFlex = isDesktopCard ? 12 : (isCompactCard ? 13 : 12);
+    final contentFlex = isDesktopCard ? 9 : (isCompactCard ? 8 : 8);
     final imageFit = BoxFit.cover;
     final displayIsFavorite = _favoriteOverride ?? widget.isFavorite;
 
@@ -2055,7 +2064,7 @@ class _ProductCardState extends State<_ProductCard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    flex: isDesktopCard ? 12 : (isCompactCard ? 14 : 12),
+                    flex: imageFlex,
                     child: ClipRRect(
                       borderRadius: const BorderRadius.only(
                         topLeft: Radius.circular(22),
@@ -2163,65 +2172,75 @@ class _ProductCardState extends State<_ProductCard> {
                     ),
                   ),
                   Expanded(
-                    flex: isDesktopCard ? 9 : (isCompactCard ? 7 : 8),
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        isCompactCard ? 14 : 16,
-                        isCompactCard ? 10 : 14,
-                        isCompactCard ? 14 : 16,
-                        isCompactCard ? 10 : 14,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.product.title,
-                            maxLines: isCompactCard ? 1 : 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              fontSize: isCompactCard ? 15 : null,
-                            ),
+                    flex: contentFlex,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final compactContent = constraints.maxHeight < 98;
+                        final showBadges =
+                            visibleBadges.isNotEmpty &&
+                            constraints.maxHeight >= (isCompactCard ? 72 : 82);
+                        return Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            isCompactCard ? 12 : 16,
+                            compactContent ? 8 : 14,
+                            isCompactCard ? 12 : 16,
+                            compactContent ? 8 : 14,
                           ),
-                          const SizedBox(height: 6),
-                          Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(
-                                Icons.location_on_outlined,
-                                size: 16,
-                                color: theme.colorScheme.outline,
-                              ),
-                              const SizedBox(width: 3),
-                              Expanded(
-                                child: Text(
-                                  widget.product.locationWilaya ??
-                                      L10n.tr(
-                                        context,
-                                        'listing.location_unknown',
-                                      ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: metadataStyle,
+                              Text(
+                                widget.product.title,
+                                maxLines: compactContent ? 1 : 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: compactContent ? 14 : null,
                                 ),
                               ),
+                              SizedBox(height: compactContent ? 4 : 6),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.location_on_outlined,
+                                    size: 16,
+                                    color: theme.colorScheme.outline,
+                                  ),
+                                  const SizedBox(width: 3),
+                                  Expanded(
+                                    child: Text(
+                                      widget.product.locationWilaya ??
+                                          L10n.tr(
+                                            context,
+                                            'listing.location_unknown',
+                                          ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: metadataStyle,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (showBadges) ...[
+                                const Spacer(),
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: [
+                                    ...visibleBadges,
+                                    if (hiddenBadgesCount > 0)
+                                      _CardMiniBadge(
+                                        icon: Icons.add_circle_outline,
+                                        label: '+$hiddenBadgesCount',
+                                        maxWidth: compactBadgeMaxWidth,
+                                      ),
+                                  ],
+                                ),
+                              ],
                             ],
                           ),
-                          const Spacer(),
-                          if (visibleBadges.isNotEmpty)
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: [
-                                ...visibleBadges,
-                                if (hiddenBadgesCount > 0)
-                                  _CardMiniBadge(
-                                    icon: Icons.add_circle_outline,
-                                    label: '+$hiddenBadgesCount',
-                                  ),
-                              ],
-                            ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -2286,10 +2305,15 @@ class _CardFavoriteButton extends StatelessWidget {
 }
 
 class _CardMiniBadge extends StatelessWidget {
-  const _CardMiniBadge({required this.icon, required this.label});
+  const _CardMiniBadge({
+    required this.icon,
+    required this.label,
+    this.maxWidth,
+  });
 
   final IconData icon;
   final String label;
+  final double? maxWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -2300,18 +2324,25 @@ class _CardMiniBadge extends StatelessWidget {
         color: theme.colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: theme.colorScheme.outline),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w700,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth ?? double.infinity),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: theme.colorScheme.outline),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

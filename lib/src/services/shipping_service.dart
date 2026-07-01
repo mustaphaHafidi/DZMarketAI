@@ -83,6 +83,7 @@ class CourierParcelRules {
   final int maxLengthCm;
   final int maxVolumeCm3;
   final double maxDeclaredValue;
+  final double maxCodAmount;
   final int overweightThresholdKg;
 
   const CourierParcelRules({
@@ -93,6 +94,7 @@ class CourierParcelRules {
     required this.maxLengthCm,
     required this.maxVolumeCm3,
     required this.maxDeclaredValue,
+    required this.maxCodAmount,
     required this.overweightThresholdKg,
   });
 
@@ -104,6 +106,7 @@ class CourierParcelRules {
     maxLengthCm: 200,
     maxVolumeCm3: 8000000,
     maxDeclaredValue: 99999999,
+    maxCodAmount: 99999999,
     overweightThresholdKg: 5,
   );
 
@@ -128,6 +131,9 @@ class CourierParcelRules {
       maxDeclaredValue: maxDeclaredValue < other.maxDeclaredValue
           ? maxDeclaredValue
           : other.maxDeclaredValue,
+      maxCodAmount: maxCodAmount < other.maxCodAmount
+          ? maxCodAmount
+          : other.maxCodAmount,
       overweightThresholdKg: overweightThresholdKg < other.overweightThresholdKg
           ? overweightThresholdKg
           : other.overweightThresholdKg,
@@ -471,6 +477,7 @@ class ShippingService {
         'max_declared_value',
         fallback.maxDeclaredValue,
       ),
+      maxCodAmount: parseDoubleField('max_cod_amount', fallback.maxCodAmount),
       overweightThresholdKg: parseIntField(
         'overweight_threshold_kg',
         fallback.overweightThresholdKg,
@@ -492,7 +499,7 @@ class ShippingService {
             .select(
               'courier_code,min_weight_kg,max_weight_kg,max_height_cm,'
               'max_width_cm,max_length_cm,max_volume_cm3,max_declared_value,'
-              'overweight_threshold_kg',
+              'max_cod_amount,overweight_threshold_kg',
             )
             .eq('courier_code', courierCode)
             .maybeSingle(),
@@ -604,6 +611,7 @@ class ShippingService {
         maxLengthCm: 200,
         maxVolumeCm3: 8000000,
         maxDeclaredValue: 99999999,
+        maxCodAmount: 99999999,
         overweightThresholdKg: 5,
       );
     }
@@ -616,6 +624,7 @@ class ShippingService {
         maxLengthCm: 200,
         maxVolumeCm3: 8000000,
         maxDeclaredValue: 99999999,
+        maxCodAmount: 150000,
         overweightThresholdKg: 5,
       );
     }
@@ -628,6 +637,7 @@ class ShippingService {
         maxLengthCm: 200,
         maxVolumeCm3: 8000000,
         maxDeclaredValue: 99999999,
+        maxCodAmount: 150000,
         overweightThresholdKg: 5,
       );
     }
@@ -640,6 +650,7 @@ class ShippingService {
         maxLengthCm: 200,
         maxVolumeCm3: 8000000,
         maxDeclaredValue: 150000,
+        maxCodAmount: 150000,
         overweightThresholdKg: 5,
       );
     }
@@ -707,6 +718,7 @@ class ShippingService {
     required int? widthCm,
     required int? lengthCm,
     required double? declaredValue,
+    required double? codAmount,
     required bool insuranceActive,
   }) {
     if (weightKg == null ||
@@ -743,6 +755,12 @@ class ShippingService {
       return CourierParcelValidation(
         'volume_max',
         params: {'max': rules.maxVolumeCm3.toString()},
+      );
+    }
+    if (codAmount != null && codAmount > 0 && codAmount > rules.maxCodAmount) {
+      return CourierParcelValidation(
+        'cod_amount_max',
+        params: {'max': rules.maxCodAmount.toStringAsFixed(0)},
       );
     }
     if (insuranceActive &&
@@ -982,10 +1000,9 @@ class ShippingService {
         ),
       );
     } on FunctionException catch (e) {
-      final data = parseShipmentErrorPayload(e.details) ??
-          <String, dynamic>{
-            'message': _summarizeFunctionException(e),
-          };
+      final data =
+          parseShipmentErrorPayload(e.details) ??
+          <String, dynamic>{'message': _summarizeFunctionException(e)};
       final rawMessage = data['message']?.toString() ?? 'Shipment failed';
       if (rawMessage == 'zr_phone_invalid') {
         throw StateError(L10n.trLocale(locale, 'checkout.error_zr_phone'));

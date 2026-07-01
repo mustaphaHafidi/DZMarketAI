@@ -8,15 +8,24 @@ import 'package:dzmarket/src/services/rate_limiter.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/utils/public_storage_url_resolver.dart';
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthService {
   AuthService._();
   static final instance = AuthService._();
+  static const _googleWebClientId = String.fromEnvironment(
+    'GOOGLE_WEB_CLIENT_ID',
+  );
+  static const _googleIosClientId = String.fromEnvironment(
+    'GOOGLE_IOS_CLIENT_ID',
+  );
 
   User? get currentUser => supabase.auth.currentUser;
 
   Stream<AuthState> get authChanges => supabase.auth.onAuthStateChange;
+
+  bool get supportsGoogleSignIn => kIsWeb || _googleWebClientId.isNotEmpty;
 
   Future<AuthResponse> signIn(String email, String password) async {
     final locale = LocaleService.instance.locale.value?.languageCode ?? 'fr';
@@ -270,6 +279,89 @@ class AuthService {
 
   Future<void> signOut() =>
       RateLimiter.instance.run('auth.signOut', () => supabase.auth.signOut());
+
+  Future<void> signInWithGoogle({String? nextPath}) async {
+    final locale = LocaleService.instance.locale.value?.languageCode ?? 'fr';
+    try {
+      if (kIsWeb) {
+        await supabase.auth.signInWithOAuth(
+          OAuthProvider.google,
+          redirectTo: buildEmailRedirectUrl(
+            flow: 'oauth',
+            locale: locale,
+            next: nextPath,
+          ),
+        );
+        return;
+      }
+
+      if (_googleWebClientId.isEmpty) {
+        throw FormatException(
+          L10n.trLocale(
+            locale,
+            'auth.google_unavailable',
+            fallback: 'Connexion Google indisponible sur cet appareil.',
+          ),
+        );
+      }
+
+      final googleSignIn = GoogleSignIn(
+        serverClientId: _googleWebClientId,
+        clientId: _googleIosClientId.isEmpty ? null : _googleIosClientId,
+      );
+      final googleUser = await googleSignIn.signIn();
+      if (googleUser == null) {
+        throw FormatException(
+          L10n.trLocale(
+            locale,
+            'auth.google_cancelled',
+            fallback: 'Connexion Google annulée.',
+          ),
+        );
+      }
+      final googleAuth = await googleUser.authentication;
+      final idToken = googleAuth.idToken;
+      if (idToken == null || idToken.isEmpty) {
+        throw FormatException(
+          L10n.trLocale(
+            locale,
+            'auth.google_unavailable',
+            fallback: 'Connexion Google indisponible sur cet appareil.',
+          ),
+        );
+      }
+
+      await supabase.auth.signInWithIdToken(
+        provider: OAuthProvider.google,
+        idToken: idToken,
+        accessToken: googleAuth.accessToken,
+      );
+
+      final user = currentUser;
+      if (user != null) {
+        await _ensureProfile(user);
+        final profile = await fetchProfile();
+        if (profile?.status == UserStatus.suspended) {
+          await signOut();
+          throw FormatException(
+            L10n.trLocale(locale, 'auth.account_suspended'),
+          );
+        }
+        if (profile?.status == UserStatus.banned) {
+          await signOut();
+          throw FormatException(L10n.trLocale(locale, 'auth.account_banned'));
+        }
+      }
+    } on FormatException {
+      rethrow;
+    } on AuthException catch (e) {
+      throw FormatException(_mapSignInAuthError(e, locale));
+    } catch (e) {
+      throw FormatException(
+        _mapGenericAuthError(e, locale, fallbackKey: 'auth.error_login_failed'),
+      );
+    }
+  }
 
   Future<void> requestAccountDeletion({String? reason}) async {
     final user = supabase.auth.currentUser;

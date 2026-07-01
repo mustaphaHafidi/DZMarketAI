@@ -12,6 +12,17 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.194169729687-s808pd104m286and39qunf1p9ul6u3dn</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleName</key>
 	<string>dzmarket</string>
 	<key>CFBundlePackageType</key>
@@ -22,6 +33,10 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>GIDClientID</key>
+	<string>194169729687-s808pd104m286and39qunf1p9ul6u3dn.apps.googleusercontent.com</string>
+	<key>GIDServerClientID</key>
+	<string>194169729687-okl2uahqc0ckfv7hlc5m3p7l0jmvdhuk.apps.googleusercontent.com</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
@@ -55,5 +70,9 @@
 	<string>DZMarket utilise l'appareil photo pour prendre des photos de produits a publier.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>DZMarket utilise votre position pour detecter automatiquement votre wilaya et votre daira lors de la configuration du profil et de la livraison.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>

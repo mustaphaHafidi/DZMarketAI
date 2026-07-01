@@ -45,9 +45,10 @@ String _summarizeShipmentErrorDetail(Object? raw) {
     if (description != null && description.isNotEmpty) {
       return description;
     }
+    return raw.toString().trim();
   }
   final parsed = parseShipmentErrorPayload(raw);
-  if (parsed != null && !identical(parsed, raw)) {
+  if (parsed != null) {
     return _summarizeShipmentErrorDetail(parsed);
   }
   return raw.toString().trim();
@@ -60,8 +61,13 @@ String mapCreateShipmentError({
 }) {
   final errorCode = data['error_code']?.toString().trim().toLowerCase() ?? '';
   final rawMessage = data['message']?.toString().trim() ?? 'Shipment failed';
-  final detail = _summarizeShipmentErrorDetail(data['detail']);
+  final detail = _summarizeShipmentErrorDetail(
+    data['detail'] ?? data['details'],
+  );
   final normalizedCode = errorCode.isNotEmpty ? errorCode : rawMessage;
+  final detailsMap = data['details'] is Map
+      ? Map<String, dynamic>.from(data['details'] as Map)
+      : <String, dynamic>{};
 
   switch (normalizedCode) {
     case 'courier_credentials_invalid':
@@ -78,6 +84,16 @@ String mapCreateShipmentError({
       );
     case 'courier_rate_limited':
       return L10n.trLocale(locale, 'fulfillment.error_courier_rate_limited');
+    case 'parcel_cod_amount_out_of_range':
+      return L10n.trLocale(
+        locale,
+        'checkout.error_cod_amount_max',
+        params: {
+          'max': (detailsMap['max']?.toString().trim().isNotEmpty ?? false)
+              ? detailsMap['max'].toString()
+              : '150000',
+        },
+      );
     default:
       return detail.isNotEmpty ? detail : rawMessage;
   }

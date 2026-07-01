@@ -21,4 +21,22 @@ void main() {
     expect(missingSecret['ok'], isFalse);
     expect(missingSecret['message'], 'Secret manquant');
   });
+
+  test('Shipping: COD amount above courier max is blocked', () {
+    final rules = ShippingService.parcelRulesFor(courierName: 'Ecotrack');
+    final validation = ShippingService.validateParcel(
+      rules: rules,
+      weightKg: 2,
+      heightCm: 20,
+      widthCm: 20,
+      lengthCm: 20,
+      declaredValue: 120000,
+      codAmount: 200000,
+      insuranceActive: false,
+    );
+
+    expect(validation, isNotNull);
+    expect(validation?.code, 'cod_amount_max');
+    expect(validation?.params['max'], '150000');
+  });
 }

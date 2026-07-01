@@ -53,10 +53,12 @@ dependencies:
   firebase_core: ^3.0.0
   firebase_analytics: ^11.0.0
   firebase_crashlytics: ^4.0.0
+  firebase_messaging: ^15.0.0
   flutter_local_notifications: ^17.2.4
   connectivity_plus: ^6.0.0
   flutter_svg: ^2.0.10
   google_mlkit_image_labeling: ^0.14.1
+  google_sign_in: ^6.3.0
   image: ^4.2.0
 
 dev_dependencies:

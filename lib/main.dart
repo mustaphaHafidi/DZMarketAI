@@ -4,6 +4,7 @@ import 'dart:async';
 
 import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:dzmarket/src/services/notification_service.dart';
+import 'package:dzmarket/src/services/push_notification_service.dart';
 import 'package:dzmarket/src/services/translation_service.dart';
 import 'package:dzmarket/src/services/connectivity_service.dart';
 import 'package:dzmarket/src/services/firebase_service.dart';
@@ -11,6 +12,7 @@ import 'package:dzmarket/src/services/crashlytics_service.dart';
 import 'package:dzmarket/src/services/app_error_service.dart';
 import 'package:dzmarket/src/services/app_logger.dart';
 import 'package:dzmarket/src/services/network_preferences_service.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 // ignore: depend_on_referenced_packages
@@ -66,6 +68,10 @@ Future<void> _bootstrapApp() async {
     // Supabase client auto-refreshes tokens by default; no extra options needed here.
   );
   await FirebaseService.instance.init(config);
+  if (!kIsWeb && FirebaseService.instance.isEnabled) {
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    await PushNotificationService.instance.start();
+  }
   await TranslationService.instance.load();
   await ConnectivityService.instance.start();
   NetworkPreferencesService.instance.bindToConnectivity(
