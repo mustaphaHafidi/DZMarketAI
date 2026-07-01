@@ -9,7 +9,7 @@ workflows:
       groups:
         - dzmarket_secrets
       flutter: stable
-      xcode: latest
+      xcode: 26.3
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.dzmarket.app
