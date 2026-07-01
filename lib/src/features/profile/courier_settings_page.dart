@@ -5,6 +5,7 @@ import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import 'package:dzmarket/src/utils/courier_credentials_status.dart';
@@ -266,6 +267,7 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
     final isGuepex = ShippingService.isGuepexCourier(
       courierName: _selectedCourierName,
     );
+    final isYalidine = lower.contains('yalidine');
     final checkedAtLabel = _lastValidatedAt == null
         ? null
         : DateFormat('dd/MM/yyyy HH:mm').format(_lastValidatedAt!);
@@ -313,6 +315,15 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: _apiKeyCtrl,
+                    keyboardType: isYalidine
+                        ? TextInputType.number
+                        : TextInputType.text,
+                    inputFormatters: isYalidine
+                        ? [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(20),
+                          ]
+                        : null,
                     decoration: InputDecoration(
                       labelText: isEcotrack
                           ? L10n.tr(context, 'courier_settings.token_label')
@@ -324,6 +335,14 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
                               'courier_settings.zrexpress_key_label',
                             )
                           : L10n.tr(context, 'courier_settings.api_key_label'),
+                      helperText: isYalidine
+                          ? L10n.tr(
+                              context,
+                              'courier_settings.yalidine_id_hint',
+                              fallback:
+                                  'ID numérique Yalidine, 20 caractères maximum.',
+                            )
+                          : null,
                       prefixIcon: const Icon(Icons.vpn_key_outlined),
                     ),
                   ),

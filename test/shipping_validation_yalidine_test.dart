@@ -21,4 +21,33 @@ void main() {
     expect(missingSecret['ok'], isFalse);
     expect(missingSecret['message'], 'Secret manquant');
   });
+
+  test(
+    'Yalidine: invalid API ID format is blocked before remote validation',
+    () async {
+      final service = ShippingService();
+
+      final invalid = await service.validateCredentialsDetailed(
+        courierName: 'Yalidine Express',
+        apiKey: 'abc-token',
+        apiSecret: 'secret-ok',
+      );
+
+      expect(invalid['ok'], isFalse);
+      expect(
+        invalid['message'],
+        'API ID Yalidine invalide. Utilisez uniquement des chiffres (20 caractères max).',
+      );
+    },
+  );
+
+  test('Yalidine: legacy swapped ID/token is accepted by format guard', () {
+    final error = ShippingService.validateCredentialFormat(
+      courierName: 'Yalidine Express',
+      apiKey: 'yalidine-token-legacy-value',
+      apiSecret: '12345678901234567890',
+    );
+
+    expect(error, isNull);
+  });
 }

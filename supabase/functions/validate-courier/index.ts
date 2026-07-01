@@ -93,6 +93,21 @@ const probeRatePolicy = (carrierCode: string): CarrierRateWindow[] => {
   }
 };
 
+const yalidineApiIdFormatError = (apiKey: string) => {
+  const trimmed = apiKey.trim();
+  if (/^\d{1,20}$/.test(trimmed)) return "";
+  return "API ID Yalidine invalide. Utilisez uniquement des chiffres (20 caractères max).";
+};
+
+const normalizeYalidineCredentials = (apiKey: string, apiSecret: string) => {
+  const key = apiKey.trim();
+  const secret = apiSecret.trim();
+  if (!/^\d{1,20}$/.test(key) && /^\d{1,20}$/.test(secret) && key) {
+    return { apiKey: secret, apiSecret: key };
+  }
+  return { apiKey: key, apiSecret: secret };
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -153,8 +168,8 @@ serve(async (req) => {
   }
 
   const courierName = (payload.courierName ?? "").trim().toLowerCase();
-  const apiKey = (payload.apiKey ?? "").trim();
-  const apiSecret = (payload.apiSecret ?? "").trim();
+  let apiKey = (payload.apiKey ?? "").trim();
+  let apiSecret = (payload.apiSecret ?? "").trim();
   if (!courierName || !apiKey || (!apiSecret && !courierName.includes("ecotrack"))) {
     return new Response(
       JSON.stringify({ ok: false, message: "Missing credentials" }),
@@ -171,8 +186,14 @@ serve(async (req) => {
         courierName.includes("zr-express"))
     ? "zrexpress"
     : courierName.includes("guepex")
-    ? "guepex"
-    : "generic";
+      ? "guepex"
+      : "generic";
+
+  if (courierCode === "yalidine") {
+    const normalized = normalizeYalidineCredentials(apiKey, apiSecret);
+    apiKey = normalized.apiKey;
+    apiSecret = normalized.apiSecret;
+  }
 
   try {
     for (const window of probeRatePolicy(courierCode)) {
@@ -197,6 +218,13 @@ serve(async (req) => {
   }
 
   if (courierName.includes("yalidine")) {
+    const formatError = yalidineApiIdFormatError(apiKey);
+    if (formatError) {
+      return new Response(
+        JSON.stringify({ ok: false, message: formatError }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
     const url = "https://api.yalidine.app/v1/wilayas/";
     const headers = {
       "X-API-ID": apiKey,

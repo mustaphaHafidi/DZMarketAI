@@ -44,10 +44,7 @@ class _FakeBuyerReturnService extends BuyerReturnService {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  MaterialApp wrapApp({
-    required Locale locale,
-    required Widget child,
-  }) {
+  MaterialApp wrapApp({required Locale locale, required Widget child}) {
     return MaterialApp(
       locale: locale,
       supportedLocales: const [Locale('fr'), Locale('ar')],
@@ -96,9 +93,7 @@ void main() {
 
     expect(find.text('Annuler la commande'), findsOneWidget);
     expect(
-      find.text(
-        "Cette action annulera la commande et informera l'acheteur.",
-      ),
+      find.text("Cette action annulera la commande et informera l'acheteur."),
       findsOneWidget,
     );
     expect(find.text("Confirmer l'annulation"), findsOneWidget);
@@ -190,16 +185,60 @@ void main() {
     );
   });
 
-  testWidgets('cancelling a seller order removes it from the list immediately', (
+  testWidgets(
+    'cancelling a seller order removes it from the list immediately',
+    (tester) async {
+      final service = _FakeOrderService([pendingOrder()]);
+
+      await tester.pumpWidget(
+        wrapApp(
+          locale: const Locale('fr'),
+          child: SellerOrdersPage(
+            orderService: service,
+            buyerReturnService: _FakeBuyerReturnService(const {}),
+            userIdOverride: 'seller-1',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Produit 45'), findsOneWidget);
+      expect(find.text('Commande order-pending'), findsOneWidget);
+
+      await tester.tap(find.text('Annuler'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text("Confirmer l'annulation"));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Produit 45'), findsNothing);
+      expect(
+        find.text("Commande annulée. L'acheteur a été informé."),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('seller order without price does not duplicate order label', (
     tester,
   ) async {
-    final service = _FakeOrderService([pendingOrder()]);
+    final order = Order(
+      id: 'order-no-price',
+      productId: 'product-9',
+      buyerId: 'buyer-9',
+      sellerId: 'seller-1',
+      status: OrderStatus.pending,
+      createdAt: DateTime(2026, 4, 24),
+      productTitle: 'Table basse',
+      productPrice: null,
+      shippingOption: 'home',
+    );
 
     await tester.pumpWidget(
       wrapApp(
         locale: const Locale('fr'),
         child: SellerOrdersPage(
-          orderService: service,
+          orderService: _FakeOrderService([order]),
           buyerReturnService: _FakeBuyerReturnService(const {}),
           userIdOverride: 'seller-1',
         ),
@@ -207,18 +246,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Produit 45'), findsOneWidget);
-
-    await tester.tap(find.text('Annuler'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text("Confirmer l'annulation"));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
-
-    expect(find.text('Produit 45'), findsNothing);
-    expect(
-      find.text("Commande annulée. L'acheteur a été informé."),
-      findsOneWidget,
-    );
+    expect(find.text('Table basse'), findsOneWidget);
+    expect(find.text('Commande order-no-price'), findsOneWidget);
+    expect(find.text('Chat acheteur'), findsOneWidget);
   });
 }

@@ -16,6 +16,15 @@ const jsonResponse = (body: unknown, status = 200) =>
 const textValue = (value: unknown) =>
   typeof value === "string" ? value.trim() : value == null ? "" : String(value);
 
+const normalizeYalidineCredentials = (apiKey: unknown, apiSecret: unknown) => {
+  const key = textValue(apiKey);
+  const secret = textValue(apiSecret);
+  if (!/^\d{1,20}$/.test(key) && /^\d{1,20}$/.test(secret) && key) {
+    return { api_key: secret, api_secret: key };
+  }
+  return { api_key: key, api_secret: secret };
+};
+
 const consumeRateLimit = async (
   supabase: ReturnType<typeof createClient>,
   key: string,
@@ -370,12 +379,19 @@ serve(async (req) => {
   const normalizedVariants = variants.map(normalizeCourier);
   const courierKey = normalizeCourier(courierId);
 
-  const { data: settingsRow } = await supabaseAdmin
+  const { data: rawSettingsRow } = await supabaseAdmin
     .from("seller_delivery_settings")
     .select("api_key, api_secret")
     .eq("owner_id", sellerId)
     .in("courier_id", variants)
     .maybeSingle();
+
+  const settingsRow = normalizedVariants.some((v) => v.includes("yalidine"))
+    ? normalizeYalidineCredentials(rawSettingsRow?.api_key, rawSettingsRow?.api_secret)
+    : {
+      api_key: textValue(rawSettingsRow?.api_key),
+      api_secret: textValue(rawSettingsRow?.api_secret),
+    };
 
   if (!settingsRow?.api_key) {
     return jsonResponse({ ok: true, data: [] });

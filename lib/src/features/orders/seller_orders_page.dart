@@ -252,9 +252,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_friendlyCancelError(context, e)),
-          ),
+          SnackBar(content: Text(_friendlyCancelError(context, e))),
         );
       }
     }
@@ -287,11 +285,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
       L10n.t(context, 'Annuler', 'إلغاء');
 
   // ignore: unused_element
-  String _cancelDialogConfirmLabel(BuildContext context) => L10n.t(
-    context,
-    "Confirmer l'annulation",
-    'تأكيد الإلغاء',
-  );
+  String _cancelDialogConfirmLabel(BuildContext context) =>
+      L10n.t(context, "Confirmer l'annulation", 'تأكيد الإلغاء');
 
   // ignore: unused_element
   String _cancelledSnackLabel(BuildContext context) => L10n.t(
@@ -342,13 +337,12 @@ class _SellerOrderCard extends StatelessWidget {
       deliveryMethod: order.deliveryMethod,
       shippingOption: order.shippingOption,
     );
-    final priceText = order.productPrice != null
-        ? currency.format(order.productPrice)
-        : L10n.tr(
-            context,
-            'seller_orders.order_label',
-            params: {'id': order.id},
-          );
+    final resolvedPrice =
+        order.salePrice ?? order.agreedPrice ?? order.productPrice;
+    final priceText = resolvedPrice != null
+        ? currency.format(resolvedPrice)
+        : '-';
+    final chatBuyerLabel = L10n.t(context, 'Chat acheteur', 'محادثة المشتري');
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -375,93 +369,95 @@ class _SellerOrderCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 4),
+            Text(
+              L10n.tr(
+                context,
+                'seller_orders.order_label',
+                params: {'id': order.id},
+              ),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 2),
             Text(priceText),
             if ((buyerReturnStats?.returns12m ?? 0) > 0) ...[
               const SizedBox(height: 6),
               _BuyerReturnSummary(stats: buyerReturnStats!),
             ],
             const SizedBox(height: 4),
-            if (order.shippingOption != null)
-              Chip(
-                label: Text(order.shippingOption!),
-                visualDensity: VisualDensity.compact,
-                avatar: const Icon(Icons.local_shipping_outlined, size: 16),
-              ),
-            if ((order.courierName ?? '').isNotEmpty)
-              Chip(
-                label: Text(order.courierName!),
-                visualDensity: VisualDensity.compact,
-                avatar: const Icon(Icons.apartment_outlined, size: 16),
-              ),
-            const SizedBox(height: 8),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
               children: [
-                IconButton(
-                  tooltip: L10n.tr(context, 'common.chat'),
-                  onPressed: () => context.push('/order/${order.id}/chat'),
-                  icon: const Icon(Icons.chat_bubble_outline),
-                ),
-                IconButton(
-                  tooltip: L10n.tr(context, 'common.track'),
-                  onPressed: () => context.push('/order/${order.id}/track'),
-                  icon: const Icon(Icons.map_outlined),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Wrap(
-                    alignment: WrapAlignment.end,
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: [
-                      if (canCancel)
-                        TextButton.icon(
-                          onPressed: onDelete,
-                          icon: const Icon(Icons.cancel_outlined),
-                          label: Text(_cancelButtonLabelV2(context)),
-                        ),
-                      if ((order.labelUrl ?? '').isNotEmpty)
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            TextButton.icon(
-                              onPressed: () =>
-                                  onOpenLabel(order.id, order.labelUrl!),
-                              icon: const Icon(Icons.picture_as_pdf_outlined),
-                              label: Text(
-                                L10n.tr(context, 'seller_orders.open_label'),
-                              ),
-                            ),
-                            ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 280),
-                              child: Text(
-                                L10n.tr(
-                                  context,
-                                  'shipments.label_retention_note',
-                                ),
-                                textAlign: TextAlign.end,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ),
-                          ],
-                        )
-                      else if (!isArrangedOrder)
-                        FilledButton.icon(
-                          onPressed: onGenerateLabel,
-                          icon: const Icon(Icons.local_shipping_outlined),
-                          label: Text(_generateLabelButtonLabel(context)),
-                        )
-                      else
-                        OutlinedButton.icon(
-                          onPressed: onManageArrangedDelivery,
-                          icon: const Icon(Icons.chat_bubble_outline),
-                          label: Text(_arrangedDeliveryButtonLabel(context)),
-                        ),
-                    ],
+                if (order.shippingOption != null)
+                  Chip(
+                    label: Text(order.shippingOption!),
+                    visualDensity: VisualDensity.compact,
+                    avatar: const Icon(Icons.local_shipping_outlined, size: 16),
                   ),
-                ),
+                if ((order.courierName ?? '').isNotEmpty)
+                  Chip(
+                    label: Text(order.courierName!),
+                    visualDensity: VisualDensity.compact,
+                    avatar: const Icon(Icons.apartment_outlined, size: 16),
+                  ),
               ],
             ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => context.push('/order/${order.id}/chat'),
+                  icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                  label: Text(chatBuyerLabel),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => context.push('/order/${order.id}/track'),
+                  icon: const Icon(Icons.map_outlined, size: 18),
+                  label: Text(L10n.tr(context, 'common.track')),
+                ),
+                if (canCancel)
+                  TextButton.icon(
+                    onPressed: onDelete,
+                    icon: const Icon(Icons.cancel_outlined),
+                    label: Text(_cancelButtonLabelV2(context)),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            if ((order.labelUrl ?? '').isNotEmpty) ...[
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () => onOpenLabel(order.id, order.labelUrl!),
+                  icon: const Icon(Icons.picture_as_pdf_outlined),
+                  label: Text(L10n.tr(context, 'seller_orders.open_label')),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                L10n.tr(context, 'shipments.label_retention_note'),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ] else if (!isArrangedOrder)
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: onGenerateLabel,
+                  icon: const Icon(Icons.local_shipping_outlined),
+                  label: Text(_generateLabelButtonLabel(context)),
+                ),
+              )
+            else
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: onManageArrangedDelivery,
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  label: Text(_arrangedDeliveryButtonLabel(context)),
+                ),
+              ),
           ],
         ),
       ),
@@ -473,7 +469,7 @@ class _SellerOrderCard extends StatelessWidget {
       L10n.t(context, 'Annuler', 'إلغاء');
 
   String _generateLabelButtonLabel(BuildContext context) =>
-      L10n.t(context, 'Generer bordereau', 'إنشاء البوليصة');
+      L10n.tr(context, 'seller_orders.generate_label');
 
   String _arrangedDeliveryButtonLabel(BuildContext context) =>
       L10n.t(context, 'Livraison a convenir', 'تسليم يتم بالاتفاق');

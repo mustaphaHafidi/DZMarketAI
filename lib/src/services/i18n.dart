@@ -434,6 +434,8 @@ class L10n {
     'courier_settings.token_label': 'Token Ecotrack',
     'courier_settings.validating': 'Validation...',
     'courier_settings.web_notice': 'Validation API côté serveur.',
+    'courier_settings.yalidine_id_hint':
+        'ID numerique Yalidine, 20 caracteres maximum.',
     'courier_settings.zrexpress_key_label': 'Clé secrète ZR Express',
     'courier_settings.zrexpress_tenant_label': 'Tenant ID ZR Express',
     'cta.buy_agreed': 'Acheter {price} DA',
@@ -568,7 +570,11 @@ class L10n {
     'listing.add.preview_stock': 'Stock',
     'listing.add.preview_weight': 'Poids (kg)',
     'listing.add.preview_width': 'Largeur (cm)',
+    'listing.add.price_field_label': 'Prix',
+    'listing.add.price_helper': 'Prix de vente en DZD.',
     'listing.add.price_label': 'Prix de vente (DZD)',
+    'listing.add.declared_value_helper':
+        'Par defaut = prix de vente. Modifiable si necessaire.',
     'listing.add.publish': 'Publier',
     'listing.add.search_tags_add': 'Ajouter un tag',
     'listing.add.search_tags_empty': 'Aucun tag selectionne.',
@@ -1465,6 +1471,8 @@ class L10n {
     'courier_settings.token_label': 'معرّف API / توكن',
     'courier_settings.validating': 'جارٍ التحقق',
     'courier_settings.web_notice': 'إعدادات الناقل لا تُحفظ على الويب.',
+    'courier_settings.yalidine_id_hint':
+        'معرّف Yalidine رقمي وبحد أقصى 20 رقما.',
     'courier_settings.zrexpress_key_label': 'المفتاح السري ZR Express',
     'courier_settings.zrexpress_tenant_label': 'معرّف المستأجر ZR Express',
     'cta.buy_agreed': 'شراء {price} دج',
@@ -1595,7 +1603,11 @@ class L10n {
     'listing.add.preview_stock': 'الكمية',
     'listing.add.preview_weight': 'الوزن (كغ)',
     'listing.add.preview_width': 'العرض (سم)',
+    'listing.add.price_field_label': 'السعر',
+    'listing.add.price_helper': 'سعر البيع بالدج.',
     'listing.add.price_label': 'سعر البيع (دج)',
+    'listing.add.declared_value_helper':
+        'افتراضيا = سعر البيع. يمكن تعديله عند الحاجة.',
     'listing.add.publish': 'نشر',
     'listing.add.search_tags_add': 'إضافة وسم',
     'listing.add.search_tags_empty': 'لا توجد وسوم محددة.',

@@ -1119,6 +1119,221 @@ const validateParcelAgainstRules = ({
   return null;
 };
 
+const firstFiniteNumber = (...values: unknown[]) => {
+  for (const value of values) {
+    if (value == null) continue;
+    const parsed = typeof value === "number" ? value : Number(textValue(value));
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+};
+
+const normalizeNumericWilayaCode = (value: unknown) => {
+  const raw = textValue(value);
+  if (!raw) return "";
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return "";
+  const parsed = Number.parseInt(digits, 10);
+  return Number.isFinite(parsed) ? String(parsed) : digits;
+};
+
+const extractCarrierErrorText = (value: unknown): string => {
+  if (value == null) return "";
+  if (typeof value === "string") return value.trim();
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const message = extractCarrierErrorText(item);
+      if (message) return message;
+    }
+    return "";
+  }
+  if (typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    const directKeys = [
+      "message",
+      "detail",
+      "description",
+      "title",
+      "error",
+      "errors",
+    ];
+    for (const key of directKeys) {
+      const message = extractCarrierErrorText(obj[key]);
+      if (message) return message;
+    }
+    for (const nested of Object.values(obj)) {
+      const message = extractCarrierErrorText(nested);
+      if (message) return message;
+    }
+  }
+  return "";
+};
+
+const summarizeCarrierError = (rawBody: string) => {
+  const trimmed = textValue(rawBody);
+  if (!trimmed) return "";
+  try {
+    const parsed = JSON.parse(trimmed);
+    return extractCarrierErrorText(parsed) || trimmed;
+  } catch {
+    return trimmed;
+  }
+};
+
+const carrierFailureResponse = ({
+  carrierLabel,
+  status,
+  rawBody,
+  codAmount,
+}: {
+  carrierLabel: string;
+  status: number;
+  rawBody: string;
+  codAmount: number;
+}) => {
+  const detail = summarizeCarrierError(rawBody);
+  const normalized = normalizeErrorBlob(detail);
+  const mentionsAmount =
+    normalized.includes("montant") ||
+    normalized.includes("amount") ||
+    normalized.includes("cod") ||
+    normalized.includes("price");
+  const mentionsUpperBound =
+    normalized.includes("150000") ||
+    normalized.includes("less than or equal") ||
+    normalized.includes("less or equal") ||
+    normalized.includes("superieure") ||
+    normalized.includes("maximum") ||
+    normalized.includes("max");
+  if (mentionsAmount && mentionsUpperBound) {
+    return jsonResponse(
+      {
+        ok: false,
+        error_code: "parcel_cod_amount_out_of_range",
+        message: "parcel_cod_amount_out_of_range",
+        details: { max: 150000, value: codAmount },
+        detail,
+      },
+      400,
+    );
+  }
+  return jsonResponse(
+    {
+      ok: false,
+      error_code: "carrier_request_failed",
+      message: `${carrierLabel} ${status}`,
+      detail,
+    },
+    status >= 400 && status < 500 ? 400 : 502,
+  );
+};
+
+type SellerCourierSettings = {
+  api_key?: string | null;
+  api_secret?: string | null;
+  sender_id?: string | null;
+  extra?: Record<string, unknown> | null;
+  encrypted_fallback?: boolean;
+  last_validation_status?: string | null;
+  last_validation_error?: string | null;
+  last_validated_at?: string | null;
+  consecutive_failures?: number | null;
+};
+
+const yalidineApiIdFormatError = (apiKey: string) => {
+  const trimmed = textValue(apiKey);
+  if (/^\d{1,20}$/.test(trimmed)) return "";
+  return "API ID Yalidine invalide. Utilisez uniquement des chiffres (20 caractères max).";
+};
+
+const normalizeSellerCourierSettings = (
+  courierCode: string,
+  settings: SellerCourierSettings,
+): SellerCourierSettings => {
+  const apiKey = textValue(settings.api_key);
+  const apiSecret = textValue(settings.api_secret);
+  if (
+    courierCode === "yalidine" &&
+    !/^\d{1,20}$/.test(apiKey) &&
+    /^\d{1,20}$/.test(apiSecret) &&
+    apiKey
+  ) {
+    return {
+      ...settings,
+      api_key: apiSecret,
+      api_secret: apiKey,
+    };
+  }
+  return {
+    ...settings,
+    api_key: apiKey,
+    api_secret: apiSecret,
+  };
+};
+
+const validateCourierCredentialFormat = (
+  courierCode: string,
+  apiKey: string,
+  apiSecret: string,
+) => {
+  if (courierCode === "yalidine") {
+    if (!apiSecret.trim()) return "Token Yalidine manquant.";
+    return yalidineApiIdFormatError(apiKey);
+  }
+  return "";
+};
+
+const loadSellerCourierSettings = async (
+  supabaseAdmin: ReturnType<typeof createClient>,
+  ownerId: string,
+  courierId: string,
+): Promise<SellerCourierSettings | null> => {
+  const { data: healthRow, error: healthError } = await supabaseAdmin
+    .from("seller_delivery_settings")
+    .select(
+      "api_key, api_secret, sender_id, extra, api_key_enc, api_secret_enc, " +
+        "last_validated_at, last_validation_status, last_validation_error, consecutive_failures",
+    )
+    .eq("owner_id", ownerId)
+    .eq("courier_id", courierId)
+    .maybeSingle();
+  if (healthError || !healthRow) return null;
+
+  let secureRow: Record<string, unknown> | null = null;
+  const { data: secureRows } = await supabaseAdmin.rpc(
+    "get_seller_delivery_settings_secure",
+    {
+      p_owner: ownerId,
+      p_courier_id: courierId,
+    },
+  );
+  if (Array.isArray(secureRows) && secureRows.length > 0) {
+    const first = secureRows[0];
+    if (first && typeof first === "object") {
+      secureRow = first as Record<string, unknown>;
+    }
+  } else if (secureRows && typeof secureRows === "object") {
+    secureRow = secureRows as Record<string, unknown>;
+  }
+
+  const raw = healthRow as Record<string, unknown>;
+  const hasEncryptedSecrets = raw.api_key_enc != null || raw.api_secret_enc != null;
+  const mergedExtra = secureRow?.extra ?? raw.extra;
+  return {
+    api_key: textValue(secureRow?.api_key ?? raw.api_key),
+    api_secret: textValue(secureRow?.api_secret ?? raw.api_secret),
+    sender_id: textValue(secureRow?.sender_id ?? raw.sender_id),
+    extra: mergedExtra && typeof mergedExtra === "object"
+      ? mergedExtra as Record<string, unknown>
+      : null,
+    encrypted_fallback: secureRow == null && hasEncryptedSecrets,
+    last_validated_at: textValue(raw.last_validated_at),
+    last_validation_status: textValue(raw.last_validation_status),
+    last_validation_error: textValue(raw.last_validation_error),
+    consecutive_failures: intValue(raw.consecutive_failures, 0),
+  };
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ ok: false, message: "Method not allowed" }, 405);
@@ -1194,7 +1409,7 @@ serve(async (req) => {
   }
 
   const baseOrderSelect =
-    "id, seller_id, buyer_id, courier_id, courier_name, delivery_method, "
+    "id, product_id, seller_id, buyer_id, agreed_price, sale_price, courier_id, courier_name, delivery_method, "
     + "shipping_option, shipping_cost, delivery_cost, tracking_number, "
     + "label_url, status";
   let order = null;
@@ -1269,10 +1484,59 @@ serve(async (req) => {
   const selection =
     (payload.selection as Selection | undefined) ??
     (order?.shipping_selection as Selection | undefined);
+  let productSnapshot: Record<string, unknown> | null = null;
+  if (order.product_id != null && textValue(order.product_id).length > 0) {
+    const { data: productData } = await supabaseAdmin
+      .from("products")
+      .select(
+        "id,title,declared_value,weight_kg,height_cm,width_cm,length_cm",
+      )
+      .eq("id", order.product_id)
+      .maybeSingle();
+    if (productData && typeof productData === "object") {
+      productSnapshot = productData as Record<string, unknown>;
+    }
+  }
   const deliveryMode =
     textValue(payload.delivery_mode) || textValue(order.delivery_method);
   const shippingOption =
     textValue(payload.shipping_option) || textValue(order.shipping_option);
+  const lockedCodAmount =
+    firstPositiveNumber(
+      order.agreed_price,
+      order.sale_price,
+      pick(selection, "price"),
+    ) ?? 0;
+  const lockedProductList =
+    textValue(productSnapshot?.title) ||
+    textValue(pick(selection, "productList")) ||
+    textValue(pick(selection, "product_list")) ||
+    `Commande ${orderId}`;
+  const lockedWeight = Math.max(
+    1,
+    intValue(
+      firstFiniteNumber(productSnapshot?.weight_kg, pick(selection, "weight")),
+      1,
+    ),
+  );
+  const lockedHeight = intValue(
+    firstFiniteNumber(productSnapshot?.height_cm, pick(selection, "height")),
+    0,
+  );
+  const lockedWidth = intValue(
+    firstFiniteNumber(productSnapshot?.width_cm, pick(selection, "width")),
+    0,
+  );
+  const lockedLength = intValue(
+    firstFiniteNumber(productSnapshot?.length_cm, pick(selection, "length")),
+    0,
+  );
+  const lockedDeclaredValue =
+    firstPositiveNumber(
+      productSnapshot?.declared_value,
+      pick(selection, "declaredValue"),
+      lockedCodAmount,
+    ) ?? lockedCodAmount;
   let shippingCost = firstPositiveNumber(
     payload.shipping_cost,
     order.shipping_cost,
@@ -1296,13 +1560,19 @@ serve(async (req) => {
     return jsonResponse({ ok: true, queued: true, job_id: jobId });
   }
 
-  const { data: settingsRow, error: settingsError } = await supabaseAdmin
-    .from("seller_delivery_settings")
-    .select("api_key, api_secret, sender_id, extra")
-    .eq("owner_id", effectiveUserId)
-    .eq("courier_id", courierId)
-    .maybeSingle();
-  if (settingsError || !settingsRow?.api_key) {
+  const normalizeCourier = (value: string) =>
+    value.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const normalizedCourier = normalizeCourier(`${courierId} ${courierName}`);
+  const courierCode = canonicalCourierCode(courierId, courierName, normalizedCourier);
+  const loadedSettingsRow = await loadSellerCourierSettings(
+    supabaseAdmin,
+    effectiveUserId,
+    effectiveCourierId,
+  );
+  const settingsRow = loadedSettingsRow
+    ? normalizeSellerCourierSettings(courierCode, loadedSettingsRow)
+    : null;
+  if (!settingsRow?.api_key) {
     return jsonResponse(
       {
         ok: false,
@@ -1314,11 +1584,41 @@ serve(async (req) => {
       400,
     );
   }
-
-  const normalizeCourier = (value: string) =>
-    value.toLowerCase().replace(/[^a-z0-9]/g, "");
-  const normalizedCourier = normalizeCourier(`${courierId} ${courierName}`);
-  const courierCode = canonicalCourierCode(courierId, courierName, normalizedCourier);
+  if (settingsRow.encrypted_fallback == true) {
+    return await credentialInvalidResponse({
+      supabaseAdmin,
+      sellerId: effectiveUserId,
+      orderId,
+      courierId: effectiveCourierId,
+      courierName: effectiveCourierName,
+      detail: "Parametres transporteur indisponibles. Ouvrez Comptes transporteurs et revalidez ce compte.",
+    });
+  }
+  if (textValue(settingsRow.last_validation_status).toLowerCase() === "invalid") {
+    return await credentialInvalidResponse({
+      supabaseAdmin,
+      sellerId: effectiveUserId,
+      orderId,
+      courierId: effectiveCourierId,
+      courierName: effectiveCourierName,
+      detail: textValue(settingsRow.last_validation_error) || "Paramètres transporteur invalides",
+    });
+  }
+  const formatError = validateCourierCredentialFormat(
+    courierCode,
+    textValue(settingsRow.api_key),
+    textValue(settingsRow.api_secret),
+  );
+  if (formatError) {
+    return await credentialInvalidResponse({
+      supabaseAdmin,
+      sellerId: effectiveUserId,
+      orderId,
+      courierId: effectiveCourierId,
+      courierName: effectiveCourierName,
+      detail: formatError,
+    });
+  }
   const parcelRules = await loadParcelRulesForCourier(
     supabaseAdmin,
     courierCode,
@@ -1417,13 +1717,13 @@ serve(async (req) => {
       textValue(pick(selection, "phone_main")) ||
       textValue(pick(selection, "phone"));
     const address = textValue(pick(selection, "address"));
-    const productList = textValue(pick(selection, "productList"));
-    const price = numberValue(pick(selection, "price"), 0);
-    const weight = intValue(pick(selection, "weight"), 1);
-    const height = intValue(pick(selection, "height"), 0);
-    const width = intValue(pick(selection, "width"), 0);
-    const length = intValue(pick(selection, "length"), 0);
-    const declaredValue = numberValue(pick(selection, "declaredValue"), price);
+    const productList = lockedProductList;
+    const price = lockedCodAmount;
+    const weight = lockedWeight;
+    const height = lockedHeight;
+    const width = lockedWidth;
+    const length = lockedLength;
+    const declaredValue = lockedDeclaredValue;
     const freeShipping =
       pick(selection, "freeshipping") === true ||
       textValue(pick(selection, "freeshipping")).toLowerCase() === "true";
@@ -1509,7 +1809,12 @@ serve(async (req) => {
           detail: bodyText || `Yalidine ${resp.status}`,
         });
       }
-      return jsonResponse({ ok: false, message: `Yalidine ${resp.status}` }, 502);
+      return carrierFailureResponse({
+        carrierLabel: "Yalidine",
+        status: resp.status,
+        rawBody: bodyText,
+        codAmount: price,
+      });
     }
     const decoded = await resp.json();
     const data = decoded?.data ?? decoded;
@@ -1530,7 +1835,12 @@ serve(async (req) => {
           detail: message || "Token invalide",
         });
       }
-      return jsonResponse({ ok: false, message }, 400);
+      return carrierFailureResponse({
+        carrierLabel: "Yalidine",
+        status: 400,
+        rawBody: message,
+        codAmount: price,
+      });
     }
     trackingNumber = textValue(
       first?.tracking ?? first?.tracking_number ?? first?.tracking_id ?? first?.parcel_id,
@@ -1594,13 +1904,13 @@ serve(async (req) => {
       textValue(pick(selection, "phone_main")) ||
       textValue(pick(selection, "phone"));
     const address = textValue(pick(selection, "address"));
-    const productList = textValue(pick(selection, "productList"));
-    const price = numberValue(pick(selection, "price"), 0);
-    const weight = intValue(pick(selection, "weight"), 1);
-    const height = intValue(pick(selection, "height"), 0);
-    const width = intValue(pick(selection, "width"), 0);
-    const length = intValue(pick(selection, "length"), 0);
-    const declaredValue = numberValue(pick(selection, "declaredValue"), price);
+    const productList = lockedProductList;
+    const price = lockedCodAmount;
+    const weight = lockedWeight;
+    const height = lockedHeight;
+    const width = lockedWidth;
+    const length = lockedLength;
+    const declaredValue = lockedDeclaredValue;
     const freeShipping =
       pick(selection, "freeshipping") === true ||
       textValue(pick(selection, "freeshipping")).toLowerCase() === "true";
@@ -1719,10 +2029,12 @@ serve(async (req) => {
           detail: bodyText || `Guepex ${resp.status}`,
         });
       }
-      return jsonResponse(
-        { ok: false, message: `Guepex ${resp.status}: ${bodyText}` },
-        502,
-      );
+      return carrierFailureResponse({
+        carrierLabel: "Guepex",
+        status: resp.status,
+        rawBody: bodyText,
+        codAmount: price,
+      });
     }
 
     const decoded = await resp.json();
@@ -1784,7 +2096,12 @@ serve(async (req) => {
           detail: message || "Token invalide",
         });
       }
-      return jsonResponse({ ok: false, message }, 400);
+      return carrierFailureResponse({
+        carrierLabel: "Guepex",
+        status: 400,
+        rawBody: message,
+        codAmount: price,
+      });
     }
 
     trackingNumber = textValue(
@@ -1855,15 +2172,12 @@ serve(async (req) => {
     if (!selection) {
       return jsonResponse({ ok: false, message: "Missing shipment selection" }, 400);
     }
-      const price = numberValue(pick(selection, "price"), 0);
-      const weight = intValue(pick(selection, "weight"), 1);
-      const height = intValue(pick(selection, "height"), 0);
-      const width = intValue(pick(selection, "width"), 0);
-      const length = intValue(pick(selection, "length"), 0);
-      const declaredValue = numberValue(
-        pick(selection, "declaredValue"),
-        price,
-      );
+      const price = lockedCodAmount;
+      const weight = lockedWeight;
+      const height = lockedHeight;
+      const width = lockedWidth;
+      const length = lockedLength;
+      const declaredValue = lockedDeclaredValue;
       const insuranceActive =
         pick(selection, "insuranceActive") === true ||
         pick(selection, "insurance_active") === true;
@@ -1889,10 +2203,14 @@ serve(async (req) => {
       adresse: textValue(pick(selection, "address")),
       code_postal: textValue(pick(selection, "zip")),
       commune: textValue(pick(selection, "receiverCommune")),
-      code_wilaya: textValue(pick(selection, "wilayaCode")),
-      montant: textValue(pick(selection, "price")),
+      code_wilaya: normalizeNumericWilayaCode(
+        pick(selection, "wilayaCode") ||
+            pick(selection, "receiverWilayaId") ||
+            pick(selection, "wilaya_id"),
+      ),
+      montant: Math.round(price).toString(),
       remarque: textValue(pick(selection, "remark")),
-      produit: textValue(pick(selection, "productList")),
+      produit: lockedProductList,
       boutique: textValue(pick(selection, "shopName")),
       type: pick(selection, "hasExchange") === true ? "2" : "1",
         stop_desk: pick(selection, "deliveryType") === "stopdesk" ? "1" : "0",
@@ -1939,11 +2257,12 @@ serve(async (req) => {
             detail: errorBody || `Ecotrack ${resp.status}`,
           });
         }
-        const suffix = errorBody ? `: ${errorBody}` : "";
-        return jsonResponse(
-          { ok: false, message: `Ecotrack ${resp?.status ?? "error"}${suffix}` },
-          502,
-        );
+        return carrierFailureResponse({
+          carrierLabel: "Ecotrack",
+          status: resp?.status ?? 502,
+          rawBody: errorBody,
+          codAmount: price,
+        });
       }
       const decoded = await resp.json();
       const results = decoded?.results ?? {};
@@ -1960,7 +2279,12 @@ serve(async (req) => {
             detail: message || "Token invalide",
           });
         }
-        return jsonResponse({ ok: false, message }, 400);
+        return carrierFailureResponse({
+          carrierLabel: "Ecotrack",
+          status: 400,
+          rawBody: message,
+          codAmount: price,
+        });
       }
       trackingNumber = textValue(result?.tracking ?? decoded?.tracking);
       if (!trackingNumber) {
@@ -2170,13 +2494,13 @@ serve(async (req) => {
       pick(selection, "firstname"),
     )}`.trim();
     const address = textValue(pick(selection, "address"));
-    const productList = textValue(pick(selection, "productList"));
-    const price = numberValue(pick(selection, "price"), 0);
-    const weight = intValue(pick(selection, "weight"), 1);
-    const height = intValue(pick(selection, "height"), 0);
-    const width = intValue(pick(selection, "width"), 0);
-    const length = intValue(pick(selection, "length"), 0);
-    const declaredValue = numberValue(pick(selection, "declaredValue"), price);
+    const productList = lockedProductList;
+    const price = lockedCodAmount;
+    const weight = lockedWeight;
+    const height = lockedHeight;
+    const width = lockedWidth;
+    const length = lockedLength;
+    const declaredValue = lockedDeclaredValue;
     const insuranceActive =
       pick(selection, "insuranceActive") === true ||
       pick(selection, "insurance_active") === true;
@@ -2326,10 +2650,12 @@ serve(async (req) => {
           detail: bodyText || `ZrExpress ${resp.status}`,
         });
       }
-      return jsonResponse(
-        { ok: false, message: `ZrExpress ${resp.status}: ${bodyText}` },
-        502,
-      );
+      return carrierFailureResponse({
+        carrierLabel: "ZrExpress",
+        status: resp.status,
+        rawBody: bodyText,
+        codAmount: price,
+      });
     }
     const decoded = await resp.json();
     const parcel =

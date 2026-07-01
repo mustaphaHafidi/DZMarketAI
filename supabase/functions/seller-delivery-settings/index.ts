@@ -22,6 +22,18 @@ const consumeRateLimit = async (
   return data === true;
 };
 
+const textValue = (value: unknown) =>
+  typeof value === "string" ? value.trim() : value == null ? "" : String(value);
+
+const normalizeYalidineCredentials = (apiKey: unknown, apiSecret: unknown) => {
+  const key = textValue(apiKey);
+  const secret = textValue(apiSecret);
+  if (!/^\d{1,20}$/.test(key) && /^\d{1,20}$/.test(secret) && key) {
+    return { apiKey: secret, apiSecret: key };
+  }
+  return { apiKey: key, apiSecret: secret };
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -70,12 +82,15 @@ serve(async (req) => {
     });
   }
 
-  const supabase = createClient(url, serviceKey, {
+  const supabaseUser = createClient(url, serviceKey, {
     auth: { persistSession: false },
     global: { headers: { Authorization: auth } },
   });
+  const supabaseAdmin = createClient(url, serviceKey, {
+    auth: { persistSession: false },
+  });
 
-  const { data: userData, error: userError } = await supabase.auth.getUser();
+  const { data: userData, error: userError } = await supabaseUser.auth.getUser();
   if (userError || !userData?.user) {
     return new Response(JSON.stringify({ ok: false, message: "Unauthorized" }), {
       status: 401,
@@ -92,7 +107,7 @@ serve(async (req) => {
 
   try {
     const ok = await consumeRateLimit(
-      supabase,
+      supabaseUser,
       `seller_settings:${userId}`,
       30,
       60,
@@ -114,35 +129,67 @@ serve(async (req) => {
     new Set([courierId, courierId.toLowerCase(), courierId.toUpperCase()]),
   );
 
-  const { data, error } = await supabase
+  const { data: healthData, error: healthError } = await supabaseUser
     .from("seller_delivery_settings")
-    .select("api_key, api_secret, sender_id, extra")
+    .select(
+      "sender_id, extra, last_validated_at, last_validation_status, last_validation_error, consecutive_failures",
+    )
     .eq("owner_id", ownerId)
     .in("courier_id", variants)
     .maybeSingle();
 
-  if (error) {
-    return new Response(JSON.stringify({ ok: false, message: error.message }), {
+  if (healthError) {
+    return new Response(JSON.stringify({ ok: false, message: healthError.message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
   const isEcotrack = variants.includes("ecotrack");
-  if (!data || !data.api_key || (!isEcotrack && !data.api_secret)) {
+  const { data: secureRows, error: secureError } = await supabaseAdmin.rpc(
+    "get_seller_delivery_settings_secure",
+    {
+      p_owner: ownerId,
+      p_courier_id: courierId.toLowerCase(),
+    },
+  );
+  if (secureError) {
+    return new Response(JSON.stringify({ ok: false, message: secureError.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const secureRow = Array.isArray(secureRows)
+    ? secureRows[0]
+    : secureRows && typeof secureRows === "object"
+    ? secureRows
+    : null;
+
+  if (!secureRow || !secureRow.api_key || (!isEcotrack && !secureRow.api_secret)) {
     return new Response(JSON.stringify({ ok: false, message: "Not found" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
+  const normalized = courierId.toLowerCase() === "yalidine"
+    ? normalizeYalidineCredentials(secureRow.api_key, secureRow.api_secret)
+    : {
+      apiKey: textValue(secureRow.api_key),
+      apiSecret: textValue(secureRow.api_secret),
+    };
+
   return new Response(
     JSON.stringify({
       ok: true,
       data: {
-        has_api_key: !!data.api_key,
-        has_api_secret: !!data.api_secret,
-        sender_id: data.sender_id,
-        extra: data.extra,
+        api_key: normalized.apiKey,
+        api_secret: normalized.apiSecret,
+        sender_id: secureRow.sender_id ?? healthData?.sender_id ?? null,
+        extra: secureRow.extra ?? healthData?.extra ?? null,
+        last_validated_at: healthData?.last_validated_at ?? null,
+        last_validation_status: healthData?.last_validation_status ?? null,
+        last_validation_error: healthData?.last_validation_error ?? null,
+        consecutive_failures: healthData?.consecutive_failures ?? 0,
       },
     }),
     {

@@ -533,6 +533,51 @@ class ShippingService {
     return idKey.contains('guepex') || nameKey.contains('guepex');
   }
 
+  static bool _looksLikeYalidineId(String value) {
+    return RegExp(r'^\d{1,20}$').hasMatch(value.trim());
+  }
+
+  static ({String apiKey, String apiSecret}) _normalizeCredentialPair({
+    required String courierName,
+    required String apiKey,
+    required String apiSecret,
+  }) {
+    final key = _normalizeCourierKey(courierName);
+    final safeApiKey = apiKey.trim();
+    final safeApiSecret = apiSecret.trim();
+    if (key.contains('yalidine') &&
+        !_looksLikeYalidineId(safeApiKey) &&
+        _looksLikeYalidineId(safeApiSecret) &&
+        safeApiKey.isNotEmpty) {
+      return (apiKey: safeApiSecret, apiSecret: safeApiKey);
+    }
+    return (apiKey: safeApiKey, apiSecret: safeApiSecret);
+  }
+
+  static String? validateCredentialFormat({
+    required String courierName,
+    required String apiKey,
+    required String apiSecret,
+  }) {
+    final key = _normalizeCourierKey(courierName);
+    final normalized = _normalizeCredentialPair(
+      courierName: courierName,
+      apiKey: apiKey,
+      apiSecret: apiSecret,
+    );
+    final safeApiKey = normalized.apiKey;
+    final safeApiSecret = normalized.apiSecret;
+    if (key.contains('yalidine')) {
+      if (!_looksLikeYalidineId(safeApiKey)) {
+        return 'API ID Yalidine invalide. Utilisez uniquement des chiffres (20 caractères max).';
+      }
+      if (safeApiSecret.isEmpty) {
+        return 'Token Yalidine manquant.';
+      }
+    }
+    return null;
+  }
+
   static CourierCapabilities capabilitiesFor({
     String? courierId,
     String? courierName,
@@ -1984,9 +2029,22 @@ class ShippingService {
         (apiSecret == null || apiSecret.trim().isEmpty)) {
       return {'ok': false, 'message': 'Secret manquant'};
     }
+    final formatError = validateCredentialFormat(
+      courierName: courierName,
+      apiKey: apiKey,
+      apiSecret: apiSecret ?? '',
+    );
+    if (formatError != null) {
+      return {'ok': false, 'message': formatError};
+    }
     try {
       final isZr = isZrExpressCourier(courierName: name);
       final isGuepex = isGuepexCourier(courierName: name);
+      final normalized = _normalizeCredentialPair(
+        courierName: courierName,
+        apiKey: apiKey,
+        apiSecret: apiSecret ?? '',
+      );
       if (name.contains('yalidine') ||
           name.contains('ecotrack') ||
           isZr ||
@@ -1996,17 +2054,28 @@ class ShippingService {
             : 120;
         final edge = await _validateViaEdgeDetailed(
           courierName: courierName,
-          apiKey: InputSanitizer.sanitizeText(apiKey, maxLength: tokenLength),
-          apiSecret: apiSecret == null || apiSecret.trim().isEmpty
+          apiKey: InputSanitizer.sanitizeText(
+            normalized.apiKey,
+            maxLength: tokenLength,
+          ),
+          apiSecret: normalized.apiSecret.isEmpty
               ? ''
-              : InputSanitizer.sanitizeText(apiSecret, maxLength: 200),
+              : InputSanitizer.sanitizeText(
+                  normalized.apiSecret,
+                  maxLength: 200,
+                ),
         );
         if (edge != null) return edge;
         if (name.contains('yalidine') && !kIsWeb) {
-          final secret = apiSecret ?? '';
           final ok = await _validateYalidine(
-            apiKey: InputSanitizer.sanitizeText(apiKey, maxLength: 120),
-            apiSecret: InputSanitizer.sanitizeText(secret, maxLength: 120),
+            apiKey: InputSanitizer.sanitizeText(
+              normalized.apiKey,
+              maxLength: 120,
+            ),
+            apiSecret: InputSanitizer.sanitizeText(
+              normalized.apiSecret,
+              maxLength: 120,
+            ),
           ).timeout(const Duration(seconds: 8), onTimeout: () => false);
           return {'ok': ok, 'message': ok ? 'OK' : 'Token invalide'};
         }
@@ -2646,6 +2715,20 @@ class ShippingService {
       throw StateError('Ecotrack token missing');
     }
     final safeOrderId = InputSanitizer.sanitizeId(orderId, maxLength: 64);
+    final rawEcotrackWilayaCode =
+        selection['wilayaCode'] ??
+        selection['receiverWilayaId'] ??
+        selection['wilaya_id'];
+    final normalizedEcotrackWilayaCode = rawEcotrackWilayaCode == null
+        ? ''
+        : () {
+            final digits = rawEcotrackWilayaCode.toString().replaceAll(
+              RegExp(r'\D'),
+              '',
+            );
+            if (digits.isEmpty) return '';
+            return int.tryParse(digits)?.toString() ?? digits;
+          }();
     final orderPayload = <String, dynamic>{
       'reference': safeOrderId,
       'nom_client': '${selection['familyname']} ${selection['firstname']}'
@@ -2655,7 +2738,7 @@ class ShippingService {
       'adresse': selection['address'],
       'code_postal': selection['zip'] ?? '',
       'commune': selection['receiverCommune'],
-      'code_wilaya': selection['wilayaCode'],
+      'code_wilaya': normalizedEcotrackWilayaCode,
       'montant': selection['price'],
       'remarque': selection['remark'] ?? '',
       'produit': selection['productList'],
@@ -2878,6 +2961,14 @@ class ShippingService {
       return null;
     }
 
+    final edgeLoaded = await _loadSellerDeliverySettingsViaEdge(
+      ownerId: safeOwnerId ?? current,
+      courierId: safeCourierIdLower,
+    );
+    if (edgeLoaded != null) {
+      return edgeLoaded;
+    }
+
     // Direct select: only for the authenticated owner.
     var query = supabase
         .from('seller_delivery_settings')
@@ -2902,9 +2993,16 @@ class ShippingService {
   Map<String, dynamic>? _normalizeCourierSettings(Object? row) {
     if (row == null) return null;
     final map = Map<String, dynamic>.from(row as Map);
-    final apiKey = map['api_key'] ?? map['api_id'];
-    final apiSecret = map['api_secret'] ?? map['api_token'];
-    if (apiKey == null) return null;
+    final courierName =
+        map['courier_name']?.toString() ?? map['courier_id']?.toString() ?? '';
+    final normalized = _normalizeCredentialPair(
+      courierName: courierName,
+      apiKey: (map['api_key'] ?? map['api_id'] ?? '').toString(),
+      apiSecret: (map['api_secret'] ?? map['api_token'] ?? '').toString(),
+    );
+    final apiKey = normalized.apiKey;
+    final apiSecret = normalized.apiSecret;
+    if (apiKey.isEmpty) return null;
     final extra = map['extra'] is Map
         ? Map<String, dynamic>.from(map['extra'] as Map)
         : null;
@@ -2920,6 +3018,30 @@ class ShippingService {
       'last_validation_error': map['last_validation_error'],
       'consecutive_failures': map['consecutive_failures'],
     };
+  }
+
+  Future<Map<String, dynamic>?> _loadSellerDeliverySettingsViaEdge({
+    required String? ownerId,
+    required String courierId,
+  }) async {
+    if (ownerId == null || ownerId.trim().isEmpty) return null;
+    try {
+      final response = await RateLimiter.instance.run(
+        'seller_settings.edge_load',
+        () => supabase.functions.invoke(
+          'seller-delivery-settings',
+          body: {'ownerId': ownerId, 'courierId': courierId},
+        ),
+      );
+      final data = response.data;
+      if (data is! Map) return null;
+      if (data['ok'] != true || data['data'] is! Map) return null;
+      return _normalizeCourierSettings(
+        Map<String, dynamic>.from(data['data'] as Map),
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Load settings for the current user by courier name.
@@ -2964,16 +3086,23 @@ class ShippingService {
     final isEcotrack = lowerName.contains('ecotrack');
     final isZrExpress = isZrExpressCourier(courierName: lowerName);
     final isGuepex = isGuepexCourier(courierName: lowerName);
-    final safeApiKey = InputSanitizer.sanitizeText(
+    final rawApiKey = InputSanitizer.sanitizeText(
       apiKey,
       maxLength: (isEcotrack || isZrExpress || isGuepex) ? 200 : 120,
     );
-    final safeApiSecret = isEcotrack || apiSecret.trim().isEmpty
+    final rawApiSecret = isEcotrack || apiSecret.trim().isEmpty
         ? ''
         : InputSanitizer.sanitizeText(
             apiSecret,
             maxLength: (isZrExpress || isGuepex) ? 200 : 120,
           );
+    final normalized = _normalizeCredentialPair(
+      courierName: safeCourierName,
+      apiKey: rawApiKey,
+      apiSecret: rawApiSecret,
+    );
+    final safeApiKey = normalized.apiKey;
+    final safeApiSecret = normalized.apiSecret;
     final safeSenderId = InputSanitizer.sanitizeOptionalText(
       senderId,
       maxLength: 80,

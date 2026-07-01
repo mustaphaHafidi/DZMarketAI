@@ -12,6 +12,8 @@ import 'package:dzmarket/src/services/storage_service.dart';
 import 'package:dzmarket/src/services/moderation_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:dzmarket/src/utils/large_volume_listing_utils.dart';
+import 'package:dzmarket/src/utils/declared_value_sync.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -62,6 +64,8 @@ class _AddListingPageState extends State<AddListingPage> {
   List<Map<String, String>> _categories = const [];
   List<Map<String, String>> _wilayas = const [];
   List<Map<String, String>> _communes = const [];
+  bool _declaredValueManuallyEdited = false;
+  bool _syncingDeclaredValue = false;
   final List<PlatformFile> _pickedFiles = [];
   static const int _minPhotos = 2;
   static const int _maxPhotos = 5;
@@ -103,11 +107,8 @@ class _AddListingPageState extends State<AddListingPage> {
     _priceCtrl.addListener(_onFieldChanged);
     _stockCtrl.addListener(_onFieldChanged);
     _costCtrl.addListener(_onFieldChanged);
-    _priceCtrl.addListener(() {
-      if (_declaredValueCtrl.text.trim().isEmpty) {
-        _declaredValueCtrl.text = _priceCtrl.text.trim();
-      }
-    });
+    _priceCtrl.addListener(_syncDeclaredValueFromPrice);
+    _declaredValueCtrl.addListener(_trackDeclaredValueOverride);
   }
 
   @override
@@ -115,6 +116,8 @@ class _AddListingPageState extends State<AddListingPage> {
     _titleCtrl.removeListener(_onFieldChanged);
     _descCtrl.removeListener(_onFieldChanged);
     _priceCtrl.removeListener(_onFieldChanged);
+    _priceCtrl.removeListener(_syncDeclaredValueFromPrice);
+    _declaredValueCtrl.removeListener(_trackDeclaredValueOverride);
     _suggestionDebounce?.cancel();
     _titleCtrl.dispose();
     _descCtrl.dispose();
@@ -401,10 +404,38 @@ class _AddListingPageState extends State<AddListingPage> {
     }
     if (!_courierCaps.supportsInsurance) {
       _insuranceActive = false;
-      if (_declaredValueCtrl.text.trim().isNotEmpty) {
-        _declaredValueCtrl.text = '';
-      }
+      _setDeclaredValueText('');
+      _declaredValueManuallyEdited = false;
     }
+  }
+
+  void _setDeclaredValueText(String value) {
+    final nextValue = value.trim();
+    if (_declaredValueCtrl.text.trim() == nextValue) return;
+    _syncingDeclaredValue = true;
+    _declaredValueCtrl.text = nextValue;
+    _declaredValueCtrl.selection = TextSelection.fromPosition(
+      TextPosition(offset: _declaredValueCtrl.text.length),
+    );
+    _syncingDeclaredValue = false;
+  }
+
+  void _syncDeclaredValueFromPrice() {
+    final nextValue = nextDeclaredValueFromPrice(
+      priceText: _priceCtrl.text,
+      currentDeclaredValueText: _declaredValueCtrl.text,
+      manuallyEdited: _declaredValueManuallyEdited,
+    );
+    if (nextValue == _declaredValueCtrl.text.trim()) return;
+    _setDeclaredValueText(nextValue);
+  }
+
+  void _trackDeclaredValueOverride() {
+    if (_syncingDeclaredValue) return;
+    _declaredValueManuallyEdited = isDeclaredValueManualOverride(
+      priceText: _priceCtrl.text,
+      declaredValueText: _declaredValueCtrl.text,
+    );
   }
 
   Future<void> _loadEnabledCouriers() async {
@@ -1183,14 +1214,8 @@ class _AddListingPageState extends State<AddListingPage> {
     final width = _parseDigitsNullable(_widthCtrl.text.trim()) ?? 0;
     final length = _parseDigitsNullable(_lengthCtrl.text.trim()) ?? 0;
     final volume = height * width * length;
-    final text = [
-      _titleCtrl.text,
-      _descCtrl.text,
-      _categoryNameFr,
-    ].whereType<String>().join(' ').toLowerCase();
-    final keywordMatch = RegExp(
-      r'(voiture|moto|camion|meuble|canape|armoire|frigo|refrigerateur|lave[- ]linge|machine[- ]a[- ]laver|climatiseur|lit|table|bureau|vehicle|furniture)',
-    ).hasMatch(text);
+    final text = [_titleCtrl.text, _descCtrl.text, _categoryNameFr];
+    final keywordMatch = hasLargeVolumeListingKeywords(text);
     return weight > 15 ||
         height > 120 ||
         width > 120 ||
@@ -2035,8 +2060,17 @@ class _AddListingPageState extends State<AddListingPage> {
                   controller: _priceCtrl,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
-                    labelText: L10n.tr(context, 'listing.add.price_label'),
+                    labelText: L10n.tr(
+                      context,
+                      'listing.add.price_field_label',
+                      fallback: 'Prix',
+                    ),
                     prefixText: 'DA ',
+                    helperText: L10n.tr(
+                      context,
+                      'listing.add.price_helper',
+                      fallback: 'Prix de vente en DZD.',
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -2264,7 +2298,12 @@ class _AddListingPageState extends State<AddListingPage> {
                   ),
                   SwitchListTile(
                     value: _insuranceActive,
-                    onChanged: (v) => setState(() => _insuranceActive = v),
+                    onChanged: (v) => setState(() {
+                      _insuranceActive = v;
+                      if (v && !_declaredValueManuallyEdited) {
+                        _syncDeclaredValueFromPrice();
+                      }
+                    }),
                     title: Text(L10n.tr(context, 'checkout.insurance_active')),
                   ),
                   TextField(
@@ -2272,9 +2311,12 @@ class _AddListingPageState extends State<AddListingPage> {
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
                       labelText: L10n.tr(context, 'checkout.declared_value'),
+                      prefixText: 'DA ',
                       helperText: L10n.tr(
                         context,
-                        'checkout.declared_value_hint',
+                        'listing.add.declared_value_helper',
+                        fallback:
+                            'Par défaut = prix de vente. Vous pouvez le modifier si nécessaire.',
                       ),
                     ),
                   ),
@@ -2410,6 +2452,14 @@ class _AddListingPageState extends State<AddListingPage> {
                   _PreviewRow(
                     label: L10n.tr(context, 'listing.add.preview_cost'),
                     value: 'DA ${_costCtrl.text.trim()}',
+                  ),
+                if (_declaredValueCtrl.text.trim().isNotEmpty)
+                  _PreviewRow(
+                    label: L10n.tr(
+                      context,
+                      'listing.add.preview_declared_value',
+                    ),
+                    value: 'DA ${_declaredValueCtrl.text.trim()}',
                   ),
                 _PreviewRow(
                   label: L10n.tr(context, 'listing.add.preview_location'),

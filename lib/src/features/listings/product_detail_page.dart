@@ -212,13 +212,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         'receiverCommuneId': selection['receiverCommuneId'],
         'wilayaCode': selection['wilayaCode'],
         'zip': selection['zip'],
-        'weight': selection['weight'],
-        'height': selection['height'],
-        'width': selection['width'],
-        'length': selection['length'],
-        'productList': selection['productList'],
-        'price': selection['price'],
-        'declaredValue': selection['declaredValue'],
         'courierId': selection['courierId'],
         'courierName': selection['courierName'],
         'freeshipping': selection['freeshipping'],
@@ -2612,17 +2605,10 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
     _zipCtrl = TextEditingController(
       text: widget.lastCheckout?['zip']?.toString() ?? '',
     );
-    _productListCtrl = TextEditingController(
-      text:
-          widget.lastCheckout?['productList']?.toString() ??
-          widget.productTitle,
-    );
+    _productListCtrl = TextEditingController(text: widget.productTitle);
     _orderNumberCtrl = TextEditingController(text: 'auto');
     _priceCtrl = TextEditingController(
-      text:
-          (widget.lastCheckout?['price']?.toString() ??
-                  widget.defaultPrice.toStringAsFixed(0))
-              .toString(),
+      text: widget.defaultPrice.toStringAsFixed(0),
     );
     final declaredValue = product?.declaredValue ?? widget.defaultPrice;
     _declaredValueCtrl = TextEditingController(
@@ -3678,7 +3664,7 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                   decoration: InputDecoration(
                     labelText: L10n.tr(context, 'checkout.product_list'),
                   ),
-                  onChanged: (_) => setState(() {}),
+                  readOnly: true,
                   validator: (v) => v == null || v.trim().isEmpty
                       ? L10n.tr(context, 'checkout.error_product_list_required')
                       : null,
@@ -3697,15 +3683,12 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
                   decoration: InputDecoration(
                     labelText: L10n.tr(context, 'checkout.cod_price'),
                   ),
+                  readOnly: true,
                   keyboardType: TextInputType.number,
                   inputFormatters: [
                     FilteringTextInputFormatter.digitsOnly,
                     LengthLimitingTextInputFormatter(6),
                   ],
-                  onChanged: (_) {
-                    setState(() {});
-                    _scheduleFeeRefresh();
-                  },
                   validator: (v) => v == null || v.trim().isEmpty
                       ? L10n.tr(context, 'checkout.error_price_required')
                       : null,
