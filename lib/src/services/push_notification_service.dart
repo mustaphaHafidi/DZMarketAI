@@ -6,6 +6,7 @@ import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -13,13 +14,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   try {
     await Firebase.initializeApp();
+    if (PushNotificationService.isDzMarketEventPush(message)) return;
     await PushNotificationService.showRemoteMessage(message);
   } catch (_) {
     // Ignore background notification errors.
   }
 }
 
-class PushNotificationService {
+class PushNotificationService with WidgetsBindingObserver {
   PushNotificationService._();
   static final instance = PushNotificationService._();
 
@@ -29,13 +31,16 @@ class PushNotificationService {
 
   StreamSubscription<AuthState>? _authSub;
   StreamSubscription<String>? _tokenRefreshSub;
+  Timer? _tokenSyncTimer;
   bool _started = false;
 
   Future<void> start() async {
     if (_started || kIsWeb) return;
     _started = true;
+    WidgetsBinding.instance.addObserver(this);
     await _initLocalNotifications();
     await _requestPermissions();
+    await _configureForegroundPresentation();
     await _syncCurrentToken();
     _tokenRefreshSub = FirebaseMessaging.instance.onTokenRefresh.listen((
       token,
@@ -48,11 +53,23 @@ class PushNotificationService {
     _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((event) {
       unawaited(_syncCurrentToken());
     });
+    _tokenSyncTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      unawaited(_syncCurrentToken());
+    });
   }
 
   Future<void> dispose() async {
+    WidgetsBinding.instance.removeObserver(this);
+    _tokenSyncTimer?.cancel();
     await _authSub?.cancel();
     await _tokenRefreshSub?.cancel();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_syncCurrentToken());
+    }
   }
 
   Future<void> _initLocalNotifications() async {
@@ -87,6 +104,23 @@ class PushNotificationService {
     AppLogger.info('Push permission: ${settings.authorizationStatus}');
   }
 
+  Future<void> _configureForegroundPresentation() async {
+    try {
+      await FirebaseMessaging.instance
+          .setForegroundNotificationPresentationOptions(
+            alert: true,
+            badge: true,
+            sound: true,
+          );
+    } catch (error, stackTrace) {
+      AppLogger.warn(
+        'Push foreground presentation setup failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
   Future<void> _syncCurrentToken() async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
@@ -112,13 +146,10 @@ class PushNotificationService {
       TargetPlatform.iOS => 'ios',
       _ => 'unknown',
     };
-    await Supabase.instance.client.from('device_tokens').upsert({
-      'user_id': user.id,
-      'token': token,
-      'platform': platform,
-      'locale': locale,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }, onConflict: 'token');
+    await Supabase.instance.client.rpc(
+      'register_device_token',
+      params: {'p_token': token, 'p_platform': platform, 'p_locale': locale},
+    );
   }
 
   static Future<void> showRemoteMessage(RemoteMessage message) async {
@@ -147,12 +178,14 @@ class PushNotificationService {
       _staticLocalReady = true;
     }
 
-    final android = AndroidNotificationDetails(
+    const android = AndroidNotificationDetails(
       'dzmarket_push',
       'DZMarket push',
       channelDescription: 'Push DZMarket',
       importance: Importance.max,
       priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
     );
     const darwin = DarwinNotificationDetails(
       presentAlert: true,
@@ -169,6 +202,11 @@ class PushNotificationService {
   }
 
   static bool _isReadyForDisplay() => !kIsWeb;
+
+  static bool isDzMarketEventPush(RemoteMessage message) {
+    final id = _resolveDataValue(message.data['notification_id']);
+    return id != null;
+  }
 
   static String? _resolveDataValue(Object? value) {
     final text = value?.toString().trim();

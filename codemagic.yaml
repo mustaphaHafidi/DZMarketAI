@@ -16,7 +16,7 @@ workflows:
       vars:
         APP_FLAVOR: prod
         APP_BUILD_NAME: "1.0.4"
-        APP_BUILD_NUMBER: "26"
+        APP_BUILD_NUMBER: "27"
         ENABLE_ANALYTICS: "true"
         ENABLE_CRASHLYTICS: "true"
     scripts:
@@ -27,8 +27,14 @@ workflows:
         script: |
           test -n "$SUPABASE_URL" || { echo "SUPABASE_URL is missing"; exit 1; }
           test -n "$SUPABASE_ANON_KEY" || { echo "SUPABASE_ANON_KEY is missing"; exit 1; }
+          test -n "$FIREBASE_IOS_PLIST_BASE64" || { echo "FIREBASE_IOS_PLIST_BASE64 is missing"; exit 1; }
           echo "SUPABASE_URL present"
           echo "SUPABASE_ANON_KEY present"
+          echo "FIREBASE_IOS_PLIST_BASE64 present"
+      - name: Set up Firebase iOS config
+        script: |
+          echo "$FIREBASE_IOS_PLIST_BASE64" | base64 --decode > ios/Runner/GoogleService-Info.plist
+          plutil -lint ios/Runner/GoogleService-Info.plist
       - name: Set up iOS code signing
         script: |
           keychain initialize

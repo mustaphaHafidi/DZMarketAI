@@ -60,6 +60,13 @@ rollout-*.jsonl
 # Local ops secrets (never commit)
 infra/hetzner/.secrets.local.md
 infra/hetzner/*.local.secrets.md
+ios/Runner/GoogleService-Info.plist
+firebase-service-account*.json
+*service-account*.json
+Firebase/*.env.local
+Firebase/*.json
+Firebase/*.plist
+Firebase/*_BASE64.txt
 
 # Local load-test/runtime artifacts (never commit)
 /load/env.local

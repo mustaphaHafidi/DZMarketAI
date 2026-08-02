@@ -386,6 +386,379 @@ const parseEnvInt = (
   return Math.min(Math.max(Math.floor(raw), min), max);
 };
 
+type FirebaseServiceAccount = {
+  project_id: string;
+  client_email: string;
+  private_key: string;
+};
+
+type PushMetrics = {
+  scanned: number;
+  sent_events: number;
+  sent_messages: number;
+  failed_events: number;
+  invalid_tokens: number;
+  missing_config: boolean;
+};
+
+let googleAccessTokenCache: { token: string; expiresAt: number } | null = null;
+
+const emptyPushMetrics = (): PushMetrics => ({
+  scanned: 0,
+  sent_events: 0,
+  sent_messages: 0,
+  failed_events: 0,
+  invalid_tokens: 0,
+  missing_config: false,
+});
+
+const base64UrlEncode = (value: string | ArrayBuffer) => {
+  const bytes = typeof value === "string"
+    ? new TextEncoder().encode(value)
+    : new Uint8Array(value);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+};
+
+const pemToArrayBuffer = (pem: string) => {
+  const base64 = pem
+    .replace(/-----BEGIN PRIVATE KEY-----/g, "")
+    .replace(/-----END PRIVATE KEY-----/g, "")
+    .replace(/\s/g, "");
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+};
+
+const firebaseAccountFromEnv = (): FirebaseServiceAccount | null => {
+  const rawJson = textValue(Deno.env.get("FIREBASE_SERVICE_ACCOUNT_JSON"));
+  const rawB64 = textValue(Deno.env.get("FIREBASE_SERVICE_ACCOUNT_JSON_BASE64"));
+  try {
+    if (rawJson) {
+      const parsed = JSON.parse(rawJson);
+      return {
+        project_id: textValue(parsed.project_id),
+        client_email: textValue(parsed.client_email),
+        private_key: textValue(parsed.private_key).replace(/\\n/g, "\n"),
+      };
+    }
+    if (rawB64) {
+      const parsed = JSON.parse(atob(rawB64));
+      return {
+        project_id: textValue(parsed.project_id),
+        client_email: textValue(parsed.client_email),
+        private_key: textValue(parsed.private_key).replace(/\\n/g, "\n"),
+      };
+    }
+  } catch {
+    return null;
+  }
+
+  const projectId = textValue(Deno.env.get("FIREBASE_PROJECT_ID"));
+  const clientEmail = textValue(Deno.env.get("FIREBASE_CLIENT_EMAIL"));
+  const privateKey = textValue(Deno.env.get("FIREBASE_PRIVATE_KEY")).replace(
+    /\\n/g,
+    "\n",
+  );
+  if (!projectId || !clientEmail || !privateKey) return null;
+  return { project_id: projectId, client_email: clientEmail, private_key: privateKey };
+};
+
+const googleAccessToken = async (account: FirebaseServiceAccount) => {
+  if (
+    googleAccessTokenCache != null &&
+    googleAccessTokenCache.expiresAt > Date.now() + 60_000
+  ) {
+    return googleAccessTokenCache.token;
+  }
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const header = base64UrlEncode(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+  const claim = base64UrlEncode(
+    JSON.stringify({
+      iss: account.client_email,
+      scope: "https://www.googleapis.com/auth/firebase.messaging",
+      aud: "https://oauth2.googleapis.com/token",
+      iat: nowSeconds,
+      exp: nowSeconds + 3600,
+    }),
+  );
+  const unsigned = `${header}.${claim}`;
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    pemToArrayBuffer(account.private_key),
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    key,
+    new TextEncoder().encode(unsigned),
+  );
+  const assertion = `${unsigned}.${base64UrlEncode(signature)}`;
+  const resp = await fetchWithRetry(
+    "https://oauth2.googleapis.com/token",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        assertion,
+      }),
+    },
+    2,
+    parseEnvInt("PUSH_TOKEN_TIMEOUT_MS", 8000, 2000, 30000),
+  );
+  if (!resp.ok) throw new Error(`google_token_${resp.status}`);
+  const body = await resp.json();
+  const token = textValue(body?.access_token);
+  if (!token) throw new Error("google_token_empty");
+  const expiresIn = Number(body?.expires_in ?? 3600);
+  googleAccessTokenCache = {
+    token,
+    expiresAt: Date.now() + Math.max(300, expiresIn - 60) * 1000,
+  };
+  return token;
+};
+
+const pushTranslations: Record<string, string> = {
+  "notifications.chat.title": "Nouveau message",
+  "notifications.chat.new_message": "{snippet}",
+  "notifications.chat.system": "Mise a jour dans une conversation",
+  "notifications.offer.title": "Offre",
+  "notifications.offer.new": "Nouvelle offre: DA {amount}",
+  "notifications.offer.counter": "Contre-offre: DA {amount}",
+  "notifications.offer.accepted": "Offre acceptee: DA {amount}",
+  "notifications.offer.rejected": "Offre refusee",
+  "notifications.order.title": "Commande",
+  "notifications.order.created_buyer": "Commande #{id} creee",
+  "notifications.order.created_seller": "Nouvelle commande #{id}",
+  "notifications.order.status": "Commande #{id}: {status}",
+  "notifications.system.title": "Systeme",
+  "notifications.system.body": "Nouvelle mise a jour systeme",
+  "notifications.system.courier_credentials_invalid":
+    "Le compte transporteur {courier_name} de la commande #{order_id} n'est plus valide.",
+  "order.status.cancelled": "Annulee",
+  "order.status.delivered": "Livree",
+  "order.status.not_claimed": "Non reclame",
+  "order.status.out_for_delivery": "En livraison",
+  "order.status.pending": "En attente",
+  "order.status.refused": "Refuse",
+  "order.status.returned_to_sender": "Retour expediteur",
+  "order.status.shipped": "Expediee",
+  "order.status.validated": "Validee",
+  "order.system.cancelled": "Commande annulee automatiquement.",
+  "order.system.cancelled_by_seller": "Commande annulee par le vendeur.",
+  "order.system.created": "Commande enregistree, en attente de validation vendeur.",
+  "order.system.label_reminder":
+    "Expedition en attente: le bordereau n'a pas encore ete genere.",
+  "order.system.carrier_scan_reminder":
+    "Retard d'expedition: aucun mouvement transporteur detecte.",
+  "order.system.pickup_request":
+    "Livraison a convenir demandee. Merci de suivre les details dans le chat.",
+  "order.system.arranged_validated":
+    "Commande validee. Les details de remise seront confirmes via le chat.",
+  "order.system.arranged_confirmed":
+    "Livraison a convenir confirmee. Merci de suivre les details dans le chat.",
+  "order.system.arranged_no_label":
+    "Livraison a convenir: aucun bordereau transporteur n'est requis.",
+  "order.system.returned": "Retour colis detecte.",
+  "order.system.shipped": "Commande expediee.",
+  "order.system.tracking": "Mise a jour du suivi.",
+  "order.system.validated": "Commande validee, bordereau genere.",
+};
+
+const interpolate = (template: string, params: Record<string, string>) =>
+  template.replace(/\{([a-zA-Z0-9_]+)\}/g, (_, key) => params[key] ?? "");
+
+const pushDataFromPayload = (
+  event: Record<string, unknown>,
+  payload: Record<string, unknown>,
+) => {
+  const data: Record<string, string> = {
+    notification_id: textValue(event.id),
+    category: textValue(event.category),
+    title_key: textValue(event.title_i18n),
+    body_key: textValue(event.body_i18n),
+  };
+  for (const [key, value] of Object.entries(payload)) {
+    if (value == null) continue;
+    const serialized = typeof value === "object" ? JSON.stringify(value) : String(value);
+    data[key] = serialized.slice(0, 500);
+  }
+  return data;
+};
+
+const pushText = (event: Record<string, unknown>) => {
+  const payload = event.payload && typeof event.payload === "object"
+    ? event.payload as Record<string, unknown>
+    : {};
+  const params: Record<string, string> = {};
+  for (const [key, value] of Object.entries(payload)) {
+    params[key] = value == null ? "" : String(value);
+  }
+  params.id = params.id || params.order_id || textValue(payload.order_id);
+  params.amount = params.amount || textValue(payload.amount);
+  const statusKey = textValue(payload.status_i18n);
+  params.status = statusKey
+    ? pushTranslations[statusKey] ?? textValue(payload.status)
+    : textValue(payload.status);
+  params.snippet = textValue(payload.snippet);
+
+  const titleKey = textValue(event.title_i18n);
+  const bodyKey = textValue(event.body_i18n);
+  const title = interpolate(pushTranslations[titleKey] ?? "DZMarket", params);
+  const body = interpolate(pushTranslations[bodyKey] ?? bodyKey, params);
+  return { title, body: body || "Nouvelle notification DZMarket", data: pushDataFromPayload(event, payload) };
+};
+
+const sendFcmMessage = async (
+  account: FirebaseServiceAccount,
+  accessToken: string,
+  token: string,
+  event: Record<string, unknown>,
+) => {
+  const { title, body, data } = pushText(event);
+  const resp = await fetchWithRetry(
+    `https://fcm.googleapis.com/v1/projects/${account.project_id}/messages:send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: {
+          token,
+          notification: { title, body },
+          data,
+          android: {
+            priority: "HIGH",
+            ttl: "86400s",
+            notification: {
+              channel_id: "dzmarket_push",
+              sound: "default",
+              default_sound: true,
+              default_vibrate_timings: true,
+              visibility: "PUBLIC",
+            },
+          },
+          apns: {
+            headers: {
+              "apns-priority": "10",
+              "apns-push-type": "alert",
+            },
+            payload: {
+              aps: {
+                alert: { title, body },
+                sound: "default",
+                badge: 1,
+              },
+            },
+          },
+        },
+      }),
+    },
+    2,
+    parseEnvInt("PUSH_SEND_TIMEOUT_MS", 8000, 2000, 30000),
+  );
+  if (resp.ok) return { ok: true, invalidToken: false, error: "" };
+  const error = await resp.text();
+  const invalidToken = resp.status === 404 ||
+    error.includes("UNREGISTERED") ||
+    error.includes("registration token is not a valid FCM registration token");
+  return { ok: false, invalidToken, error: error.slice(0, 1000) };
+};
+
+const sendPendingPushNotifications = async (
+  supabase: ReturnType<typeof createClient>,
+): Promise<PushMetrics> => {
+  const metrics = emptyPushMetrics();
+  const account = firebaseAccountFromEnv();
+  if (account == null || !account.project_id || !account.client_email || !account.private_key) {
+    metrics.missing_config = true;
+    return metrics;
+  }
+
+  const maxEvents = parseEnvInt("PUSH_NOTIFICATION_MAX_EVENTS", 50, 1, 500);
+  const maxAttempts = parseEnvInt("PUSH_NOTIFICATION_MAX_ATTEMPTS", 5, 1, 20);
+  const { data: events, error } = await supabase
+    .from("notification_events")
+    .select("id,user_id,category,title_i18n,body_i18n,payload,push_attempts")
+    .is("push_sent_at", null)
+    .lt("push_attempts", maxAttempts)
+    .order("created_at", { ascending: true })
+    .limit(maxEvents);
+  if (error) throw error;
+
+  const list = Array.isArray(events) ? events : [];
+  metrics.scanned = list.length;
+  if (list.length === 0) return metrics;
+
+  const accessToken = await googleAccessToken(account);
+  for (const event of list) {
+    const eventId = Number(event?.id);
+    const userId = textValue(event?.user_id);
+    const attempts = Number(event?.push_attempts ?? 0);
+    if (!Number.isFinite(eventId) || !userId) continue;
+
+    const { data: tokens, error: tokenError } = await supabase
+      .from("device_tokens")
+      .select("token,platform,locale")
+      .eq("user_id", userId)
+      .order("updated_at", { ascending: false })
+      .limit(8);
+    if (tokenError) throw tokenError;
+
+    const tokenList = Array.isArray(tokens) ? tokens : [];
+    if (tokenList.length === 0) {
+      metrics.failed_events += 1;
+      await supabase.from("notification_events").update({
+        push_attempts: attempts + 1,
+        push_error: "no_device_tokens",
+      }).eq("id", eventId);
+      continue;
+    }
+
+    let sent = 0;
+    let lastError = "";
+    for (const row of tokenList) {
+      const token = textValue(row?.token);
+      if (!token) continue;
+      const result = await sendFcmMessage(account, accessToken, token, event);
+      if (result.ok) {
+        sent += 1;
+        metrics.sent_messages += 1;
+      } else {
+        lastError = result.error || "fcm_send_failed";
+        if (result.invalidToken) {
+          metrics.invalid_tokens += 1;
+          await supabase.from("device_tokens").delete().eq("token", token);
+        }
+      }
+    }
+
+    if (sent > 0) {
+      metrics.sent_events += 1;
+      await supabase.from("notification_events").update({
+        push_attempts: attempts + 1,
+        push_sent_at: new Date().toISOString(),
+        push_error: null,
+      }).eq("id", eventId);
+    } else {
+      metrics.failed_events += 1;
+      await supabase.from("notification_events").update({
+        push_attempts: attempts + 1,
+        push_error: lastError || "fcm_send_failed",
+      }).eq("id", eventId);
+    }
+  }
+
+  return metrics;
+};
+
 const normalizeReturnStatus = (status: string | null) => {
   if (!status) return null;
   if (status === "returned_to_sender") return status;
@@ -1182,6 +1555,7 @@ serve(async (req) => {
   let carrierScanRemindersSent = 0;
   let carrierScanReminderDebug = emptyCarrierScanReminderMetrics();
   let returnsMetrics = emptyReturnsMetrics();
+  let pushMetrics = emptyPushMetrics();
   let purgedErrors = 0;
   try {
     labelRemindersSent = await sendLabelReminders(supabase);
@@ -1210,6 +1584,12 @@ serve(async (req) => {
   }
 
   try {
+    pushMetrics = await sendPendingPushNotifications(supabase);
+  } catch (e) {
+    pushMetrics.failed_events += 1;
+  }
+
+  try {
     const envRetention = Number(
       Deno.env.get("APP_ERRORS_RETENTION_DAYS") ?? "30",
     );
@@ -1235,6 +1615,7 @@ serve(async (req) => {
     cancelled,
     returns: returnsMetrics.returns_inserted,
     returns_metrics: returnsMetrics,
+    push_notifications: pushMetrics,
     purged_errors: purgedErrors,
     results,
   });
