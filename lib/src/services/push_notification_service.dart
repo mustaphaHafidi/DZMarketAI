@@ -48,6 +48,7 @@ class PushNotificationService with WidgetsBindingObserver {
       unawaited(_upsertToken(token));
     });
     FirebaseMessaging.onMessage.listen((message) {
+      if (!_shouldMirrorForegroundMessageLocally(message)) return;
       unawaited(showRemoteMessage(message));
     });
     _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((event) {
@@ -199,6 +200,26 @@ class PushNotificationService with WidgetsBindingObserver {
     );
     final id = DateTime.now().millisecondsSinceEpoch % 2147483647;
     await _localNotifications.show(id, title, body, details);
+  }
+
+  @visibleForTesting
+  static bool shouldMirrorForegroundMessageLocally({
+    required TargetPlatform platform,
+    required bool hasNotificationPayload,
+  }) {
+    final isAppleForegroundPlatform =
+        platform == TargetPlatform.iOS || platform == TargetPlatform.macOS;
+    if (!isAppleForegroundPlatform) return true;
+    // On Apple platforms, the OS already presents foreground alerts when the
+    // remote message carries a native notification payload.
+    return !hasNotificationPayload;
+  }
+
+  static bool _shouldMirrorForegroundMessageLocally(RemoteMessage message) {
+    return shouldMirrorForegroundMessageLocally(
+      platform: defaultTargetPlatform,
+      hasNotificationPayload: message.notification != null,
+    );
   }
 
   static bool _isReadyForDisplay() => !kIsWeb;
