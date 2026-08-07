@@ -319,7 +319,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     });
   }
 
-  Future<void> _contactSeller({bool sendIntroMessage = false}) async {
+  Future<void> _contactSeller({
+    bool sendIntroMessage = false,
+    String? autoMessageKey,
+    Map<String, dynamic>? autoMessagePayload,
+    String? autoMessageDedupeKey,
+  }) async {
     final userId = supabase.auth.currentUser?.id;
     if (_product == null) return;
     if (userId == null) {
@@ -333,7 +338,25 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       sellerId: _product!.ownerId,
     );
     if (!mounted) return;
-    if (sendIntroMessage) {
+    if (autoMessageKey != null && autoMessageKey.trim().isNotEmpty) {
+      final payload = <String, dynamic>{
+        'i18n_key': autoMessageKey,
+        if (autoMessagePayload != null) ...autoMessagePayload,
+      };
+      try {
+        await repo.sendMessage(
+          conv.id,
+          autoMessageKey,
+          type: 'system',
+          payload: payload,
+          dedupeKey:
+              autoMessageDedupeKey ?? 'system:${conv.id}:$autoMessageKey',
+        );
+      } catch (_) {
+        // Best effort only: keep navigation responsive even if the auto-message
+        // cannot be inserted because of a race or a legacy backend signature.
+      }
+    } else if (sendIntroMessage) {
       final newContactText = L10n.tr(context, 'chat.new_contact');
       // Try to send a hello message; ignore duplicate/race errors.
       try {
@@ -746,21 +769,17 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         price: agreed ?? 0,
       );
       if (!confirmed) return;
-      final orderId = await OrderService().createOrder(
-        productId: widget.productId,
-        shippingOption: 'pickup',
-        paymentMethod: 'cod',
-        agreedPrice: agreed,
-        deliveryMethod: 'pickup',
-        shippingCost: 0,
+      await _contactSeller(
+        autoMessageKey: 'order.system.pickup_request',
+        autoMessagePayload: const {
+          'delivery_method': 'pickup',
+          'shipping_option': 'pickup',
+        },
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(L10n.tr(context, 'order.created.pickup'))),
         );
-      }
-      if (orderId != null) {
-        await _openOrderChat(orderId);
       }
       return;
     }

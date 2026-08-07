@@ -16,7 +16,7 @@ workflows:
       vars:
         APP_FLAVOR: prod
         APP_BUILD_NAME: "1.0.5"
-        APP_BUILD_NUMBER: "31"
+        APP_BUILD_NUMBER: "33"
         ENABLE_ANALYTICS: "true"
         ENABLE_CRASHLYTICS: "true"
     scripts:

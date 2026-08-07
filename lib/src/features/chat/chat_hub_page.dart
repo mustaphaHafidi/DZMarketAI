@@ -11,6 +11,7 @@ import 'package:dzmarket/src/services/conversation_meta_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/utils/conversation_display_utils.dart';
 import 'package:dzmarket/src/utils/public_storage_url_resolver.dart';
 import 'package:dzmarket/src/widgets/refresh_controller.dart';
 import 'package:dzmarket/src/widgets/user_avatar.dart';
@@ -43,12 +44,10 @@ class _ChatHubPageState extends State<ChatHubPage> {
     Conversation conversation,
     Map<String, ReadState> readMap,
   ) {
-    if (conversation.lastMessageAt == null) return 0;
-    final read = readMap[conversation.id];
-    final unread =
-        read?.lastReadAt == null ||
-        conversation.lastMessageAt!.isAfter(read!.lastReadAt!);
-    return unread ? 1 : 0;
+    return fallbackConversationUnreadCount(
+      conversation: conversation,
+      readState: readMap[conversation.id],
+    );
   }
 
   int _conversationUnreadCount({
@@ -95,7 +94,8 @@ class _ChatHubPageState extends State<ChatHubPage> {
   }
 
   void _scheduleAutoRecover() {
-    if (_autoRecoverScheduled || _autoRecoverAttempts >= _maxAutoRecoverAttempts) {
+    if (_autoRecoverScheduled ||
+        _autoRecoverAttempts >= _maxAutoRecoverAttempts) {
       return;
     }
     _autoRecoverScheduled = true;
@@ -254,8 +254,7 @@ class _ChatHubPageState extends State<ChatHubPage> {
                                 L10n.tr(
                                   context,
                                   'chat.offline_reconnecting',
-                                  fallback:
-                                      'Reconnexion des conversations...',
+                                  fallback: 'Reconnexion des conversations...',
                                 ),
                                 textAlign: TextAlign.center,
                               ),
@@ -467,9 +466,7 @@ class _ChatHubPageState extends State<ChatHubPage> {
                                               archivedList: archivedList,
                                             );
                                         final rawSubtitle =
-                                            conv.lastMessageText ??
-                                            meta?.productTitle ??
-                                            '';
+                                            conversationPreviewText(conv);
                                         final subtitle = rawSubtitle.isEmpty
                                             ? ''
                                             : L10n.tr(
