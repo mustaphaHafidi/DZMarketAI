@@ -25,6 +25,10 @@ subprojects {
         // ML Kit image labeling still pulls the legacy firebase-iid artifact,
         // which causes duplicate classes on Android debug/release builds.
         exclude(group = "com.google.firebase", module = "firebase-iid")
+        // FlutterFire does not require the Android KTX facade at runtime here.
+        // Keeping firebase-common-ktx triggers FirebaseCommonKtxRegistrar, which
+        // currently crashes this app on startup on the production Android build.
+        exclude(group = "com.google.firebase", module = "firebase-common-ktx")
     }
 }
 
