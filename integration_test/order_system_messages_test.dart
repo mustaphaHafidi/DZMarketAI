@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../test/test_env.dart';
 import '../test/test_supabase.dart';
+import 'test_fixture_guard.dart';
 
 bool _isOutOfStockError(Object error) {
   if (error is! PostgrestException) return false;
@@ -61,6 +62,8 @@ void main() {
         email: TestEnv.testEmail!,
         password: TestEnv.testPassword!,
       );
+      await expectCurrentTestUserActive();
+      await expectOrderableProductFixture(TestEnv.testProductId!);
 
       final attempted = <String>{};
       var productId = TestEnv.testProductId!;

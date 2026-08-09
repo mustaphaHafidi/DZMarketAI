@@ -297,7 +297,9 @@ class ChatRepository {
           'p_dedupe_key': dedupeKey ?? '',
         },
       );
-      return;
+      if (dedupeKey == null || dedupeKey.isEmpty) return;
+      final inserted = await _findMessageByDedupeKey(conv.id, dedupeKey);
+      if (inserted != null) return;
     } on PostgrestException catch (e) {
       final missingFn =
           e.code == 'PGRST202' ||
@@ -319,16 +321,10 @@ class ChatRepository {
         dedupeKey: dedupeKey,
       );
       return;
-    } on PostgrestException catch (e) {
-      final missingUnique =
-          e.code == '42P10' ||
-          e.message.contains('no unique or exclusion constraint');
-      if (!missingUnique && dedupeKey != null && dedupeKey.isNotEmpty) {
-        return;
-      }
+    } on PostgrestException {
+      // Fall through to the direct insert below, preserving the dedupe key.
     } catch (_) {
-      // If we have a dedupe key, avoid inserting duplicates without it.
-      if (dedupeKey != null && dedupeKey.isNotEmpty) return;
+      // Fall through to the direct insert below.
     }
 
     final senderId = _client.auth.currentUser?.id;
@@ -341,6 +337,7 @@ class ChatRepository {
         'text': text,
         'type': 'system',
         if (payloadWithText.isNotEmpty) 'payload': payloadWithText,
+        if (dedupeKey != null && dedupeKey.isNotEmpty) 'dedupe_key': dedupeKey,
       });
     } catch (_) {
       // Best-effort: do not block.
@@ -375,6 +372,18 @@ class ChatRepository {
               row['conversation_id'].toString(): ReadState.fromJson(row),
           },
         );
+  }
+
+  Future<Map<String, dynamic>?> _findMessageByDedupeKey(
+    String conversationId,
+    String dedupeKey,
+  ) {
+    return _client
+        .from(SupabaseTables.messages)
+        .select('id')
+        .eq('conversation_id', conversationId)
+        .eq('dedupe_key', dedupeKey)
+        .maybeSingle();
   }
 }
 

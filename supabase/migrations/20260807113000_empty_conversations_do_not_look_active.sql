@@ -174,18 +174,44 @@ begin
 end;
 $$;
 
-update public.conversations c
-set
-  last_message_at = null,
-  last_message_text = null,
-  unread_by_buyer = 0,
-  unread_by_seller = 0,
-  updated_at = now()
-where coalesce(trim(c.last_message_text), '') = ''
-  and not exists (
+do $$
+declare
+  stmt text :=
+    'update public.conversations c set '
+    || 'last_message_at = null, '
+    || 'last_message_text = null';
+begin
+  if exists (
     select 1
-    from public.messages m
-    where m.conversation_id = c.id
-      and m.deleted_at is null
-      and coalesce(m.moderation_status, 'approved') <> 'blocked'
-  );
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'conversations'
+      and column_name = 'unread_by_buyer'
+  ) then
+    stmt := stmt || ', unread_by_buyer = 0';
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'conversations'
+      and column_name = 'unread_by_seller'
+  ) then
+    stmt := stmt || ', unread_by_seller = 0';
+  end if;
+
+  stmt := stmt
+    || ', updated_at = now() '
+    || 'where coalesce(trim(c.last_message_text), '''') = '''' '
+    || 'and not exists ('
+    || '  select 1 '
+    || '  from public.messages m '
+    || '  where m.conversation_id = c.id '
+    || '    and m.deleted_at is null '
+    || '    and coalesce(m.moderation_status, ''approved'') <> ''blocked'''
+    || ')';
+
+  execute stmt;
+end;
+$$;

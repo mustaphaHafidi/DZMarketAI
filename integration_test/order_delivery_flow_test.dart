@@ -1,4 +1,3 @@
-import 'package:dzmarket/src/services/auth_service.dart';
 import 'package:dzmarket/src/services/order_service.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../test/test_env.dart';
 import '../test/test_supabase.dart';
+import 'test_fixture_guard.dart';
 
 String _courierIdFromName(String name, String? fallback) {
   if (fallback != null && fallback.isNotEmpty) return fallback;
@@ -65,10 +65,13 @@ void main() {
         anonKey: TestEnv.supabaseAnonKey!,
       );
 
-      await AuthService.instance.signIn(
-        TestEnv.testEmail!,
-        TestEnv.testPassword!,
+      final client = Supabase.instance.client;
+      await client.auth.signInWithPassword(
+        email: TestEnv.testEmail!,
+        password: TestEnv.testPassword!,
       );
+      await expectCurrentTestUserActive();
+      await expectOrderableProductFixture(TestEnv.testProductId!);
 
       final courierName = TestEnv.testCourierName ?? 'Yalidine Express';
       final courierId = _courierIdFromName(courierName, TestEnv.testCourierId);
@@ -132,7 +135,7 @@ void main() {
           );
           if (fallback == null) {
             // Fixture issue: no in-stock product available for this buyer.
-            await AuthService.instance.signOut();
+            await client.auth.signOut();
             return;
           }
           productId = fallback;
@@ -148,7 +151,7 @@ void main() {
       expect(row?['status'], 'pending');
       expect(row?['payment_status'], 'pending');
 
-      await AuthService.instance.signOut();
+      await client.auth.signOut();
     },
     skip: !TestEnv.hasAuthCreds || (TestEnv.testProductId ?? '').isEmpty,
   );
@@ -162,10 +165,12 @@ void main() {
       anonKey: TestEnv.supabaseAnonKey!,
     );
 
-    await AuthService.instance.signIn(
-      TestEnv.testEmail!,
-      TestEnv.testPassword!,
+    final client = Supabase.instance.client;
+    await client.auth.signInWithPassword(
+      email: TestEnv.testEmail!,
+      password: TestEnv.testPassword!,
     );
+    await expectCurrentTestUserActive();
 
     expect(
       () async =>
@@ -173,6 +178,6 @@ void main() {
       throwsA(anything),
     );
 
-    await AuthService.instance.signOut();
+    await client.auth.signOut();
   }, skip: !TestEnv.hasAuthCreds);
 }
