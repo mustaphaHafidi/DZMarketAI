@@ -16,7 +16,7 @@ workflows:
       vars:
         APP_FLAVOR: prod
         APP_BUILD_NAME: "1.0.6"
-        APP_BUILD_NUMBER: "34"
+        APP_BUILD_NUMBER: "35"
         ENABLE_ANALYTICS: "true"
         ENABLE_CRASHLYTICS: "true"
     scripts:
@@ -28,9 +28,13 @@ workflows:
           test -n "$SUPABASE_URL" || { echo "SUPABASE_URL is missing"; exit 1; }
           test -n "$SUPABASE_ANON_KEY" || { echo "SUPABASE_ANON_KEY is missing"; exit 1; }
           test -n "$FIREBASE_IOS_PLIST_BASE64" || { echo "FIREBASE_IOS_PLIST_BASE64 is missing"; exit 1; }
+          test -n "$GOOGLE_WEB_CLIENT_ID" || { echo "GOOGLE_WEB_CLIENT_ID is missing"; exit 1; }
+          test -n "$GOOGLE_IOS_CLIENT_ID" || { echo "GOOGLE_IOS_CLIENT_ID is missing"; exit 1; }
           echo "SUPABASE_URL present"
           echo "SUPABASE_ANON_KEY present"
           echo "FIREBASE_IOS_PLIST_BASE64 present"
+          echo "GOOGLE_WEB_CLIENT_ID present"
+          echo "GOOGLE_IOS_CLIENT_ID present"
       - name: Set up Firebase iOS config
         script: |
           echo "$FIREBASE_IOS_PLIST_BASE64" | base64 --decode > ios/Runner/GoogleService-Info.plist
@@ -54,7 +58,9 @@ workflows:
             --dart-define=SUPABASE_URL=$SUPABASE_URL \
             --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
             --dart-define=ENABLE_ANALYTICS=$ENABLE_ANALYTICS \
-            --dart-define=ENABLE_CRASHLYTICS=$ENABLE_CRASHLYTICS
+            --dart-define=ENABLE_CRASHLYTICS=$ENABLE_CRASHLYTICS \
+            --dart-define=GOOGLE_WEB_CLIENT_ID=$GOOGLE_WEB_CLIENT_ID \
+            --dart-define=GOOGLE_IOS_CLIENT_ID=$GOOGLE_IOS_CLIENT_ID
       - name: Verify IPA exists
         script: |
           echo "Looking for generated IPA files..."
