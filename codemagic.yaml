@@ -39,6 +39,18 @@ workflows:
         script: |
           echo "$FIREBASE_IOS_PLIST_BASE64" | base64 --decode > ios/Runner/GoogleService-Info.plist
           plutil -lint ios/Runner/GoogleService-Info.plist
+      - name: Set up iOS Google Sign-In config
+        script: |
+          case "$GOOGLE_IOS_CLIENT_ID" in
+            *.apps.googleusercontent.com) ;;
+            *) echo "GOOGLE_IOS_CLIENT_ID format is invalid"; exit 1 ;;
+          esac
+          GOOGLE_IOS_CLIENT_BASE="${GOOGLE_IOS_CLIENT_ID%.apps.googleusercontent.com}"
+          GOOGLE_IOS_URL_SCHEME="com.googleusercontent.apps.$GOOGLE_IOS_CLIENT_BASE"
+          plutil -replace GIDClientID -string "$GOOGLE_IOS_CLIENT_ID" ios/Runner/Info.plist
+          plutil -replace GIDServerClientID -string "$GOOGLE_WEB_CLIENT_ID" ios/Runner/Info.plist
+          plutil -replace CFBundleURLTypes.0.CFBundleURLSchemes.0 -string "$GOOGLE_IOS_URL_SCHEME" ios/Runner/Info.plist
+          plutil -lint ios/Runner/Info.plist
       - name: Set up iOS code signing
         script: |
           keychain initialize
