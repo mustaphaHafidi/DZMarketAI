@@ -32,6 +32,8 @@ class PushNotificationService with WidgetsBindingObserver {
   StreamSubscription<AuthState>? _authSub;
   StreamSubscription<String>? _tokenRefreshSub;
   Timer? _tokenSyncTimer;
+  Timer? _tokenRetryTimer;
+  int _tokenRetryAttempts = 0;
   bool _started = false;
 
   Future<void> start() async {
@@ -62,6 +64,7 @@ class PushNotificationService with WidgetsBindingObserver {
   Future<void> dispose() async {
     WidgetsBinding.instance.removeObserver(this);
     _tokenSyncTimer?.cancel();
+    _tokenRetryTimer?.cancel();
     await _authSub?.cancel();
     await _tokenRefreshSub?.cancel();
   }
@@ -124,18 +127,53 @@ class PushNotificationService with WidgetsBindingObserver {
 
   Future<void> _syncCurrentToken() async {
     final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      _resetTokenRetry();
+      return;
+    }
     try {
-      final token = await FirebaseMessaging.instance.getToken();
-      if (token == null || token.isEmpty) return;
+      final token = await _currentFcmToken();
+      if (token == null || token.isEmpty) {
+        _scheduleTokenSyncRetry();
+        return;
+      }
       await _upsertToken(token);
+      _resetTokenRetry();
     } catch (error, stackTrace) {
       AppLogger.warn(
         'Push token sync failed',
         error: error,
         stackTrace: stackTrace,
       );
+      _scheduleTokenSyncRetry();
     }
+  }
+
+  Future<String?> _currentFcmToken() async {
+    if (requiresApnsTokenBeforeFcm(defaultTargetPlatform)) {
+      final apnsToken = await FirebaseMessaging.instance.getAPNSToken();
+      if (apnsToken == null || apnsToken.isEmpty) {
+        AppLogger.info('APNs token unavailable; retrying push token sync.');
+        return null;
+      }
+    }
+    return FirebaseMessaging.instance.getToken();
+  }
+
+  void _scheduleTokenSyncRetry() {
+    if (Supabase.instance.client.auth.currentUser == null) return;
+    if (_tokenRetryTimer?.isActive ?? false) return;
+    final delay = tokenSyncRetryDelay(_tokenRetryAttempts);
+    _tokenRetryAttempts += 1;
+    _tokenRetryTimer = Timer(delay, () {
+      unawaited(_syncCurrentToken());
+    });
+  }
+
+  void _resetTokenRetry() {
+    _tokenRetryTimer?.cancel();
+    _tokenRetryTimer = null;
+    _tokenRetryAttempts = 0;
   }
 
   Future<void> _upsertToken(String token) async {
@@ -213,6 +251,25 @@ class PushNotificationService with WidgetsBindingObserver {
     // On Apple platforms, the OS already presents foreground alerts when the
     // remote message carries a native notification payload.
     return !hasNotificationPayload;
+  }
+
+  @visibleForTesting
+  static bool requiresApnsTokenBeforeFcm(TargetPlatform platform) {
+    return platform == TargetPlatform.iOS || platform == TargetPlatform.macOS;
+  }
+
+  @visibleForTesting
+  static Duration tokenSyncRetryDelay(int attempt) {
+    const delays = [
+      Duration(seconds: 2),
+      Duration(seconds: 5),
+      Duration(seconds: 10),
+      Duration(seconds: 20),
+      Duration(seconds: 30),
+    ];
+    if (attempt < 0) return delays.first;
+    if (attempt >= delays.length) return delays.last;
+    return delays[attempt];
   }
 
   static bool _shouldMirrorForegroundMessageLocally(RemoteMessage message) {

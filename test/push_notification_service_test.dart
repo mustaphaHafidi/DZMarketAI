@@ -34,4 +34,44 @@ void main() {
       expect(result, isTrue);
     });
   });
+
+  group('PushNotificationService token sync guards', () {
+    test('waits for APNs only on Apple platforms', () {
+      expect(
+        PushNotificationService.requiresApnsTokenBeforeFcm(TargetPlatform.iOS),
+        isTrue,
+      );
+      expect(
+        PushNotificationService.requiresApnsTokenBeforeFcm(
+          TargetPlatform.macOS,
+        ),
+        isTrue,
+      );
+      expect(
+        PushNotificationService.requiresApnsTokenBeforeFcm(
+          TargetPlatform.android,
+        ),
+        isFalse,
+      );
+    });
+
+    test('caps short retry delays for token registration', () {
+      expect(
+        PushNotificationService.tokenSyncRetryDelay(-1),
+        const Duration(seconds: 2),
+      );
+      expect(
+        PushNotificationService.tokenSyncRetryDelay(0),
+        const Duration(seconds: 2),
+      );
+      expect(
+        PushNotificationService.tokenSyncRetryDelay(3),
+        const Duration(seconds: 20),
+      );
+      expect(
+        PushNotificationService.tokenSyncRetryDelay(99),
+        const Duration(seconds: 30),
+      );
+    });
+  });
 }
