@@ -1257,6 +1257,7 @@ class _AddListingPageState extends State<AddListingPage> {
   }
 
   Future<void> _publish() async {
+    if (_saving) return;
     _clearError();
     if (!_validateStep(6)) {
       if (_error != null) _showErrorSnack(_error!);

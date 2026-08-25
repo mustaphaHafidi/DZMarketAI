@@ -7,6 +7,7 @@ import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:dzmarket/src/services/moderation_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/utils/conversation_display_utils.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Minimal chat repository for the Vinted-like conversation rules.
@@ -31,7 +32,10 @@ class ChatRepository {
     // Sort + dedupe client-side to avoid heavy ORDER BY on the server
     // and to collapse legacy duplicate rooms for the same thread.
     return query.map((rows) {
-      final list = rows.map(Conversation.fromJson).toList();
+      final list = rows
+          .map(Conversation.fromJson)
+          .where(hasDisplayableConversationMessage)
+          .toList();
       list.sort((a, b) {
         final at = a.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
         final bt = b.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);

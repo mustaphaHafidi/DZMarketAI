@@ -109,7 +109,7 @@ class AuthService {
     String? locale,
   }) async {
     final resolvedLocale = _normalizeLocale(locale);
-    final safeEmail = InputSanitizer.sanitizeEmail(email);
+    final safeEmail = InputSanitizer.normalizeEmailForSignUp(email);
     final safePassword = InputSanitizer.sanitizePassword(password);
     final safeFullName = InputSanitizer.sanitizeOptionalText(
       fullName,

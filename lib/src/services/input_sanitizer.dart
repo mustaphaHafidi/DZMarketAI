@@ -38,6 +38,18 @@ class InputSanitizer {
     return value;
   }
 
+  static String normalizeEmailForSignUp(String input) {
+    final value = sanitizeEmail(input);
+    final at = value.lastIndexOf('@');
+    if (at <= 0) return value;
+    final local = value.substring(0, at);
+    final domain = value.substring(at + 1);
+    if (domain != 'gmail.com' && domain != 'googlemail.com') return value;
+    final normalizedLocal = local.split('+').first.replaceAll('.', '');
+    if (normalizedLocal.isEmpty) return value;
+    return '$normalizedLocal@gmail.com';
+  }
+
   static String sanitizePassword(
     String input, {
     int minLength = 8,
