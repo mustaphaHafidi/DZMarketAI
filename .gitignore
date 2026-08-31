@@ -60,6 +60,8 @@ rollout-*.jsonl
 # Local ops secrets (never commit)
 infra/hetzner/.secrets.local.md
 infra/hetzner/*.local.secrets.md
+Apple/
+Firebase/
 ios/Runner/GoogleService-Info.plist
 firebase-service-account*.json
 *service-account*.json
@@ -72,6 +74,21 @@ Firebase/*_BASE64.txt
 /load/env.local
 /k6-results/
 /dzmarket-web.zip
+/dzmarket-web.tar.gz
 /dzmarket-web-*.zip
 /dzmarket-web-*.tar.gz
 /K6 test.txt
+
+# Local browser/store automation artifacts
+/.playwright-mcp/
+/*.png
+/*.out.txt
+/*.err.txt
+/probe*.txt
+/tmp_*.png
+
+# Generated marketing captures and videos
+/marketing/**/output/
+/marketing/**/raw/
+/marketing/**/*.webm
+/marketing/**/*.mp4

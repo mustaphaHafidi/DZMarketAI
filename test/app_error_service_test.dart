@@ -26,6 +26,18 @@ void main() {
       expect(skipped, isTrue);
     });
 
+    test('skips realtime timeout noise even when surfaced as fatal', () {
+      final skipped = AppErrorService.isSkippableAppError(
+        message:
+            'RealtimeSubscribeException(status: RealtimeSubscribeStatus.timedOut, details: null)',
+        context: 'chat_hub.watch_conversations',
+        fatal: true,
+        hasAuthenticatedUser: true,
+      );
+
+      expect(skipped, isTrue);
+    });
+
     test('skips offline noise in known transient contexts', () {
       final skipped = AppErrorService.isSkippableAppError(
         message: 'SocketException: Failed host lookup api.dzmarket.pro',

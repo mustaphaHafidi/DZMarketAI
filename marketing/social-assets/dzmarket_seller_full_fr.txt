@@ -1,0 +1,24 @@
+Bonjour,
+
+DZMarket est une application algérienne pour les vendeurs et commerçants, disponible sur Android, iPhone et Web.
+
+Elle vous aide à vendre de façon plus organisée et à gagner du temps:
+
+- Publier vos produits et annonces facilement.
+- Recevoir des commandes directement depuis l'application.
+- L'acheteur remplit lui-même ses informations: nom, téléphone, wilaya, commune, adresse et méthode de livraison.
+- Vous n'avez plus besoin de perdre du temps à récupérer les informations client dans les messages.
+- Vous pouvez générer et imprimer un bon de commande pour chaque commande.
+- Vous pouvez discuter avec les clients dans le chat.
+- Vous recevez des notifications pour les messages et les commandes.
+- Vous suivez vos commandes et leurs statuts de façon organisée.
+- Vous pouvez mieux identifier les acheteurs sérieux selon l'historique des commandes et des retours.
+- Une fois vos transporteurs configurés dans votre compte DZMarket, vos produits peuvent être commandés avec livraison.
+- L'acheteur choisit le transporteur disponible, remplit ses informations, puis une conversation est créée automatiquement entre acheteur et vendeur pour suivre la commande jusqu'à l'arrivée du colis.
+
+L'objectif est simple: regrouper la vente, les commandes, le chat et la livraison au même endroit.
+
+Accès gratuit pour les 100 premiers vendeurs sérieux.
+
+Si vous vendez des produits, essayez DZMarket avant la fin des places gratuites:
+www.dzmarket.pro

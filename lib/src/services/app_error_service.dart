@@ -23,9 +23,6 @@ class AppErrorService {
     required bool fatal,
     required bool hasAuthenticatedUser,
   }) {
-    if (fatal) return false;
-    if (!hasAuthenticatedUser) return true;
-
     final loweredMessage = message.toLowerCase();
     final loweredContext = (context ?? '').toLowerCase();
 
@@ -43,9 +40,12 @@ class AppErrorService {
 
     const realtimeNoise = <String>[
       'realtimesubscribeexception(channelerror',
+      'realtimesubscribeexception(status: realtimesubscribestatus.timedout',
+      'realtimesubscribeexception(status: realtimesubscribestatus.channelerror',
       'realtimecloseevent(code: 1006',
       'websocketchannelexception',
       'channelerror',
+      'timedout, details: null',
       'websocket exception',
       'closed before the connection was established',
     ];
@@ -72,9 +72,14 @@ class AppErrorService {
       'listings.refresh',
       'profile.load_locations',
       'profile.load_communes',
+      'resolving an image codec',
     ];
     if (offlineHints.any(loweredMessage.contains) &&
         noisyOfflineContexts.any(loweredContext.contains)) {
+      return true;
+    }
+    if (offlineHints.any(loweredMessage.contains) &&
+        loweredMessage.contains('api.dzmarket.pro/storage/v1/object/public/')) {
       return true;
     }
 
@@ -85,6 +90,8 @@ class AppErrorService {
     if (mediaNoise.any(loweredMessage.contains)) {
       return true;
     }
+
+    if (!hasAuthenticatedUser && !fatal) return true;
 
     return false;
   }

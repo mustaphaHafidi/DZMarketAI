@@ -2,16 +2,9 @@
 
 DZMarketAI est une marketplace Flutter (FR/AR) pour l'Algerie, appuyee sur Supabase self-hosted.
 
-## Etat actuel (Mars 2026)
-- Lancement public web effectue (`https://app.dzmarket.pro`).
-- Validation charge mixte confirmee:
-  - stable: `220 listings + 5 auth` (60m et 120m)
-  - limite observee: `240 listings + 5 auth` (degradation p95)
-  - budget d'exploitation recommande: `195 listings + 4 auth`
-- Correctifs recents:
-  - URL labels publiques nettoyees (`https://api.dzmarket.pro/...`)
-  - route web sans `#` (PathUrlStrategy)
-  - `job-runner` compatible schema `shipments` legacy + debug reminders transporteur
+## Etat actuel
+Pour reprendre le projet sans charger trop de contexte, commencer par
+`docs/agent/README.md`, puis lire uniquement la fiche correspondant a la tache.
 
 ## Fonctionnel
 - Auth email/password + reset mot de passe.
@@ -66,14 +59,14 @@ powershell -NoProfile -Command "Compress-Archive -Path '.\\build\\web\\*' -Desti
 ```
 
 ## Documentation principale
-- `docs/GO_NO_GO_PUBLIC_LAUNCH.md`
-- `docs/PUBLIC_LAUNCH_RUNBOOK_J0_J1.md`
-- `docs/QA_SMOKE_AND_LOCAL_CHECKLIST.md`
-- `docs/SLO_SLI_DZMARKET.md`
-- `docs/LOAD_TEST_PLAN_1M.md`
-- `E2E_MANUAL_TEST_CASES.md`
-- `PLAN_1M_USERS.md`
-- `NEXT_STEPS.md`
+- `docs/agent/README.md`: point d'entree agent.
+- `docs/agent/project-map.md`: architecture rapide.
+- `docs/agent/mobile-release.md`: Android/iOS, Codemagic, Firebase, APNs.
+- `docs/agent/server-ops.md`: Hetzner, Supabase, logs prod.
+- `docs/agent/db-and-migrations.md`: SQL, RPC, migrations, RLS.
+- `docs/agent/qa-regression.md`: tests et gates release.
+- `docs/agent/known-issues.md`: cautions recentes.
+- `docs/agent/doc-inventory.md`: anciens docs et classement.
 
 ## Securite
 - Ne jamais committer de secrets.

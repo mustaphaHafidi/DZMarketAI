@@ -56,9 +56,15 @@ flutter run -d <DEVICE_ID> --flavor dev -t lib/main.dart \
 ## Firebase Notes
 - Keep per-flavor `google-services.json` valid.
 - Keep Web config values outside Git when possible.
+- Mobile push outside the app requires the `job-runner` Edge Function to have
+  Firebase Admin credentials configured with one of:
+  - `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64`
+  - `FIREBASE_SERVICE_ACCOUNT_JSON`
+  - `FIREBASE_PROJECT_ID` + `FIREBASE_CLIENT_EMAIL` + `FIREBASE_PRIVATE_KEY`
 
 ## Security
 - Never commit `SUPABASE_SERVICE_ROLE_KEY`.
+- Never commit Firebase service account JSON/private keys.
 - Keep transporter tokens server-side only (Edge Functions or encrypted DB fields).
 - For strict moderation behavior, set Edge secret `MODERATION_FAIL_OPEN=false`.
 

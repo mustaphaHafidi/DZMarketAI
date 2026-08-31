@@ -42,18 +42,22 @@ class _MyListingsPageState extends State<MyListingsPage> {
             return const Center(child: CircularProgressIndicator());
           }
           final products = snapshot.data ?? const [];
-          final filtered = switch (_filter) {
-            'archived' => products
-                .where((p) => p.isArchived || p.stockQuantity <= 0)
-                .toList(),
-            'all' => products,
-            _ => products
-                .where((p) => !p.isArchived && p.stockQuantity > 0)
-                .toList(),
-          }
-            ..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(
+          final filtered =
+              switch (_filter) {
+                'archived' =>
+                  products
+                      .where((p) => p.isArchived || p.stockQuantity <= 0)
+                      .toList(),
+                'all' => products.toList(),
+                _ =>
+                  products
+                      .where((p) => !p.isArchived && p.stockQuantity > 0)
+                      .toList(),
+              }..sort(
+                (a, b) => (b.createdAt ?? DateTime(0)).compareTo(
                   a.createdAt ?? DateTime(0),
-                ));
+                ),
+              );
           final limited = filtered.take(_maxListings).toList();
           final emptyLabel = switch (_filter) {
             'archived' => L10n.tr(context, 'listing.archived_empty'),
@@ -80,8 +84,7 @@ class _MyListingsPageState extends State<MyListingsPage> {
                           L10n.tr(context, 'listing.filter_archived'),
                         ),
                         selected: _filter == 'archived',
-                        onSelected: (_) =>
-                            setState(() => _filter = 'archived'),
+                        onSelected: (_) => setState(() => _filter = 'archived'),
                       ),
                       ChoiceChip(
                         label: Text(L10n.tr(context, 'listing.filter_all')),
