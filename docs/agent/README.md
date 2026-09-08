@@ -4,6 +4,7 @@ Purpose: keep future agent context small. Read only the file that matches the ta
 
 ## Read Order
 
+- Every task: read [`JOURNAL-IA.md`](../../JOURNAL-IA.md) first for shared status, open findings, and the latest verification; update its journal after the intervention.
 - New or unclear task: read this file, then `project-map.md`.
 - Mobile build, Codemagic, TestFlight, Play Console, Firebase, APNs: read `mobile-release.md`.
 - Hetzner, Supabase stack, prod logs, web deploy: read `server-ops.md`.
