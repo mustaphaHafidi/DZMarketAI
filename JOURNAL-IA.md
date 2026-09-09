@@ -117,6 +117,43 @@ log) → dans ce cas, passer par la voie 1.
 
 ## Journal des changements (plus récent en haut)
 
+### 2026-09-09 - Codex - audit admin, COD, transporteurs et conversations
+
+- Audit live en lecture seule termine: stack et cron serveur verifies; aucun secret, JSONL ancien, ecriture de production ou deploiement.
+- Priorite P0: les profils publics exposent encore des donnees privees; conserver l'acces complet des superadmins mais passer par une projection publique minimale et une vue admin autorisee.
+- COD confirme en production: aucune ligne `payment_intents`; le chemin `createMockPaymentIntent` reste une dette de code a desactiver avant livraison.
+- Transporteurs: Guepex 2/2 et Yalidine 2/2 OK en lecture seule; ZR 1/2 invalide; Ecotrack 2/2 en 404 sur l'hote/endpoints generiques, a aligner avec l'URL/tenant de chaque societe. La normalisation Yalidine existante est a conserver.
+- Conversations: l'offre annulee ou vide ne cree pas de salon dans le chemin actuel; le contact vendeur cree toutefois un salon avant le premier message. Ne pas supprimer automatiquement les 19 salons vides.
+- Rapport detaille: `docs/agent/admin-couriers-cod-audit-2026-09-08.md`. Aucun changement applicatif.
+
+### 2026-09-08 — Claude — kit visuels réseaux (mode marketing)
+- Nouveau dossier `marketing/social-kit/` : 7 visuels **SVG** on-brand (FR + AR) pour
+  @dzmarketpro — posts 1080×1080, stories 1080×1920, image lien FB 1200×630, bannière
+  LinkedIn 1128×191, cover TikTok 1080×1920 + `README.md` (charte, légendes, export PNG).
+- Ajout `marketing/social-kit/posts/` : 12 visuels **SVG** à publier (feed, sans
+  couverture/photo de profil), angles marché algérien — paiement à la livraison,
+  58 wilayas (Yalidine/Ecotrack/ZR Express/Guepex), 0 commission, « fini le prix inbox »,
+  tout-en-un, comparatif, rapidité 90 s ; FR + darija AR + `README.md` (rotation, légendes).
+  Faits recoupés dans le repo : `payment method: cod`, transporteurs (dossier projet),
+  offre « 100 premiers vendeurs ». ~27 Ko au total.
+- Export **PNG** des 12 posts dans `marketing/social-kit/posts/png/` (1080×1080 ;
+  story 1080×1920) via Chrome headless (`--headless --screenshot --window-size`),
+  aucune install. Total ~1,24 Mo. Chaque PNG vérifié visuellement.
+- Correctif RTL sur les 5 fichiers `_ar` : avec `direction="rtl"` sur `<svg>`,
+  `text-anchor="end"` faisait déborder le texte hors cadre à droite au rendu Chrome ;
+  passé à `text-anchor="start"` (bord droit ancré, flux vers la gauche). p06 : titre
+  ré-espacé. Procédure de régénération ajoutée dans `posts/README.md`.
+- Recon @dzmarketpro relancée : IG confirme le style poster à plat, bilingue FR/AR,
+  bandeau transporteurs, CTA « TÉLÉCHARGEZ DZMARKET » (déjà présents dans le kit) ;
+  Facebook et TikTok toujours inaccessibles au fetch (JS). Le résumé IG évoque des
+  accents rouge/blanc — la charte du repo est verte : à trancher avec le user si la
+  palette social a divergé.
+- Base : recon @dzmarketpro (bio IG + page LinkedIn) + `MARKETING_PLAN_DZMARKET_12M.md`
+  + charte repo (`assets/branding/`, `lib/src/theme.dart`).
+- Convention posée par le user : « mode marketing » = produire des visuels dans
+  `C:\src\dzmarket\marketing`, format léger (SVG, pas de cache / PNG lourds).
+- **Aucune modification de code / config / prod / app.** Fichiers non commités.
+
 ### 2026-09-08 — Codex — vérification locale et coordination
 - Lecture de `AGENTS.md`, index agent, fiches projet/QA/risques/workflow, `lib/main.dart`, `lib/src/router.dart` et des sources citées ; aucun ancien JSONL chargé.
 - `main` distant vérifié en HTTPS au commit de code `0a009f0`. Journal auparavant non suivi et absent du routage agent ; ajout du lien dans l'index.
