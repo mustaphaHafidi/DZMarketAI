@@ -117,6 +117,14 @@ log) → dans ce cas, passer par la voie 1.
 
 ## Journal des changements (plus récent en haut)
 
+### 2026-09-09 - Codex - livraison web et nettoyage controle
+
+- Commit `ba7aeca` deploye sur le web; `app.dzmarket.pro` ouvre maintenant l'onglet annonces avec recherche, filtres et consultation anonyme.
+- Les fonctions `validate-courier` et `create_shipment` ont ete remplacees avec rollback conserve et le conteneur Edge Functions est reste `running`.
+- Le `config.json` runtime existant a ete preserve; son BOM UTF-8 a ete retire sans afficher ni modifier ses valeurs.
+- Smoke final: app/www/api HTTP 200; auth, Kong, DB, storage et Edge Functions actifs.
+- Nettoyage: anciens dossiers web, anciennes archives rollback et temporaires supprimes; actif et rollback `20260909-133524` conserves. `marketing/social-kit/` reste local et non suivi.
+
 ### 2026-09-09 - Codex - URL Ecotrack par vendeur et affichage admin
 
 - Ajout d'une URL HTTPS Ecotrack par compte vendeur, validation serveur avec hôtes autorisés et utilisation de cette URL pour l'expédition et l'étiquette.
