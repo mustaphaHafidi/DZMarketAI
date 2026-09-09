@@ -940,16 +940,29 @@ const isPdfBytes = (bytes: Uint8Array) =>
 const decodeBytes = (bytes: Uint8Array) =>
   new TextDecoder().decode(bytes).trim();
 
-const ecotrackBaseUrls = () => {
-  const envValue = (Deno.env.get("ECOTRACK_BASE_URL") ?? "").trim();
-  const candidates = [envValue, "https://api.ecotrack.dz", "https://ovred.ecotrack.dz"];
-  const seen = new Set<string>();
-  return candidates.filter((v) => {
-    const normalized = v.replace(/\/+$/, "");
-    if (!normalized || seen.has(normalized)) return false;
-    seen.add(normalized);
-    return true;
-  });
+const ecotrackBaseUrls = (extra?: Record<string, unknown> | null) => {
+  const requested = textValue(extra?.base_url);
+  const value = requested ||
+    (Deno.env.get("ECOTRACK_BASE_URL") ?? "https://api.ecotrack.dz").trim();
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return [] as string[];
+  }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password ||
+      parsed.search || parsed.hash || (parsed.pathname && parsed.pathname !== "/") ||
+      (parsed.port && parsed.port !== "443")) return [] as string[];
+  const allowedExtraHosts = new Set(
+    (Deno.env.get("ECOTRACK_ALLOWED_HOSTS") ?? "")
+      .split(",")
+      .map((host) => host.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  const host = parsed.hostname.toLowerCase();
+  if (host !== "ecotrack.dz" && !host.endsWith(".ecotrack.dz") &&
+      !allowedExtraHosts.has(host)) return [] as string[];
+  return [`https://${host}`];
 };
 
 const guepexBaseUrl = () =>
@@ -2217,7 +2230,10 @@ serve(async (req) => {
         weight: `${weight}`,
       };
       const params = new URLSearchParams(orderPayload);
-      const baseUrls = ecotrackBaseUrls();
+      const baseUrls = ecotrackBaseUrls(settingsRow?.extra);
+      if (baseUrls.length === 0) {
+        return jsonResponse({ ok: false, message: "Invalid Ecotrack base URL" }, 400);
+      }
       let resp: Response | null = null;
       let errorBody = "";
       for (const base of baseUrls) {
@@ -2290,7 +2306,7 @@ serve(async (req) => {
       if (!trackingNumber) {
         return jsonResponse({ ok: false, message: "Tracking missing" }, 500);
       }
-      const labelUrls = baseUrls.length ? baseUrls : ecotrackBaseUrls();
+      const labelUrls = baseUrls;
       let labelResp: Response | null = null;
       let labelError = "";
       for (const base of labelUrls) {

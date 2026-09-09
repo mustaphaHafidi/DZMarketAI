@@ -1,5 +1,6 @@
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/utils/admin_owner_display.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -25,6 +26,10 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
   List<Map<String, dynamic>> _listings = const [];
   List<_ReportQueueItem> _reportQueue = const [];
   List<_DeletionRequestItem> _deletionRequests = const [];
+
+  String _ownerDisplay(String ownerId) {
+    return adminOwnerDisplayName(ownerId: ownerId, users: _users);
+  }
 
   String _search = '';
   String _userStatusFilter = 'all';
@@ -208,7 +213,7 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
       final title = p['title']?.toString() ?? '';
       final id = p['id']?.toString() ?? '';
       final owner = p['owner_id']?.toString() ?? '';
-      return _matchesSearch('$title $id $owner');
+      return _matchesSearch('$title $id $owner ${_ownerDisplay(owner)}');
     }).toList();
   }
 
@@ -218,7 +223,7 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
         return false;
       }
       return _matchesSearch(
-        '${item.title} ${item.productId} ${item.ownerId} ${item.sampleReason ?? ''}',
+        '${item.title} ${item.productId} ${item.ownerId} ${_ownerDisplay(item.ownerId)} ${item.sampleReason ?? ''}',
       );
     }).toList();
   }
@@ -600,7 +605,7 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
                       L10n.tr(
                         context,
                         'admin.moderation.owner',
-                        params: {'id': ownerId},
+                        params: {'id': '${_ownerDisplay(ownerId)} ($ownerId)'},
                       ),
                     ),
                     if (reason != null && reason.trim().isNotEmpty)
@@ -720,7 +725,10 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
                       L10n.tr(
                         context,
                         'admin.moderation.owner',
-                        params: {'id': item.ownerId},
+                        params: {
+                          'id':
+                              '${_ownerDisplay(item.ownerId)} (${item.ownerId})',
+                        },
                       ),
                     ),
                     Text(

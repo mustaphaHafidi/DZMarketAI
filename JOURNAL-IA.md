@@ -117,6 +117,14 @@ log) → dans ce cas, passer par la voie 1.
 
 ## Journal des changements (plus récent en haut)
 
+### 2026-09-09 - Codex - URL Ecotrack par vendeur et affichage admin
+
+- Ajout d'une URL HTTPS Ecotrack par compte vendeur, validation serveur avec hôtes autorisés et utilisation de cette URL pour l'expédition et l'étiquette.
+- L'admin affiche maintenant le nom complet ou l'email du vendeur, avec son identifiant conservé pour audit, dans les annonces et signalements.
+- La séparation `www` marketing / `app` annonces reste protégée par le test de routage existant; aucun changement de navigation globale.
+- Tests ciblés ajoutés pour URL Ecotrack et résolution du nom vendeur; nettoyage production prévu seulement après build sain et rollback conservé.
+- Aucun secret ajouté au dépôt; les anciens artefacts serveur ne seront supprimés qu'après vérification de la version active.
+
 ### 2026-09-09 - Codex - durcissement COD et conversations
 
 - Retire le bouton et le parcours de paiement mock des commandes; `PaymentService.createMockPaymentIntent` refuse maintenant explicitement toute tentative. Le flux reste paiement a la livraison.

@@ -25,15 +25,28 @@ const consumeRateLimit = async (
 const sleep = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
-const ecotrackBaseUrls = () => {
-  const candidates = ["https://api.ecotrack.dz", "https://ovred.ecotrack.dz"];
-  const seen = new Set<string>();
-  return candidates.filter((value) => {
-    const normalized = value.replace(/\/+$/, "");
-    if (!normalized || seen.has(normalized)) return false;
-    seen.add(normalized);
-    return true;
-  });
+const normalizeEcotrackBaseUrl = (raw: string) => {
+  const value = raw.trim() ||
+    (Deno.env.get("ECOTRACK_BASE_URL") ?? "https://api.ecotrack.dz").trim();
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password ||
+      parsed.search || parsed.hash || (parsed.pathname && parsed.pathname !== "/") ||
+      (parsed.port && parsed.port !== "443")) return null;
+  const allowedExtraHosts = new Set(
+    (Deno.env.get("ECOTRACK_ALLOWED_HOSTS") ?? "")
+      .split(",")
+      .map((host) => host.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  const host = parsed.hostname.toLowerCase();
+  if (host !== "ecotrack.dz" && !host.endsWith(".ecotrack.dz") &&
+      !allowedExtraHosts.has(host)) return null;
+  return `https://${host}`;
 };
 
 const parseRetryAfterMs = (value: string | null) => {
@@ -157,7 +170,12 @@ serve(async (req) => {
     });
   }
 
-  let payload: { courierName?: string; apiKey?: string; apiSecret?: string };
+  let payload: {
+    courierName?: string;
+    apiKey?: string;
+    apiSecret?: string;
+    baseUrl?: string;
+  };
   try {
     payload = await req.json();
   } catch {
@@ -259,6 +277,13 @@ serve(async (req) => {
   }
 
   if (courierName.includes("ecotrack")) {
+    const baseUrl = normalizeEcotrackBaseUrl(payload.baseUrl ?? "");
+    if (!baseUrl) {
+      return new Response(
+        JSON.stringify({ ok: false, message: "URL Ecotrack HTTPS invalide" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
     const headers = {
       Authorization: `Bearer ${apiKey}`,
       Accept: "application/json",
@@ -299,7 +324,7 @@ serve(async (req) => {
       return { ok: hasFees, message: hasFees ? "OK" : "" };
     };
 
-    for (const baseUrl of ecotrackBaseUrls()) {
+    {
       const withParam = `${baseUrl}/api/v1/validate/token?api_token=${encodeURIComponent(apiKey)}`;
       const noParam = `${baseUrl}/api/v1/validate/token`;
       const first = await attempt(withParam);

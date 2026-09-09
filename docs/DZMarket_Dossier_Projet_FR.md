@@ -55,7 +55,8 @@ Differenciation:
 Domaines:
 - `app.dzmarket.pro`
 - `api.dzmarket.pro`
-- `www.dzmarket.pro` / `dzmarket.pro` -> redirect app
+- `www.dzmarket.pro` / `dzmarket.pro` -> landing marketing
+- `app.dzmarket.pro` -> application web et annonces
 
 ## 5) Corrections majeures recemment livrees
 - Reset mot de passe / callback web stabilises.

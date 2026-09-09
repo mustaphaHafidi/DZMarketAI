@@ -17,6 +17,7 @@ import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:dzmarket/src/utils/shipment_error_mapper.dart';
 import 'package:dzmarket/src/utils/label_url_resolver.dart';
+import 'package:dzmarket/src/utils/ecotrack_base_url.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // Simple generic cache item with expiry.
@@ -2017,6 +2018,7 @@ class ShippingService {
     required String? apiKey,
     required String? apiSecret,
     String? senderId,
+    String? baseUrl,
   }) async {
     if (apiKey == null || apiKey.trim().isEmpty) {
       return {'ok': false, 'message': 'Token manquant'};
@@ -2049,6 +2051,12 @@ class ShippingService {
           name.contains('ecotrack') ||
           isZr ||
           isGuepex) {
+        final normalizedBaseUrl = name.contains('ecotrack')
+            ? normalizeEcotrackBaseUrl(baseUrl)
+            : null;
+        if (name.contains('ecotrack') && normalizedBaseUrl == null) {
+          return {'ok': false, 'message': 'URL Ecotrack HTTPS invalide'};
+        }
         final tokenLength = name.contains('ecotrack') || isZr || isGuepex
             ? 200
             : 120;
@@ -2064,6 +2072,7 @@ class ShippingService {
                   normalized.apiSecret,
                   maxLength: 200,
                 ),
+          baseUrl: normalizedBaseUrl,
         );
         if (edge != null) return edge;
         if (name.contains('yalidine') && !kIsWeb) {
@@ -2097,6 +2106,7 @@ class ShippingService {
     required String courierName,
     required String apiKey,
     required String apiSecret,
+    String? baseUrl,
   }) async {
     try {
       final response = await RateLimiter.instance.run(
@@ -2107,6 +2117,7 @@ class ShippingService {
             'courierName': courierName,
             'apiKey': apiKey,
             'apiSecret': apiSecret,
+            if (baseUrl != null) 'baseUrl': baseUrl,
           },
         ),
       );
@@ -3077,6 +3088,7 @@ class ShippingService {
     required String apiKey,
     required String apiSecret,
     String? senderId,
+    String? baseUrl,
   }) async {
     final safeCourierName = InputSanitizer.sanitizeText(
       courierName,
@@ -3107,6 +3119,10 @@ class ShippingService {
       senderId,
       maxLength: 80,
     );
+    final safeBaseUrl = isEcotrack ? normalizeEcotrackBaseUrl(baseUrl) : null;
+    if (isEcotrack && safeBaseUrl == null) {
+      throw const FormatException('URL Ecotrack HTTPS invalide.');
+    }
     // Find the courier by name to get its ID
     final c = couriers.firstWhere(
       (e) =>
@@ -3134,7 +3150,7 @@ class ShippingService {
         'last_validation_error': null,
         'consecutive_failures': 0,
         'extra': isEcotrack
-            ? {'base_url': 'https://api.ecotrack.dz'}
+            ? {'base_url': safeBaseUrl}
             : isGuepex
             ? {'base_url': 'https://api.guepex.app'}
             : null,

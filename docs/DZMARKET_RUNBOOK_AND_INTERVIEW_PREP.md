@@ -40,14 +40,14 @@ curl -I https://api.dzmarket.pro
 
 ### Build + zip local
 ```powershell
-flutter build web --release --dart-define-from-file=test/test_env.json
+flutter build web --release
 powershell -NoProfile -Command "Compress-Archive -Path '.\\build\\web\\*' -DestinationPath '.\\dzmarket-web.zip' -Force"
 ```
 
 ### Upload + extract serveur
 ```cmd
 scp -i "%USERPROFILE%\.ssh\dzmarket_hetzner" -o IdentitiesOnly=yes .\dzmarket-web.zip root@91.107.239.5:/tmp/dzmarket-web.zip
-ssh -i "%USERPROFILE%\.ssh\dzmarket_hetzner" -o IdentitiesOnly=yes root@91.107.239.5 "rm -rf /var/www/dzmarket-web/* && unzip -oq /tmp/dzmarket-web.zip -d /var/www/dzmarket-web"
+ssh -i "%USERPROFILE%\.ssh\dzmarket_hetzner" -o IdentitiesOnly=yes root@91.107.239.5 "set -e; ts=$(date +%Y%m%d-%H%M%S); release=/var/www/dzmarket-web.release.$ts; mkdir -p \"$release\"; unzip -oq /tmp/dzmarket-web.zip -d \"$release\"; test -f /var/www/dzmarket-web/config.json && cp -p /var/www/dzmarket-web/config.json \"$release/config.json\"; mv /var/www/dzmarket-web /var/www/dzmarket-web.rollback.$ts; mv \"$release\" /var/www/dzmarket-web"
 curl.exe -I https://app.dzmarket.pro
 ```
 
@@ -72,15 +72,28 @@ ssh -i "%USERPROFILE%\.ssh\dzmarket_hetzner" -o IdentitiesOnly=yes root@91.107.2
 Note:
 - `-SendRecoveryTest` peut echouer en `429` si le test recovery est relance trop vite.
 
-## 6) Caddy redirections root/www
+## 6) Caddy hosts marketing/app
+`www.dzmarket.pro` reste la page marketing et `app.dzmarket.pro` reste l'application.
+Ne pas rediriger `www` vers `app`.
+
 Extrait attendu dans `/etc/caddy/Caddyfile`:
 ```caddy
 www.dzmarket.pro {
-    redir https://app.dzmarket.pro{uri} 301
+    root * /var/www/dzmarket-web
+    try_files {path} /index.html
+    file_server
 }
 
 dzmarket.pro {
-    redir https://app.dzmarket.pro{uri} 301
+    root * /var/www/dzmarket-web
+    try_files {path} /index.html
+    file_server
+}
+
+app.dzmarket.pro {
+    root * /var/www/dzmarket-web
+    try_files {path} /index.html
+    file_server
 }
 ```
 

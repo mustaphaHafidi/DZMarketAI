@@ -39,5 +39,10 @@ Check whether the problem is token registration or FCM/APNs delivery:
 - Never copy local secrets into tracked docs.
 - On every web deploy, replace the old web files only after the new artifact is ready.
 - Keep the active `/var/www/dzmarket-web` and one recent rollback directory.
+- Preserve the production `/var/www/dzmarket-web/config.json` runtime config when
+  the local build does not contain it; never replace it with an example file.
+- Serve `www.dzmarket.pro` and `app.dzmarket.pro` from the same artifact while
+  keeping their host-specific behavior in the Flutter router; do not redirect
+  the marketing root to the app root.
 - After deploy verification, remove only old inactive web backups, `/tmp/dzmarket-web*` archives, Docker build cache, unused Docker images, and old system journals/logs.
 - Never remove Supabase volumes, `/opt/supabase/docker/volumes`, DB files, buckets, uploads, `.env` files, keys, or active containers as part of routine cleanup.

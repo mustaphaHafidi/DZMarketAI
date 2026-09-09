@@ -53,6 +53,8 @@ class L10n {
     'admin.moderation.deletion_rejected': 'Rejetée',
     'admin.moderation.deletion_cancelled': 'Annulée',
     'admin.moderation.owner': 'Vendeur: {id}',
+    'courier_settings.base_url_label': 'URL API Ecotrack',
+    'courier_settings.base_url_hint': 'URL HTTPS fournie par votre société.',
     'admin.moderation.queue_hint':
         'Masquage auto: {count} signalements uniques sur {days} jours',
     'admin.moderation.reason': 'Raison: {reason}',
@@ -1101,6 +1103,8 @@ class L10n {
     'admin.moderation.deletion_rejected': 'مرفوض',
     'admin.moderation.deletion_cancelled': 'ملغي',
     'admin.moderation.owner': 'البائع: {id}',
+    'courier_settings.base_url_label': 'رابط API Ecotrack',
+    'courier_settings.base_url_hint': 'رابط HTTPS المقدم من شركة التوصيل.',
     'admin.moderation.queue_hint':
         'إخفاء تلقائي: {count} بلاغات فريدة خلال {days} أيام',
     'admin.moderation.reason': 'السبب: {reason}',

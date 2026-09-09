@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import 'package:dzmarket/src/utils/courier_credentials_status.dart';
+import 'package:dzmarket/src/utils/ecotrack_base_url.dart';
 
 class CourierSettingsPage extends StatefulWidget {
   const CourierSettingsPage({super.key});
@@ -21,6 +22,7 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
   final _apiKeyCtrl = TextEditingController();
   final _apiSecretCtrl = TextEditingController();
   final _senderCtrl = TextEditingController();
+  final _baseUrlCtrl = TextEditingController();
 
   String _selectedCourierName = ShippingService.couriers.first['name']!;
   final Map<String, Map<String, String?>> _localCache = {};
@@ -45,6 +47,7 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
     _apiKeyCtrl.dispose();
     _apiSecretCtrl.dispose();
     _senderCtrl.dispose();
+    _baseUrlCtrl.dispose();
     super.dispose();
   }
 
@@ -60,6 +63,11 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
         _apiKeyCtrl.text = row['api_key']?.toString() ?? '';
         _apiSecretCtrl.text = row['api_secret']?.toString() ?? '';
         _senderCtrl.text = row['sender_id']?.toString() ?? '';
+        _baseUrlCtrl.text =
+            row['base_url']?.toString() ??
+            (_selectedCourierName.toLowerCase().contains('ecotrack')
+                ? defaultEcotrackBaseUrl
+                : '');
         final health = courierCredentialStatusFromValue(
           row['last_validation_status'],
         );
@@ -94,10 +102,16 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
           _apiKeyCtrl.text = cached['api_key'] ?? '';
           _apiSecretCtrl.text = cached['api_secret'] ?? '';
           _senderCtrl.text = cached['sender_id'] ?? '';
+          _baseUrlCtrl.text =
+              cached['base_url'] ??
+              (_selectedCourierName.toLowerCase().contains('ecotrack')
+                  ? defaultEcotrackBaseUrl
+                  : '');
         } else {
           _apiKeyCtrl.clear();
           _apiSecretCtrl.clear();
           _senderCtrl.clear();
+          _baseUrlCtrl.clear();
         }
         _status = null;
         _validationErrorDetail = null;
@@ -123,9 +137,8 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
     String apiKey;
     String apiSecret;
     String? sender;
+    final isEcotrack = _selectedCourierName.toLowerCase().contains('ecotrack');
     try {
-      final lower = _selectedCourierName.toLowerCase();
-      final isEcotrack = lower.contains('ecotrack');
       final isZrExpress = ShippingService.isZrExpressCourier(
         courierName: _selectedCourierName,
       );
@@ -166,6 +179,7 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
       apiKey: apiKey,
       apiSecret: apiSecret,
       senderId: sender,
+      baseUrl: isEcotrack ? _baseUrlCtrl.text : null,
     );
     final valid = validation['ok'] == true;
     if (!valid) {
@@ -219,11 +233,15 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
       apiKey: apiKey,
       apiSecret: apiSecret,
       senderId: sender,
+      baseUrl: isEcotrack ? _baseUrlCtrl.text : null,
     );
     _localCache[_selectedCourierName] = {
       'api_key': apiKey,
       'api_secret': apiSecret,
       'sender_id': sender,
+      'base_url': isEcotrack
+          ? normalizeEcotrackBaseUrl(_baseUrlCtrl.text)
+          : null,
     };
     if (!mounted) return;
     setState(() => _saving = false);
@@ -246,6 +264,7 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
       _apiKeyCtrl.clear();
       _apiSecretCtrl.clear();
       _senderCtrl.clear();
+      _baseUrlCtrl.clear();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -363,6 +382,26 @@ class _CourierSettingsPageState extends State<CourierSettingsPage> {
                               )
                             : L10n.tr(context, 'courier_settings.secret_label'),
                         prefixIcon: const Icon(Icons.lock_outline),
+                      ),
+                    ),
+                  ],
+                  if (isEcotrack) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _baseUrlCtrl,
+                      keyboardType: TextInputType.url,
+                      decoration: InputDecoration(
+                        labelText: L10n.tr(
+                          context,
+                          'courier_settings.base_url_label',
+                          fallback: 'URL API Ecotrack',
+                        ),
+                        helperText: L10n.tr(
+                          context,
+                          'courier_settings.base_url_hint',
+                          fallback: 'URL HTTPS fournie par votre société.',
+                        ),
+                        prefixIcon: const Icon(Icons.link_outlined),
                       ),
                     ),
                   ],

@@ -79,7 +79,10 @@ routes testees `/api/v1/validate/token` et `/api/v1/get/fees` repondent 404.
 Cela ne prouve pas que les tokens sont invalides: l'URL de societe, le tenant
 ou les routes peuvent etre mauvais. Il faut obtenir pour chaque societe l'hote
 officiel et le tenant, puis propager la meme configuration verifiee dans
-validation, frais, wilayas, creation, etiquette, suivi et cache.
+validation, frais, wilayas, creation, etiquette, suivi et cache. Le formulaire
+Ecotrack accepte maintenant une URL HTTPS par vendeur; le serveur n'utilise
+que les hotes Ecotrack connus ou ceux explicitement autorises par sa liste
+d'environnement.
 
 Le modele actuel ne permet qu'un compte par vendeur et transporteur. Ajouter
 un identifiant d'instance/tenant si plusieurs societes Ecotrack sont
@@ -108,8 +111,8 @@ pas les supprimer automatiquement.
 
 1. Projection publique/RLS des profils et verification des acces admin.
 2. Pagination, isolation des erreurs, confirmation et audit des actions admin.
-3. Instance/tenant Ecotrack avec URL fournie par la societe, puis tests
-   validation/frais/locations/expedition/suivi.
+3. Renseigner l'URL Ecotrack par vendeur, configurer la liste d'hotes autorises
+   si necessaire, puis tester validation/frais/locations/expedition/suivi.
 4. Suppression du faux paiement du parcours COD et tests de statuts serveur.
 5. Creation de conversation differee et tests d'offres.
 6. Metriques d'erreurs, tokens push, alertes job runner et verification des
