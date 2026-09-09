@@ -23,21 +23,8 @@ class PaymentService {
     required double amount,
     String currency = 'DZD',
   }) async {
-    final userId = supabase.auth.currentUser?.id;
-    if (userId == null) throw StateError('Sign in to pay');
-    final safeOrderId = InputSanitizer.sanitizeId(orderId, maxLength: 64);
-    final safeCurrency = InputSanitizer.sanitizeText(currency, maxLength: 6);
-
-    await RateLimiter.instance.run(
-      'payments.insert.mock',
-      () => supabase.from('payment_intents').insert({
-      'order_id': safeOrderId,
-      'user_id': userId,
-      'amount': amount,
-      'currency': safeCurrency,
-      'status': 'succeeded', // mock: succeed immediately
-      'provider': 'mock',
-      }),
+    throw UnsupportedError(
+      'Mock payment is disabled. DZMarket currently uses cash on delivery.',
     );
   }
 

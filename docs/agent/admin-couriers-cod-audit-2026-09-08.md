@@ -54,9 +54,10 @@ l'archive precedente.
 
 ## Paiement COD
 
-Le code contient encore un bouton qui appelle `createMockPaymentIntent`, puis
-marque la commande payee. Ce chemin n'est pas utilise par les donnees live,
-mais il est dangereux pour une application COD.
+Le bouton de paiement et l'appel applicatif a `createMockPaymentIntent` ont ete
+retires du parcours commandes. Le service conserve une methode de compatibilite
+qui refuse maintenant explicitement tout paiement mock; aucune commande ne
+peut donc etre marquee payee par ce faux flux.
 
 Ordre sur: masquer/desactiver le bouton de paiement en mode COD; faire evoluer
 la commande par statuts serveur (confirmee, expediee, livree, encaissee,
@@ -93,7 +94,11 @@ revanche `_contactSeller` appelle `ensureConversation` avant le premier
 message. Cela explique les salons vides sans attribuer a tort leur creation a
 l'annulation d'offre.
 
-Correction recommandee: creer le salon dans la meme operation que le premier
+Le parcours contact envoie maintenant un premier message avant la navigation,
+et le parcours offre valide demande le meme comportement. Une annulation, une
+offre vide ou invalide sort toujours avant toute creation de salon.
+
+Correction recommandee cote backend: creer le salon dans la meme operation que le premier
 message valide ou l'offre valide, reutiliser un salon existant, et tester
 annulation, tap hors modal, vide, montant invalide, double envoi, echec/retry
 et conversation preexistante. Conserver les 19 salons actuels pour revue; ne

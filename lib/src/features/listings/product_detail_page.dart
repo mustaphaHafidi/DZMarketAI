@@ -320,7 +320,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   Future<void> _contactSeller({
-    bool sendIntroMessage = false,
     String? autoMessageKey,
     Map<String, dynamic>? autoMessagePayload,
     String? autoMessageDedupeKey,
@@ -356,7 +355,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         // Best effort only: keep navigation responsive even if the auto-message
         // cannot be inserted because of a race or a legacy backend signature.
       }
-    } else if (sendIntroMessage) {
+    } else {
+      // A chat room must have a first user-visible message. This prevents
+      // contact and valid-offer flows from creating empty rooms.
       final newContactText = L10n.tr(context, 'chat.new_contact');
       // Try to send a hello message; ignore duplicate/race errors.
       try {
@@ -1473,7 +1474,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           ),
         ),
       );
-      await _contactSeller(sendIntroMessage: false);
+      await _contactSeller();
     }
   }
 

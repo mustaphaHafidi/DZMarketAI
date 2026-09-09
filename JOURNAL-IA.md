@@ -117,6 +117,14 @@ log) → dans ce cas, passer par la voie 1.
 
 ## Journal des changements (plus récent en haut)
 
+### 2026-09-09 - Codex - durcissement COD et conversations
+
+- Retire le bouton et le parcours de paiement mock des commandes; `PaymentService.createMockPaymentIntent` refuse maintenant explicitement toute tentative. Le flux reste paiement a la livraison.
+- Le contact vendeur et l'offre valide envoient un premier message avant l'ouverture du salon, afin d'eviter les nouveaux salons vides lors d'une action valide. Les annulations/offres invalides sortent toujours avant toute creation.
+- Test de regression ajoute: `test/payment_service_test.dart`.
+- Verification: `flutter analyze --no-pub` sans erreur, 2 warnings preexistants dans `auth_service.dart`; `flutter test --no-pub --reporter expanded` = 136 OK, 2 ignores. Aucun secret, acces prod, migration ou deploiement.
+- Limite: les URLs/tenants Ecotrack et la projection RLS des profils restent a traiter avec les informations fournisseur et un staging valide.
+
 ### 2026-09-09 - Codex - audit admin, COD, transporteurs et conversations
 
 - Audit live en lecture seule termine: stack et cron serveur verifies; aucun secret, JSONL ancien, ecriture de production ou deploiement.
