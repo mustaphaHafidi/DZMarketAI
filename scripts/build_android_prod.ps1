@@ -108,6 +108,7 @@ $safeContent | Set-Content -Encoding UTF8 -LiteralPath $safeLog
 Remove-Item -LiteralPath $rawLog -Force -ErrorAction SilentlyContinue
 
 if ($buildExit -ne 0) {
+  Clear-Content -LiteralPath $definesPath -ErrorAction SilentlyContinue
   Get-Content -LiteralPath $safeLog -Tail 80
   throw "Android build failed. See sanitized log: $safeLog"
 }
@@ -120,3 +121,5 @@ if (-not (Test-Path -LiteralPath $aab)) {
 Write-Host "AAB generated: $aab"
 Write-Host "Build: $BuildName+$BuildNumber"
 Write-Host "Sanitized build log: $safeLog"
+Clear-Content -LiteralPath $definesPath -ErrorAction SilentlyContinue
+Write-Host "Temporary dart-defines cleared."

@@ -27,7 +27,7 @@ Windows release builds slow or unstable and should be tested separately.
 .\scripts\build_android_prod.ps1
 ```
 
-The script creates a temporary whitelisted dart-define file under `build/`,
+The script creates and clears a temporary whitelisted dart-define file under `build/`,
 excluding test users, test passwords, courier test secrets, and other fixtures.
 
 6. Upload the generated AAB with the Play service account JSON stored outside
