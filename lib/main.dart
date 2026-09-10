@@ -155,7 +155,7 @@ class _BootstrapErrorApp extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       const Text(
-                        'L’application n’a pas pu demarrer.',
+                        "L'application n'a pas pu demarrer.",
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w600,
@@ -186,7 +186,7 @@ String _bootstrapErrorMessage(Object error) {
   final raw = error.toString();
   if (raw.contains('SUPABASE_URL') || raw.contains('SUPABASE_ANON_KEY')) {
     return 'Configuration manquante: SUPABASE_URL / SUPABASE_ANON_KEY. '
-        'Regenerer le build avec les variables Codemagic de production.';
+        'Regenerer le build avec les variables de production.';
   }
   return 'Erreur de demarrage. Regenerer le build ou verifier la configuration '
       'de production.';

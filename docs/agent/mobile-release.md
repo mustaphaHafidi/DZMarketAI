@@ -49,10 +49,18 @@ Use variable names only; never expose values.
 ## Useful Checks
 
 ```powershell
-flutter test --no-test-assets
+flutter test
 dart analyze
 flutter build appbundle --release --flavor prod -t lib/main.dart
 ```
 
 Codemagic iOS is configured in `codemagic.yaml`; confirm its build name/number before launching.
 
+For Android production from Windows, prefer the guarded script:
+
+```powershell
+.\scripts\build_android_prod.ps1
+```
+
+This prevents a store build that boots without `SUPABASE_URL` or
+`SUPABASE_ANON_KEY`.

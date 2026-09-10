@@ -8,6 +8,7 @@ Purpose: keep future agent context small. Read only the file that matches the ta
 - Admin, COD, transporteurs, erreurs et conversations: read [admin-couriers-cod-audit-2026-09-08.md](admin-couriers-cod-audit-2026-09-08.md).
 - New or unclear task: read this file, then `project-map.md`.
 - Mobile build, Codemagic, TestFlight, Play Console, Firebase, APNs: read `mobile-release.md`.
+- PC2 mobile deployment: read `mobile-pc2-deploy.md`.
 - Hetzner, Supabase stack, prod logs, web deploy: read `server-ops.md`.
 - SQL, RPC, schema, migrations, RLS: read `db-and-migrations.md`.
 - Tests, USB checks, regression safety: read `qa-regression.md`.

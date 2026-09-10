@@ -14,10 +14,12 @@ Read this before changing code or preparing a release.
 ```powershell
 git status --short
 dart analyze
-flutter test --no-test-assets
+flutter test
 ```
 
-For pure unit tests, prefer `--no-test-assets` if Flutter hits generated asset collisions.
+Use `--no-test-assets` only for pure targeted unit tests that do not load app
+assets. Do not use it as the global release gate because several UI and i18n
+tests require the Flutter asset manifest.
 
 Targeted examples:
 
@@ -42,4 +44,3 @@ Before store submission:
 - Firebase native config present
 - APNs key configured for iOS production push
 - Play/App Store status checked externally
-
