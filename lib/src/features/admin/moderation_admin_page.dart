@@ -26,6 +26,7 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
   List<Map<String, dynamic>> _listings = const [];
   List<_ReportQueueItem> _reportQueue = const [];
   List<_DeletionRequestItem> _deletionRequests = const [];
+  int? _totalUsersCount;
 
   String _ownerDisplay(String ownerId) {
     return adminOwnerDisplayName(ownerId: ownerId, users: _users);
@@ -69,9 +70,11 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
 
       final usersFuture = supabase
           .from('profiles')
-          .select('id,email,full_name,role,status,created_at')
+          .select('id,email,phone,full_name,role,status,created_at')
           .order('created_at', ascending: false)
           .limit(400);
+
+      final usersCountFuture = supabase.from('profiles').count();
 
       final listingsFuture = supabase
           .from('products')
@@ -108,6 +111,17 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
           .cast<Map>()
           .map((row) => row.cast<String, dynamic>())
           .toList();
+
+      // Vrai total (count exact cote serveur), separe de la liste plafonnee
+      // a 400 lignes ci-dessus. Best-effort: un echec ne bloque pas la page.
+      int? totalUsersCount;
+      try {
+        totalUsersCount = await usersCountFuture;
+      } catch (_) {
+        totalUsersCount = null;
+      }
+      if (!mounted) return;
+
       setState(() {
         _users = (responses[0] as List).cast<Map<String, dynamic>>();
         _listings = (responses[1] as List).cast<Map<String, dynamic>>();
@@ -117,6 +131,7 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
         _deletionRequests = deletionRows
             .map(_DeletionRequestItem.fromJson)
             .toList();
+        _totalUsersCount = totalUsersCount;
       });
     } catch (e) {
       if (!mounted) return;
@@ -197,9 +212,10 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
         return false;
       }
       final email = u['email']?.toString() ?? '';
+      final phone = u['phone']?.toString() ?? '';
       final fullName = u['full_name']?.toString() ?? '';
       final id = u['id']?.toString() ?? '';
-      return _matchesSearch('$email $fullName $id');
+      return _matchesSearch('$email $phone $fullName $id');
     }).toList();
   }
 
@@ -519,6 +535,7 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
             final id = u['id']?.toString() ?? '';
             final status = (u['status']?.toString() ?? 'active').toLowerCase();
             final email = u['email']?.toString() ?? '-';
+            final phone = u['phone']?.toString().trim() ?? '';
             final role = u['role']?.toString() ?? 'buyer';
             final fullName = u['full_name']?.toString();
             final createdAt = _parseDate(u['created_at']);
@@ -530,6 +547,8 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
                   children: [
                     if (fullName != null && fullName.trim().isNotEmpty)
                       Text(fullName),
+                    if (phone.isNotEmpty)
+                      Text('${L10n.tr(context, 'profile.phone')}: $phone'),
                     Text('$role - ${_statusLabel(status)}'),
                     if (createdAt != null)
                       Text(
@@ -1156,7 +1175,9 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
 
   @override
   Widget build(BuildContext context) {
-    final usersCount = _filteredUsers.length;
+    final usersCount = (_search.isEmpty && _userStatusFilter == 'all')
+        ? (_totalUsersCount ?? _filteredUsers.length)
+        : _filteredUsers.length;
     final listingsCount = _filteredListings.length;
     final reportsCount = _filteredReports.length;
     final deletionCount = _filteredDeletionRequests.length;

@@ -117,6 +117,77 @@ log) → dans ce cas, passer par la voie 1.
 
 ## Journal des changements (plus récent en haut)
 
+### 2026-09-14 - Codex - admin telephones utilisateurs + deploy web Hetzner
+
+- Claude avait compris "vrai numero des users" comme **nombre total** d'utilisateurs
+  et avait ajoute un count best-effort. Ce count est conserve car non bloquant, mais
+  le besoin metier etait surtout: afficher le **telephone reel** des utilisateurs
+  dans l'onglet admin moderation.
+- Correctif web/admin: `lib/src/features/admin/moderation_admin_page.dart` charge
+  maintenant `profiles.phone`, l'affiche dans la fiche utilisateur admin, et la
+  recherche admin matche aussi le telephone. Aucun changement public/RLS, aucun
+  secret, aucune migration.
+- Verification locale: `flutter test test\admin_owner_display_test.dart --no-test-assets`
+  OK; `flutter test --no-test-assets` OK (`141 OK, 2 skipped`); `flutter analyze
+  --no-pub` garde seulement les 2 warnings historiques `auth_service.dart:457/459`.
+- Deploy web effectue sur `dzm-app-01` (`91.107.239.5`) avec la cle attendue
+  `C:\dzm-deploy\dzmarket_hetzner`. Ne pas redemander au user si cette cle existe:
+  verifier en lecture seule puis deployer. Toujours utiliser Caddy/Hetzner, pas nginx.
+- Flow web a reutiliser par Claude/Codex:
+  1. `flutter build web --release --no-pub` si le PC a deja ses deps et qu'il faut
+     eviter de modifier `pubspec.lock`; sinon `flutter build web --release`.
+  2. Uploader l'artefact vers `/tmp`, extraire dans
+     `/var/www/dzmarket-web.release.<timestamp>`.
+  3. Copier **sans afficher** `/var/www/dzmarket-web/config.json` vers la release
+     avant bascule; ne jamais remplacer par `config.example.json`.
+  4. Renommer l'actif en `/var/www/dzmarket-web.rollback.<timestamp>`, puis la release
+     en `/var/www/dzmarket-web`.
+  5. Verifier `https://app.dzmarket.pro`, `https://www.dzmarket.pro`,
+     `https://api.dzmarket.pro`, presence de `config.json`, containers Supabase.
+  6. Garder l'actif + un rollback recent; nettoyer seulement archives `/tmp` et
+     vieux rollbacks inactifs. Ne jamais supprimer volumes, DB, buckets, secrets,
+     `/opt/supabase/docker/volumes`, ou containers actifs.
+- Deploiement verifie: `app.dzmarket.pro`, `www.dzmarket.pro` et `api.dzmarket.pro`
+  repondent HTTP 200; `config.json` prod conserve; rollback
+  `/var/www/dzmarket-web.rollback.20260914-1327-admin-phone` conserve.
+
+### 2026-09-10 — Claude — build AAB Android demandé (post-changements Codex)
+
+- Contexte : Codex a modifié le code Android récemment — commits `ced9e3a`
+  (plugin Kotlin), `15f5d37` (alignement outillage Android + build number iOS),
+  `17529c0` (build number → 40) ; + non commité dans le worktree :
+  `analysis_options.yaml` (exclusions analyzer), `android/gradle.properties`
+  (flags migrator `android.builtInKotlin=false` / `android.newDsl=false`),
+  `pubspec.lock`. Version courante `1.0.7+40`.
+- **Prêt pour le build** : Flutter 3.47.2 / Dart 3.13.2, JDK 21, Android SDK
+  `C:\src\tools\android-sdk` ; signature release câblée (`android/key.properties`
+  + `android/app/upload-keystore.jks`) ; `google-services.json` par flavor présent
+  (`android/app/src/prod/`).
+- **Bloqueur** : `test/test_env.json` absent de ce PC (fichier gitignoré, non
+  repris lors de la migration PC ; introuvable dans Documents/Desktop/Downloads/
+  `C:\src`/`Historique`). Le build prod lit ses `--dart-define` via ce fichier.
+  Sans lui : `lib/main.dart:44` lève `StateError('Supabase URL/anon key
+  manquants')` → l'app ne démarre pas ; `auth_service.dart:28` → bouton Google
+  masqué. Un AAB généré maintenant serait signé mais **non fonctionnel**.
+- Clés minimales requises par `flutter build appbundle` (pas les secrets
+  transporteurs/comptes de test, qui ne servent qu'aux tests d'intégration) :
+  `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `GOOGLE_WEB_CLIENT_ID`
+  (+ `GOOGLE_IOS_CLIENT_ID`, ignoré sur Android). Ces 3 valeurs sont **publiques**
+  (déjà embarquées dans chaque APK/web en prod) — dispo aussi dans Codemagic →
+  groupe `dzmarket_secrets`. Repartir de `test/test_env.example.json`.
+- Commande de build (une fois `test/test_env.json` restauré) :
+  ```powershell
+  cd C:\src\dzmarket
+  flutter pub get
+  flutter build appbundle --release --flavor prod -t lib/main.dart --dart-define-from-file=test/test_env.json
+  ```
+  Sortie : `build\app\outputs\bundle\prodRelease\app-prod-release.aab`.
+- À vérifier avant upload Play : que le build **40** n'est pas déjà utilisé sur la
+  Play Console (sinon passer `1.0.7+41` dans `pubspec.yaml`). CI `flutter analyze`
+  toujours en échec (2 warnings `unawaited_return_in_try_block`
+  `auth_service.dart:457/459`) — n'empêche pas le build, à corriger à part.
+- **Aucune modification de code / config / prod / app.** Rien commité.
+
 ### 2026-09-09 - Codex - livraison web et nettoyage controle
 
 - Commit `ba7aeca` deploye sur le web; `app.dzmarket.pro` ouvre maintenant l'onglet annonces avec recherche, filtres et consultation anonyme.
