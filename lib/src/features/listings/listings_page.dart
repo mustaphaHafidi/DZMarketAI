@@ -13,6 +13,7 @@ import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:dzmarket/src/services/product_service.dart';
+import 'package:dzmarket/src/services/rate_limiter.dart';
 import 'package:dzmarket/src/services/saved_search_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
@@ -61,6 +62,8 @@ class _ListingsPageState extends State<ListingsPage> {
   bool _loadErrorOffline = false;
   String? _lastLoggedLoadError;
   int _savedSearchesRefreshTick = 0;
+  List<Product> _interestProducts = const [];
+  bool _interestsDismissed = false;
 
   List<Map<String, String>> _categories = const [
     {'id': 'any'},
@@ -73,6 +76,7 @@ class _ListingsPageState extends State<ListingsPage> {
     super.initState();
     _loadCategories();
     _loadBuyerWilaya();
+    _loadInterests();
     _refresh();
     _scrollController.addListener(_onScroll);
   }
@@ -89,6 +93,69 @@ class _ListingsPageState extends State<ListingsPage> {
       if (!mounted) return;
       setState(() => _buyerWilaya = profile?['wilaya']?.toString());
     } catch (_) {}
+  }
+
+  // MVP "Selon vos intérêts": derive one category signal from the user's
+  // most recent saved search, or failing that from their favorites, and
+  // show a few matching listings above the grid. No signal => no section,
+  // so behavior stays identical to today for users without history.
+  Future<void> _loadInterests() async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+    try {
+      String? categoryId;
+      final savedSearches = await SavedSearchService().fetchSavedSearches(
+        userId,
+      );
+      for (final search in savedSearches.reversed) {
+        final candidate = search.filters['category']?.toString().trim();
+        if (candidate != null && candidate.isNotEmpty && candidate != 'any') {
+          categoryId = candidate;
+          break;
+        }
+      }
+      if (categoryId == null) {
+        final favoriteIds = await FavoriteService().streamFavorites(
+          userId,
+        ).first;
+        if (favoriteIds.isNotEmpty) {
+          final ids = favoriteIds
+              .take(50)
+              .map<dynamic>((id) => int.tryParse(id) ?? id)
+              .toList();
+          final rows = await RateLimiter.instance.run(
+            'listings.interests.favorite_categories',
+            () => supabase
+                .from('products')
+                .select('category_id')
+                .inFilter('id', ids)
+                .limit(50),
+          );
+          final counts = <String, int>{};
+          for (final row in rows as List) {
+            final cid = (row as Map)['category_id']?.toString();
+            if (cid == null || cid.isEmpty) continue;
+            counts[cid] = (counts[cid] ?? 0) + 1;
+          }
+          if (counts.isNotEmpty) {
+            categoryId = counts.entries
+                .reduce((a, b) => a.value >= b.value ? a : b)
+                .key;
+          }
+        }
+      }
+      if (categoryId == null) return;
+      final results = await ProductService().fetchProducts(
+        categoryId: categoryId,
+        sort: 'newest',
+        limit: 10,
+        excludeOwner: true,
+      );
+      if (!mounted || results.isEmpty) return;
+      setState(() => _interestProducts = results);
+    } catch (_) {
+      // Best-effort discovery section only; never surface an error for it.
+    }
   }
 
   Future<void> _loadCategories() async {
@@ -293,6 +360,15 @@ class _ListingsPageState extends State<ListingsPage> {
           ),
           if (userId == null)
             _GuestValueBanner(onSignIn: () => _goToSignIn('/?tab=listings')),
+          if (userId != null &&
+              _interestProducts.isNotEmpty &&
+              !_interestsDismissed)
+            _InterestsSection(
+              userId: userId,
+              products: _interestProducts,
+              currency: currency,
+              onDismiss: () => setState(() => _interestsDismissed = true),
+            ),
           ValueListenableBuilder<bool>(
             valueListenable: ConnectivityService.instance.isOnline,
             builder: (context, isOnline, _) {
@@ -1916,6 +1992,90 @@ class _SavedSearchesRow extends StatelessWidget {
               label: Text(L10n.tr(context, 'common.save')),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _InterestsSection extends StatelessWidget {
+  const _InterestsSection({
+    required this.userId,
+    required this.products,
+    required this.currency,
+    required this.onDismiss,
+  });
+
+  final String userId;
+  final List<Product> products;
+  final NumberFormat currency;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  L10n.tr(
+                    context,
+                    'listing.interests.title',
+                    fallback: 'Selon vos intérêts',
+                  ),
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: onDismiss,
+                child: Text(
+                  L10n.tr(
+                    context,
+                    'listing.interests.dismiss',
+                    fallback: 'Masquer',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            height: 258,
+            child: StreamBuilder<Set<String>>(
+              stream: FavoriteService().streamFavorites(userId),
+              builder: (context, favSnapshot) {
+                final favorites = favSnapshot.data ?? const <String>{};
+                return ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: products.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  itemBuilder: (context, index) {
+                    final product = products[index];
+                    return SizedBox(
+                      width: 168,
+                      child: _ProductCard(
+                        product: product,
+                        currency: currency,
+                        isFavorite: favorites.contains(product.id),
+                        onFavoriteToggle: (currentIsFavorite) =>
+                            FavoriteService().toggleFavorite(
+                              productId: product.id,
+                              isFav: currentIsFavorite,
+                            ),
+                        onFavoriteRequiresLogin: () {},
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
         ],
       ),
     );
