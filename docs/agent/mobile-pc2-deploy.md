@@ -59,6 +59,12 @@ The script creates and clears a temporary whitelisted dart-define file under
 `build/`, excluding test users, test passwords, courier test secrets, and other
 fixtures.
 
+Current PC2 tooling note: Flutter 3.47.2 requires Gradle wrapper 8.14+ before
+Android build. The guarded script also passes
+`--android-skip-build-dependency-validation` because the project still uses
+AGP 8.9.1 during this hotfix; do not upgrade AGP/Kotlin casually in a store
+hotfix. Revisit this as a separate tooling task.
+
 8. Upload the generated AAB with the Play service account JSON stored outside
    the repo:
 

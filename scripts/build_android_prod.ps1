@@ -77,7 +77,7 @@ if ($Clean) {
 
 $env:GRADLE_OPTS = (($env:GRADLE_OPTS, "-Dkotlin.compiler.execution.strategy=in-process") -join " ").Trim()
 
-flutter pub get
+flutter pub get --enforce-lockfile
 
 $logDir = Join-Path "build" "release-logs"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
@@ -88,6 +88,8 @@ $oldErrorActionPreference = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
 try {
   & flutter build appbundle `
+    --no-pub `
+    --android-skip-build-dependency-validation `
     --release `
     --flavor prod `
     -t lib/main.dart `

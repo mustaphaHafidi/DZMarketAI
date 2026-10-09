@@ -1,6 +1,8 @@
 # DZMarket Agent Instructions
 
 - Keep context small: start with `docs/agent/README.md`, then read only the task-specific file.
+- For token-heavy chats, prefer a fresh short handoff and targeted reads over reloading old conversation history.
+- If the user asks for advice only, answer from existing context when enough; do not inspect the repo or run tools unless needed.
 - Treat live code, migrations, and config as source of truth over old handovers.
 - Preserve unrelated dirty worktree changes; never revert user work unless explicitly requested.
 - Keep fixes narrow, run targeted tests, and report any unverified risk before release.

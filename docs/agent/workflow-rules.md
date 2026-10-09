@@ -20,6 +20,13 @@ Read this before changing code, config, deploy scripts, or project instructions.
 - Do not copy full old Codex JSONL sessions into repo docs.
 - Keep docs operational and current; mark stale historical docs as historical instead of treating them as truth.
 
+## Token Hygiene
+
+- If a task spans multiple unrelated topics, stop and propose a fresh thread with a compact handoff.
+- For "avis pro", "sans rien faire", or "ne touche pas le code", answer briefly and do not run tools unless the user asks for live verification.
+- Before deep repo exploration, identify the smallest needed file set from `docs/agent/README.md`.
+- Summarize command output; do not paste long logs unless the user requests them.
+
 ## Git Safety
 
 - Preserve unrelated dirty files.

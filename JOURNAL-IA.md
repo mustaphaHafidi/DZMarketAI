@@ -414,3 +414,11 @@ log) → dans ce cas, passer par la voie 1.
   security-review baseline) + relecture ciblée des chats Codex DZMarket (avr.→sept. 2026).
 - 9 findings ouverts consignés ci-dessus. **Aucune modification de code / config / prod.**
 - Prochaine étape à décider par le user (remédiation secrets, policy `profiles`, revue Edge Functions…).
+
+### 2026-10-09 - Codex - Android Play production 1.0.7+42
+- Recreated local-only `test/test_env.json` without printing values: Supabase public runtime config from `app.dzmarket.pro/config.json`, Google OAuth web client from `ios/Runner/Info.plist`; file remains gitignored.
+- Android release identity: package `com.dzmarket.app`, version `1.0.7+42`; release signing, prod Firebase config and Play service account path present.
+- Checks: `flutter analyze --no-pub` = only 2 historical warnings in `auth_service.dart:457/459`; full `flutter test --no-pub --reporter expanded` = 142 OK, 2 skipped; targeted i18n/interests tests OK after lockfile refresh.
+- Build: `.\scripts\build_android_prod.ps1` generated `build/app/outputs/bundle/prodRelease/app-prod-release.aab`; script now uses locked deps, `--no-pub`, sanitized logs, and Flutter dependency validation bypass for current AGP 8.9.1 hotfix.
+- Play upload: first attempt with versionCode 41 rejected because already used; bumped build number only to 42 and uploaded versionCode 42 to production as `completed`.
+- Tooling notes: Gradle wrapper moved from 8.12 to 8.14 for Flutter 3.47.2; AGP/Kotlin upgrade intentionally deferred. No secrets printed.

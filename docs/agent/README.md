@@ -2,6 +2,8 @@
 
 Purpose: keep future agent context small. Read only the file that matches the task.
 
+Token rule: when a chat becomes long or mixed-topic, ask for or create a fresh 5-line handoff and continue in a new thread. Do not reload old chat history unless the current task needs exact evidence.
+
 ## Read Order
 
 - Every task: read [`JOURNAL-IA.md`](../../JOURNAL-IA.md) first for shared status, open findings, and the latest verification; update its journal after the intervention.
@@ -20,6 +22,7 @@ Purpose: keep future agent context small. Read only the file that matches the ta
 
 - Treat live repo files as source of truth over old handovers.
 - Do not load old Codex JSONL sessions wholesale. Search targeted excerpts only.
+- For simple advice, avoid repo reads, screenshots, browser control, and broad audits unless the user explicitly asks for verification.
 - Preserve unrelated dirty worktree changes.
 - Never commit or print secrets: API keys, service-role keys, `.p8`, plist contents, keystores, passwords.
 - Prefer narrow fixes plus targeted tests before any release.
