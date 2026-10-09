@@ -28,6 +28,7 @@ class _HomeShellState extends State<HomeShell> {
   static final NotificationInboxService _notificationInboxService =
       NotificationInboxService();
   late int _currentIndex = _tabIndexFor(widget.initialTab);
+  final ValueNotifier<int> _browseResetSignal = ValueNotifier<int>(0);
 
   @override
   void didUpdateWidget(covariant HomeShell oldWidget) {
@@ -37,11 +38,23 @@ class _HomeShellState extends State<HomeShell> {
     }
   }
 
+  @override
+  void dispose() {
+    _browseResetSignal.dispose();
+    super.dispose();
+  }
+
   void _onTabSelected(int index) {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null && index != 0) {
       final from = Uri.encodeComponent('/?tab=${_tabs[index]}');
       context.go('/sign-in?from=$from');
+      return;
+    }
+    if (index == 0 && index == _currentIndex) {
+      // Re-tapping the already-active Browse tab: reset sticky quick
+      // filters (e.g. favorites-only) instead of doing nothing.
+      _browseResetSignal.value++;
       return;
     }
     setState(() {
@@ -53,7 +66,9 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      const ListingsPage(), // index 0: Browse/Product list
+      ListingsPage(
+        browseResetSignal: _browseResetSignal,
+      ), // index 0: Browse/Product list
       const ChatHubPage(), // index 1: Chat hub
       const ProfilePage(), // index 2: Profile
     ];

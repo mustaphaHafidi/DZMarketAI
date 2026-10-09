@@ -25,7 +25,13 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 class ListingsPage extends StatefulWidget {
-  const ListingsPage({super.key});
+  const ListingsPage({super.key, this.browseResetSignal});
+
+  /// Fires when the user re-taps the already-active Browse tab. Lets the
+  /// page drop sticky quick filters (e.g. favorites-only) instead of
+  /// staying stuck on them, matching the re-tap-resets convention used by
+  /// Vinted/Leboncoin's own tab bars.
+  final ValueListenable<int>? browseResetSignal;
 
   @override
   State<ListingsPage> createState() => _ListingsPageState();
@@ -79,6 +85,24 @@ class _ListingsPageState extends State<ListingsPage> {
     _loadInterests();
     _refresh();
     _scrollController.addListener(_onScroll);
+    widget.browseResetSignal?.addListener(_onBrowseResetSignal);
+  }
+
+  // Re-tapping the already-active Browse tab should drop sticky quick
+  // filters (favorites-only) instead of silently staying on them, and
+  // scroll back to the top of the grid.
+  void _onBrowseResetSignal() {
+    if (!mounted) return;
+    if (_showFavoritesOnly) {
+      setState(() => _showFavoritesOnly = false);
+    }
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   Future<void> _loadBuyerWilaya() async {
@@ -178,6 +202,7 @@ class _ListingsPageState extends State<ListingsPage> {
     _color.dispose();
     _scrollController.dispose();
     _searchDebounce?.cancel();
+    widget.browseResetSignal?.removeListener(_onBrowseResetSignal);
     super.dispose();
   }
 
@@ -768,6 +793,7 @@ class _ListingsPageState extends State<ListingsPage> {
       filtered,
       interestCategoryId: _interestCategoryId,
       hasActiveUserFilters: _hasActiveFilters() || _safeSearch().isNotEmpty,
+      favoriteIds: favorites,
     );
   }
 
