@@ -117,6 +117,35 @@ log) → dans ce cas, passer par la voie 1.
 
 ## Journal des changements (plus récent en haut)
 
+### 2026-10-09 - Claude - section découverte "Selon vos intérêts" (MVP)
+
+- Nouvelle rangée optionnelle au-dessus de la grille d'annonces
+  (`_InterestsSection` dans `listings_page.dart`), **code uniquement, rien
+  déployé ni poussé** : montre jusqu'à 10 annonces d'une catégorie déduite
+  des signaux déjà disponibles — catégorie de la recherche sauvegardée la
+  plus récente, sinon catégorie la plus fréquente parmi les favoris
+  (requête `products.category_id` bornée aux 50 derniers favoris). **Aucun
+  signal connu → la section ne s'affiche pas du tout**, donc le comportement
+  par défaut (annonces récentes dans la grille) reste identique à avant pour
+  tout visiteur sans historique ou déconnecté.
+- Pas de géolocalisation, pas de scoring IA, pas de mélange avec du contenu
+  sponsorisé (aucun concept de sponsoring dans le repo) ; la grille et les
+  filtres existants ne sont pas touchés — section strictement additive,
+  bouton "Masquer" pour la désactiver pour la session en cours (réversible,
+  ne supprime ni recherche sauvegardée ni favori).
+- Réutilise `_ProductCard`, `FavoriteService`, `SavedSearchService`,
+  `ProductService.fetchProducts` existants ; nouvelles clés FR/AR
+  `listing.interests.title` / `listing.interests.dismiss` dans `i18n.dart`.
+- Test ciblé ajouté `test/listings_interests_test.dart` : vérifie qu'un
+  visiteur déconnecté ne voit jamais la section et que la bannière invité
+  existante s'affiche inchangée.
+- Vérification : `flutter analyze --no-pub` → 2 warnings historiques
+  uniquement ; `flutter test --no-pub test/i18n_runtime_sanity_test.dart` →
+  2/2 OK ; suite complète → **142 OK, 2 ignorés, 0 régression**.
+  `analysis_options.yaml`/`android/gradle.properties` toujours exclus du
+  commit (hors sujet, cf. entrée précédente). Commit `3672620`, local
+  uniquement, pas de push.
+
 ### 2026-10-09 - Claude - complète les garde-fous Codex + commit vérifié
 
 - Suite à l'audit Codex du 2026-10-08 (priorité: annonces complètes/localisables/
