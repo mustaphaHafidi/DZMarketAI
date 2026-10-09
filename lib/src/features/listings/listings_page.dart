@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cached_network_image_platform_interface/cached_network_image_platform_interface.dart';
 import 'package:dzmarket/src/features/listings/add_listing_page.dart';
+import 'package:dzmarket/src/features/listings/interest_ranking.dart';
 import 'package:dzmarket/src/models/product.dart';
 import 'package:dzmarket/src/services/app_error_service.dart';
 import 'package:dzmarket/src/services/category_service.dart';
@@ -62,8 +63,7 @@ class _ListingsPageState extends State<ListingsPage> {
   bool _loadErrorOffline = false;
   String? _lastLoggedLoadError;
   int _savedSearchesRefreshTick = 0;
-  List<Product> _interestProducts = const [];
-  bool _interestsDismissed = false;
+  String? _interestCategoryId;
 
   List<Map<String, String>> _categories = const [
     {'id': 'any'},
@@ -95,10 +95,11 @@ class _ListingsPageState extends State<ListingsPage> {
     } catch (_) {}
   }
 
-  // MVP "Selon vos intérêts": derive one category signal from the user's
-  // most recent saved search, or failing that from their favorites, and
-  // show a few matching listings above the grid. No signal => no section,
-  // so behavior stays identical to today for users without history.
+  // Discreet discovery signal: derive one category from the user's most
+  // recent saved search, or failing that from their favorites, and use it
+  // to silently reorder the existing grid (see applyInterestRanking). No
+  // signal => no reorder, so behavior stays identical to today for users
+  // without history.
   Future<void> _loadInterests() async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return;
@@ -144,17 +145,10 @@ class _ListingsPageState extends State<ListingsPage> {
           }
         }
       }
-      if (categoryId == null) return;
-      final results = await ProductService().fetchProducts(
-        categoryId: categoryId,
-        sort: 'newest',
-        limit: 10,
-        excludeOwner: true,
-      );
-      if (!mounted || results.isEmpty) return;
-      setState(() => _interestProducts = results);
+      if (categoryId == null || !mounted) return;
+      setState(() => _interestCategoryId = categoryId);
     } catch (_) {
-      // Best-effort discovery section only; never surface an error for it.
+      // Best-effort discovery signal only; never surface an error for it.
     }
   }
 
@@ -360,15 +354,6 @@ class _ListingsPageState extends State<ListingsPage> {
           ),
           if (userId == null)
             _GuestValueBanner(onSignIn: () => _goToSignIn('/?tab=listings')),
-          if (userId != null &&
-              _interestProducts.isNotEmpty &&
-              !_interestsDismissed)
-            _InterestsSection(
-              userId: userId,
-              products: _interestProducts,
-              currency: currency,
-              onDismiss: () => setState(() => _interestsDismissed = true),
-            ),
           ValueListenableBuilder<bool>(
             valueListenable: ConnectivityService.instance.isOnline,
             builder: (context, isOnline, _) {
@@ -768,7 +753,7 @@ class _ListingsPageState extends State<ListingsPage> {
     List<Product> products,
     Set<String> favorites,
   ) {
-    return products.where((p) {
+    final filtered = products.where((p) {
       if (_showFavoritesOnly && !favorites.contains(p.id)) return false;
       if (_quickDeliveryOnly && !p.deliveryOptions.contains('cod')) {
         return false;
@@ -778,6 +763,12 @@ class _ListingsPageState extends State<ListingsPage> {
       }
       return true;
     }).toList();
+    if (supabase.auth.currentUser?.id == null) return filtered;
+    return applyInterestRanking(
+      filtered,
+      interestCategoryId: _interestCategoryId,
+      hasActiveUserFilters: _hasActiveFilters() || _safeSearch().isNotEmpty,
+    );
   }
 
   String _conditionLabel(BuildContext context, String value) {
@@ -1992,90 +1983,6 @@ class _SavedSearchesRow extends StatelessWidget {
               label: Text(L10n.tr(context, 'common.save')),
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-class _InterestsSection extends StatelessWidget {
-  const _InterestsSection({
-    required this.userId,
-    required this.products,
-    required this.currency,
-    required this.onDismiss,
-  });
-
-  final String userId;
-  final List<Product> products;
-  final NumberFormat currency;
-  final VoidCallback onDismiss;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  L10n.tr(
-                    context,
-                    'listing.interests.title',
-                    fallback: 'Selon vos intérêts',
-                  ),
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              TextButton(
-                onPressed: onDismiss,
-                child: Text(
-                  L10n.tr(
-                    context,
-                    'listing.interests.dismiss',
-                    fallback: 'Masquer',
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          SizedBox(
-            height: 258,
-            child: StreamBuilder<Set<String>>(
-              stream: FavoriteService().streamFavorites(userId),
-              builder: (context, favSnapshot) {
-                final favorites = favSnapshot.data ?? const <String>{};
-                return ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: products.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 10),
-                  itemBuilder: (context, index) {
-                    final product = products[index];
-                    return SizedBox(
-                      width: 168,
-                      child: _ProductCard(
-                        product: product,
-                        currency: currency,
-                        isFavorite: favorites.contains(product.id),
-                        onFavoriteToggle: (currentIsFavorite) =>
-                            FavoriteService().toggleFavorite(
-                              productId: product.id,
-                              isFav: currentIsFavorite,
-                            ),
-                        onFavoriteRequiresLogin: () {},
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
         ],
       ),
     );
