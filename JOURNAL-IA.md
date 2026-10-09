@@ -117,6 +117,90 @@ log) → dans ce cas, passer par la voie 1.
 
 ## Journal des changements (plus récent en haut)
 
+### 2026-10-09 - Claude - complète les garde-fous Codex + commit vérifié
+
+- Suite à l'audit Codex du 2026-10-08 (priorité: annonces complètes/localisables/
+  fiables avant nouvelles fonctions), ajout de 3 compléments ciblés, **code
+  uniquement, rien déployé ni poussé** :
+  1. `ProductService.createProduct` : détection de doublon avant insertion
+     (même `owner_id` + titre identique insensible à la casse + même prix) ;
+     bloque avec `listing.add.error_duplicate` si trouvé. Étend le garde-fou
+     Codex (images/catégorie/état/wilaya) sans toucher son comportement existant.
+  2. `ListingsPage` : nouveau chip de filtre rapide "Livraison à convenir"
+     (`_quickPickupOnly`, filtre client sur `deliveryOptions.contains('pickup')`),
+     câblé dans `_queryKey`, `_applyClientFilters`, `_currentFilters`,
+     `_applySavedSearch`, `resetLocal` (x2) et `_clearFilters` — même traitement
+     que `_quickDeliveryOnly` existant.
+  3. `PublicProfilePage` : badge "N annonces actives" à côté de la note moyenne,
+     basé sur `_products.length` déjà chargé (aucun nouveau champ BDD, aucune
+     requête supplémentaire).
+  - Nouvelles clés FR/AR dans `i18n.dart` : `listing.add.error_duplicate`,
+    `profile.listing_count_one`, `profile.listing_count_other`. Le chip pickup
+    réutilise la clé existante `listing.add.delivery_pickup`.
+- Vérification de clôture (sur ce PC, Flutter non bloqué) : `flutter analyze
+  --no-pub` → 2 issues, uniquement les warnings historiques
+  `auth_service.dart:457/459` déjà documentés depuis le 2026-09-08 ; `flutter
+  test --no-pub test/i18n_runtime_sanity_test.dart` → 2/2 OK ; `flutter test
+  --no-pub --reporter expanded` (suite complète) → **141 OK, 2 ignorés, 0
+  régression**. `pubspec.lock` : touché une fois par un `flutter run` local
+  (bump de versions transitives), restauré via `git checkout --` avant de
+  continuer — aucun changement de dépendance committé.
+- Migration `supabase/migrations/20261008120000_fix_category_labels_fr_ar.sql`
+  (déjà appliquée en prod par Codex le 2026-10-08, fichier jusque-là non
+  committé) vérifiée : `charset=utf-8` confirmé, 0 caractère de remplacement,
+  contient bien les échantillons attendus (`Beauté & Santé`, `Électronique`,
+  `Téléphones`, `الجمال والصحة`, `إلكترونيات`). **Ne pas la réappliquer en
+  prod** — elle est idempotente mais déjà live ; ce commit ne fait que
+  l'ajouter à l'historique git.
+- `analysis_options.yaml` et `android/gradle.properties` restent modifiés dans
+  le worktree (exclusions analyzer + flags migrateur Flutter, déjà notés dans
+  l'entrée du 2026-09-10) mais **exclus de ce commit** : aucun rapport avec les
+  catégories/qualité annonces, décision produit Android séparée à prendre par
+  le user plus tard.
+- Commit préparé avec uniquement : `JOURNAL-IA.md`,
+  `docs/agent/db-and-migrations.md`, `lib/src/services/product_service.dart`,
+  `lib/src/features/listings/listings_page.dart`,
+  `lib/src/features/profile/public_profile_page.dart`,
+  `lib/src/services/i18n.dart`, `test/i18n_runtime_sanity_test.dart`,
+  `supabase/migrations/20261008120000_fix_category_labels_fr_ar.sql`. Pas de
+  push — à faire seulement sur validation explicite du user.
+
+### 2026-10-08 - Codex - audit BDD et garde-fous qualité annonces
+
+- Audit production DZMarket en lecture seule: stack app/API OK, `app_errors` récent vide, anomalies principales identifiées sur profils incomplets, annonces sans image/localisation/catégorie, quelques doublons et catégories mojibake.
+- Ajout d'une migration idempotente limitée à `public.categories` pour restaurer les libellés FR/AR propres par `slug`, avec accents français et orthographe arabe vérifiés depuis les clés runtime.
+- Production: sauvegarde `supabase_migrations.categories_backup_20261008_before_label_fix`, migration appliquée via transfert base64 UTF-8, vérification hex OK (`?`/replacement char = 0).
+- Ajout d'un garde-fou applicatif dans `ProductService.createProduct`: les nouvelles annonces doivent conserver au moins 2 images, une catégorie, un état et une wilaya avant insertion.
+- Test i18n renforcé pour couvrir les libellés de recherche locale, erreurs de publication et catégories FR/AR critiques.
+
+### 2026-09-30 — Claude — token API Hetzner Cloud créé (diagnostic blocage IP)
+
+- User a un serveur `mihna-app-01` (CX23, IP `167.233.139.38`) bloqué par Hetzner
+  (page Console : "IP address of this server is blocked" → flux d'abus réseau,
+  pas une suspension pour impayé). Ce serveur vit dans le projet Hetzner
+  **DZMarket-Prod** mais **n'est pas** l'un des 3 hôtes DZMarket documentés
+  (`dzm-app-01` 91.107.239.5 / `dzm-db-01` 46.225.88.249 / `dzm-storage-01`
+  91.98.227.237) — son rôle réel reste à confirmer par le user avant toute action
+  dessus.
+- Aucun connecteur MCP Hetzner disponible côté Claude. Le user a créé un **token
+  API Hetzner Cloud** dans Console → DZMarket-Prod → Security → API tokens :
+  nom `IA-diagnostic`, portée **Read+Write** (choix explicite du user, pas le
+  Read-only initialement suggéré — donc capable de créer/redémarrer/reconstruire/
+  supprimer n'importe quelle ressource du projet DZMarket-Prod, pas seulement lire).
+- Convention à réutiliser par Claude **et Codex** : le token est stocké en variable
+  d'environnement Windows **`HETZNER_CLOUD_TOKEN`** (persistant via `setx`, pas
+  `$env:` qui ne survit pas à un nouveau process). **Ne jamais** redemander sa
+  valeur en chat, ne jamais l'afficher, ne jamais le committer — le traiter comme
+  un mot de passe, au même titre que les clés SSH `dzmarket_hetzner`.
+- Portée Read+Write = même règle « aucune modif à risque / aucune régression »
+  que pour SSH/déploiement : toute action d'écriture via ce token sur une
+  ressource de prod (reboot, resize, delete, rebuild) doit suivre la même
+  prudence que documentée plus haut dans ce journal, pas être traitée comme un
+  simple appel API de confort.
+- Statut à la clôture de cette entrée : token créé, **pas encore utilisé** —
+  `setx` en cours côté user, aucune requête API lancée, aucune cause du blocage
+  identifiée, aucune action de déblocage effectuée.
+
 ### 2026-09-14 - Codex - admin telephones utilisateurs + deploy web Hetzner
 
 - Claude avait compris "vrai numero des users" comme **nombre total** d'utilisateurs

@@ -24,6 +24,7 @@ Read this for schema, SQL, RPC, RLS, and production DB work.
 - `notification_events`: in-app notifications and push delivery tracking.
 - `post_order_event`: order/chat notification event creation.
 - `orders`, `shipments`, `messages`, `conversations`: high-risk business tables.
+- `categories`: labels are user-facing FR/AR data; preserve UTF-8 when applying SQL remotely. Use base64 or a file transfer, not a lossy shell paste from Windows.
 - RLS policies: never bypass without a service role edge function reason.
 
 ## Production Guardrails

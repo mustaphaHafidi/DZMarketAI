@@ -48,6 +48,7 @@ class _ListingsPageState extends State<ListingsPage> {
   bool _nearbyOnly = false;
   bool _quickNewOnly = false;
   bool _quickDeliveryOnly = false;
+  bool _quickPickupOnly = false;
   String? _buyerWilaya;
   List<Product> _products = const [];
   bool _loading = false;
@@ -269,6 +270,23 @@ class _ListingsPageState extends State<ListingsPage> {
                       setState(() => _quickDeliveryOnly = value);
                     },
                   ),
+                  const SizedBox(width: 8),
+                  FilterChip(
+                    selected: _quickPickupOnly,
+                    label: Text(
+                      L10n.tr(
+                        context,
+                        'listing.add.delivery_pickup',
+                        fallback: 'Livraison a convenir',
+                      ),
+                    ),
+                    visualDensity: isCompactMobile
+                        ? VisualDensity.compact
+                        : VisualDensity.standard,
+                    onSelected: (value) {
+                      setState(() => _quickPickupOnly = value);
+                    },
+                  ),
                 ],
               ),
             ),
@@ -418,6 +436,7 @@ class _ListingsPageState extends State<ListingsPage> {
       _nearbyOnly ? (_buyerWilaya ?? '') : '',
       _sort,
       _quickDeliveryOnly ? 'delivery_only' : '',
+      _quickPickupOnly ? 'pickup_only' : '',
       userId,
     ].join('|');
   }
@@ -678,6 +697,9 @@ class _ListingsPageState extends State<ListingsPage> {
       if (_quickDeliveryOnly && !p.deliveryOptions.contains('cod')) {
         return false;
       }
+      if (_quickPickupOnly && !p.deliveryOptions.contains('pickup')) {
+        return false;
+      }
       return true;
     }).toList();
   }
@@ -778,6 +800,7 @@ class _ListingsPageState extends State<ListingsPage> {
       _nearbyOnly = (f['nearbyOnly'] as bool?) ?? false;
       _quickNewOnly = (f['quickNewOnly'] as bool?) ?? false;
       _quickDeliveryOnly = (f['quickDeliveryOnly'] as bool?) ?? false;
+      _quickPickupOnly = (f['quickPickupOnly'] as bool?) ?? false;
     });
     _refresh();
   }
@@ -797,6 +820,7 @@ class _ListingsPageState extends State<ListingsPage> {
       'nearbyOnly': _nearbyOnly,
       'quickNewOnly': _quickNewOnly,
       'quickDeliveryOnly': _quickDeliveryOnly,
+      'quickPickupOnly': _quickPickupOnly,
     };
   }
 
@@ -870,6 +894,7 @@ class _ListingsPageState extends State<ListingsPage> {
                 _nearbyOnly = false;
                 _quickNewOnly = false;
                 _quickDeliveryOnly = false;
+                _quickPickupOnly = false;
               });
             }
 
@@ -1300,6 +1325,7 @@ class _ListingsPageState extends State<ListingsPage> {
     if (_nearbyOnly) count++;
     if (_showFavoritesOnly) count++;
     if (_quickDeliveryOnly) count++;
+    if (_quickPickupOnly) count++;
     return count;
   }
 
@@ -1454,6 +1480,7 @@ class _ListingsPageState extends State<ListingsPage> {
       _nearbyOnly = false;
       _quickNewOnly = false;
       _quickDeliveryOnly = false;
+      _quickPickupOnly = false;
     });
     _refresh();
   }

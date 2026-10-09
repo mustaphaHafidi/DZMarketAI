@@ -429,16 +429,41 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                       ),
                     ],
                   ),
-                  if (_averageRating != null) ...[
+                  if (_averageRating != null || _products.isNotEmpty) ...[
                     const SizedBox(height: 16),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        Chip(
-                          avatar: const Icon(Icons.star, size: 18),
-                          label: Text(_averageRating!.toStringAsFixed(1)),
-                        ),
+                        if (_averageRating != null)
+                          Chip(
+                            avatar: const Icon(Icons.star, size: 18),
+                            label: Text(_averageRating!.toStringAsFixed(1)),
+                          ),
+                        if (_products.isNotEmpty)
+                          Chip(
+                            avatar: const Icon(
+                              Icons.storefront_outlined,
+                              size: 18,
+                            ),
+                            label: Text(
+                              _products.length == 1
+                                  ? L10n.tr(
+                                      context,
+                                      'profile.listing_count_one',
+                                      fallback: '1 annonce active',
+                                    )
+                                  : L10n.tr(
+                                      context,
+                                      'profile.listing_count_other',
+                                      params: {
+                                        'count': _products.length.toString(),
+                                      },
+                                      fallback:
+                                          '${_products.length} annonces actives',
+                                    ),
+                            ),
+                          ),
                       ],
                     ),
                   ],

@@ -119,9 +119,7 @@ class ProductService {
       return cached.items;
     }
 
-    final query = supabase
-        .from(SupabaseTables.products)
-        .select(_listingSelect);
+    final query = supabase.from(SupabaseTables.products).select(_listingSelect);
     var filtered = query;
     filtered = filtered.eq('is_archived', false);
     filtered = filtered.gt('stock_quantity', 0);
@@ -285,6 +283,43 @@ class ProductService {
       locationDaira,
       maxLength: 60,
     );
+    final imageCount = safeImageUrls.isNotEmpty
+        ? safeImageUrls.length
+        : (safeImageUrl == null ? 0 : 1);
+    if (imageCount < 2) {
+      throw FormatException(
+        L10n.trLocale(locale, 'listing.add.error_min_photo'),
+      );
+    }
+    if ((safeCategoryId ?? '').trim().isEmpty) {
+      throw FormatException(
+        L10n.trLocale(locale, 'listing.add.error_choose_category'),
+      );
+    }
+    if ((safeCondition ?? '').trim().isEmpty) {
+      throw FormatException(
+        L10n.trLocale(locale, 'listing.add.error_missing_info'),
+      );
+    }
+    if ((safeWilaya ?? '').trim().isEmpty) {
+      throw FormatException(
+        L10n.trLocale(locale, 'listing.add.error_invalid_location'),
+      );
+    }
+    final duplicate = await supabase
+        .from(SupabaseTables.products)
+        .select('id')
+        .eq('owner_id', userId)
+        .eq('is_archived', false)
+        .ilike('title', safeTitle)
+        .eq('price', price)
+        .limit(1)
+        .maybeSingle();
+    if (duplicate != null) {
+      throw FormatException(
+        L10n.trLocale(locale, 'listing.add.error_duplicate'),
+      );
+    }
     final safeCostPrice = costPrice;
     if (safeCostPrice != null && safeCostPrice < 0) {
       throw FormatException(
