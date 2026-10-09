@@ -117,6 +117,37 @@ log) → dans ce cas, passer par la voie 1.
 
 ## Journal des changements (plus récent en haut)
 
+### 2026-10-09 - Claude - push main + tentative déploiement web/mobile
+
+- Vérifications avant push : `git status --short --branch`, `git log --oneline -5`
+  confirmés (commits `0455048`/`3672620`/`9b71233` seuls en avance) ; `git show
+  --stat` sur chacun confirme aucun fichier hors sujet (`analysis_options.yaml`,
+  `android/gradle.properties`, `.codex-tmp/`, `android/build/`,
+  `marketing/social-kit/` toujours non commités, intacts) ; `flutter analyze
+  --no-pub` → 2 warnings historiques seulement ; `flutter test --no-pub
+  --reporter expanded` → **142 OK, 2 skipped**, 0 régression.
+- **Push effectué** : `git push origin main` → `d54f0e2..9b71233 main -> main`.
+  `main` est maintenant à jour avec `origin/main`.
+- **Déploiement web NON fait** : la lecture SSH en lecture seule sur
+  `dzm-app-01` (`91.107.239.5`) a été refusée par le classifieur auto-mode de
+  l'environnement (catégorie "Production Reads"). Pas de contournement tenté
+  (ni autre outil, ni autre host/encodage) — conforme à la consigne de
+  l'environnement. Nécessite soit un run en mode autorisant les accès
+  production, soit une action manuelle de l'utilisateur.
+- **Build Android AAB bloqué** : `test/test_env.json` toujours absent de ce PC
+  (blocage déjà documenté le 2026-09-10, non résolu depuis). Signature release
+  et `google-services.json` prod sont bien présents ; seul le fichier d'env
+  manque. Aucun AAB généré. Upload Play Console : aucun identifiant/outil
+  d'automatisation (pas de compte de service, pas de fastlane) présent sur ce
+  PC — upload manuel requis de toute façon.
+- **iOS Codemagic NON déclenché** : aucun `CM_API_TOKEN`/CLI Codemagic
+  configuré sur ce PC pour déclencher le workflow `DZMarket iOS TestFlight` à
+  distance ; les secrets iOS vivent dans le groupe Codemagic `dzmarket_secrets`
+  (pas affectés par le blocage `test_env.json` local, mais le déclenchement
+  lui-même doit se faire depuis le dashboard Codemagic ou avec un token API).
+- Aucune modification de code ce tour-ci ; seulement vérification + push +
+  journal.
+
 ### 2026-10-09 - Claude - section découverte "Selon vos intérêts" (MVP)
 
 - Nouvelle rangée optionnelle au-dessus de la grille d'annonces
