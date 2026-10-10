@@ -15,7 +15,7 @@ workflows:
         bundle_identifier: com.dzmarket.app
       vars:
         APP_FLAVOR: prod
-        APP_BUILD_NAME: "1.0.7"
+        APP_BUILD_NAME: "1.0.8"
         APP_BUILD_NUMBER: "43"
         ENABLE_ANALYTICS: "true"
         ENABLE_CRASHLYTICS: "true"
