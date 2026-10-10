@@ -1,3 +1,4 @@
+import 'package:dzmarket/src/features/admin/paged_fetch.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/utils/admin_owner_display.dart';
@@ -15,6 +16,10 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
     with SingleTickerProviderStateMixin {
   static const _reportsThreshold = 10;
   static const _reportsWindowDays = 7;
+  static const _usersPageSize = 500;
+  // Safety cap on full-list pagination: 20 pages x 500 = 10 000 profiles.
+  // Well above current live volume; prevents unbounded admin page loads.
+  static const _usersMaxPages = 20;
 
   late final TabController _tabs;
   final _dateFmt = DateFormat('dd/MM HH:mm');
@@ -68,11 +73,7 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
           .subtract(const Duration(days: _reportsWindowDays))
           .toIso8601String();
 
-      final usersFuture = supabase
-          .from('profiles')
-          .select('id,email,phone,full_name,role,status,created_at')
-          .order('created_at', ascending: false)
-          .limit(400);
+      final usersFuture = _fetchAllUsers();
 
       final usersCountFuture = supabase.from('profiles').count();
 
@@ -112,8 +113,8 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
           .map((row) => row.cast<String, dynamic>())
           .toList();
 
-      // Vrai total (count exact cote serveur), separe de la liste plafonnee
-      // a 400 lignes ci-dessus. Best-effort: un echec ne bloque pas la page.
+      // Vrai total (count exact cote serveur), verifie independamment de la
+      // liste paginee ci-dessus. Best-effort: un echec ne bloque pas la page.
       int? totalUsersCount;
       try {
         totalUsersCount = await usersCountFuture;
@@ -139,6 +140,25 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  // Pages through all profiles instead of a single .limit(400) query, so
+  // search/filters/actions see every user, not just the 400 most recent.
+  // Stops at the safety cap (see fetchAllPages) or as soon as a page comes
+  // back short.
+  Future<List<Map<String, dynamic>>> _fetchAllUsers() {
+    return fetchAllPages<Map<String, dynamic>>(
+      pageSize: _usersPageSize,
+      maxPages: _usersMaxPages,
+      fetchPage: (start, end) async {
+        final rows = await supabase
+            .from('profiles')
+            .select('id,email,phone,full_name,role,status,created_at')
+            .order('created_at', ascending: false)
+            .range(start, end);
+        return (rows as List).cast<Map<String, dynamic>>();
+      },
+    );
   }
 
   List<_ReportQueueItem> _buildReportQueue(List<Map<String, dynamic>> rows) {
