@@ -117,6 +117,34 @@ log) → dans ce cas, passer par la voie 1.
 
 ## Journal des changements (plus récent en haut)
 
+### 2026-11-03 - Claude - finalise le correctif polices/favicon web et deploie
+
+- Reprise d'une tache commencee par Codex (quota epuise avant la bascule) : le commit `f97dfe4` (garde `scripts/verify_web_artifact.ps1` + `docs/agent/web-release.md`) etait deja pousse sur `origin/main`, et `build/web` contenait deja les 3 ressources manquantes (favicon, MaterialIcons, CupertinoIcons) suite au rebuild sans tree-shaking d'icones.
+- Verification locale : `verify_web_artifact.ps1` passe sur `build/web` ; `version.json` confirme `1.0.7 / build 43`.
+- Acces SSH `dzm-app-01` : la cle `dzmarket_hetzner` est deja chargee dans l'agent SSH natif Windows (service `ssh-agent`), inutilisable depuis Git Bash (pas le meme canal d'agent) mais fonctionnelle depuis PowerShell.
+- Deploiement : archive `build/web` -> `/tmp` -> nouvelle release `/var/www/dzmarket-web-releases/20261103-122702` -> `config.json` prod copie depuis l'actif -> bascule atomique (`mv` ancien actif en rollback `dzmarket-web-rollback-20261103-122702`, nouvelle release renommee en actif). `dzmarket-web-releases/` confirme vide apres.
+- Verification finale : `www`, `app`, `api` HTTP 200 ; les 2 URLs de polices d'icones et le favicon renvoient maintenant 200 (etaient en 404). Archive `/tmp` de ce deploiement supprimee.
+- Non touche (hors perimetre de cette tache) : les rollbacks/releases orphelins plus anciens deja releves par l'audit du 2026-10-13/2026-11-03 (`dzmarket-web.release.20260914-121425`, `dzmarket-web.rollback.20260914-1327-admin-phone`, `dzmarket-web-rollback-20261009-1554`, `dzmarket-web-rollbacks`, et l'archive `dzmarket-web-seo-20261103-113936.zip` restee dans `/tmp`) — leur suppression reste une action a part, non autorisee dans cette session.
+
+### 2026-10-24 - Codex - audit lecture seule livraisons, chat et abus
+
+- Livraison: 8 configurations pour 2 vendeurs (Yalidine, Ecotrack, Guepex, ZR Express); 7 valides et 1 ZR Express invalide avec un echec, dernier controle le 2026-06-30. Aucune cle ou identite exposee.
+- Echanges: 141 conversations, dont 122 avec message; 512 messages approuves. Activite recente faible mais reelle (3 conversations, 8 messages sur 7 jours). Aucun emetteur a 50 messages ou plus sur 24 h.
+- Revue des 3 conversations recentes: aucun abus ni partage de coordonnees observe; un message systeme `Nouveau contact` est double dans un echange, a verifier plus tard sans correction automatique.
+- Moderation: aucun signalement sur 30 jours; historique de 4 signalements annonce, 1 signalement utilisateur et 3 blocages. 12 annonces masquees et 1 bloquee. Anomalies a examiner manuellement: 19 conversations vides et 73 commandes ouvertes depuis plus de 30 jours (46 `shipped`, 27 `pending`); aucune action automatique appliquee.
+
+### 2026-10-24 - Codex - nettoyage prudent espace disque
+
+- Apres controles HTTP 200 et conteneurs actifs, suppression des deux rollbacks web excedentaires, d'une release staged orpheline, de deux archives deploiement et de journaux archives de plus de 14 jours (~290 Mo).
+- Release active et rollback `20261009-1554` conserves. Aucun volume, DB, upload, bucket, secret, configuration ou conteneur actif touche. `docker image prune -af` et `docker builder prune -af` n'ont rien trouve a recuperer.
+- `app.dzmarket.pro`, `www.dzmarket.pro` et `api.dzmarket.pro` verifies HTTP 200 apres nettoyage. Le disque reste a 83% car `/opt/supabase/docker/volumes` occupe ~40 Go: donnees actives, volontairement non touchees.
+
+### 2026-10-24 - Codex - audit reseau et runtime lecture seule
+
+- Disponibilite publique verifiee: `www.dzmarket.pro`, `app.dzmarket.pro` et `api.dzmarket.pro` repondent HTTP 200. Stack Supabase, PostgreSQL et MinIO actifs; aucune erreur client dans `public.app_errors` sur les 7 derniers jours.
+- Surface publique verifiee depuis l'exterieur: seuls SSH, HTTP et HTTPS sont accessibles; ports internes analytics, PostgreSQL, pooler, Kong et MinIO filtres. Aucun changement prod, code ou configuration.
+- Point de surveillance: disque `dzm-app-01` a 83% (13 Go libres), sans saturation. Logs Caddy: quelques deconnexions clients et un message ponctuel de motif glob invalide le 22 octobre; configuration actuelle valide et services fonctionnels.
+
 ### 2026-10-09 - Claude - push main + tentative déploiement web/mobile
 
 - Vérifications avant push : `git status --short --branch`, `git log --oneline -5`
@@ -422,3 +450,25 @@ log) → dans ce cas, passer par la voie 1.
 - Build: `.\scripts\build_android_prod.ps1` generated `build/app/outputs/bundle/prodRelease/app-prod-release.aab`; script now uses locked deps, `--no-pub`, sanitized logs, and Flutter dependency validation bypass for current AGP 8.9.1 hotfix.
 - Play upload: first attempt with versionCode 41 rejected because already used; bumped build number only to 42 and uploaded versionCode 42 to production as `completed`.
 - Tooling notes: Gradle wrapper moved from 8.12 to 8.14 for Flutter 3.47.2; AGP/Kotlin upgrade intentionally deferred. No secrets printed.
+
+### 2026-10-13 - Codex - nettoyage prudent serveurs DZMarket
+
+- Nettoyage effectue sur les 3 serveurs `dzm` apres verification sante, sans redemarrer de service et sans toucher DB, volumes, uploads, buckets, `.env`, cles, containers actifs ou release active.
+- `dzm-app-01`: `app.dzmarket.pro` et `api.dzmarket.pro` HTTP 200 avant/apres; disque 84% -> 83%; suppression d'un conteneur arrete, d'une image Docker inutilisee `minio/mc`, et des journaux systeme archives de plus de 14 jours (~1 Go libere).
+- `dzm-db-01`: PostgreSQL actif et port 5432 en ecoute; disque 5% -> 4%; nettoyage uniquement des journaux anciens (~922 Mo liberes).
+- `dzm-storage-01`: MinIO actif et health OK; disque 4% -> 3%; suppression d'une image Docker inutilisee `minio/mc` et journaux anciens (~1.5 Go + 22 Mo liberes).
+- Instruction renforcee: `docs/agent/server-ops.md` garde la checklist de nettoyage safe post-build/deploy; `docs/agent/workflow-rules.md` impose maintenant de mettre a jour `JOURNAL-IA.md` apres toute operation prod/deploy/cleanup/audit/handoff significatif.
+
+### 2026-11-01 - Codex - audit lecture seule des anomalies app
+
+- Controle live de `app_errors`, des conteneurs Supabase, de Caddy et des URLs publiques; aucune ecriture, aucun changement de code ou de donnees.
+- Les 10 erreurs conservees sont toutes anciennes; aucune erreur enregistree dans les dernieres 48 h. L'archive admin contient aussi les erreurs de plus de 48 h et les doublons: elle ne signifie donc pas qu'une erreur est resolue.
+- Le 30 octobre, une seule erreur Android a touche un seul utilisateur: interruption reseau vers `api.dzmarket.pro` a 13:19 UTC. Aucun incident Caddy/Kong correle; ce n'est pas une panne serveur confirmee.
+- Verification finale: stack en service; `app.dzmarket.pro`, `www.dzmarket.pro` et `api.dzmarket.pro` repondent HTTP 200.
+
+### 2026-11-03 - Codex - renforcement SEO public et comprehension IA
+
+- `web/index.html` renforce le site officiel `www.dzmarket.pro` avec des donnees structurees statiques `Organization`/`OnlineStore` et `WebSite`, liees aux stores et profils officiels.
+- Ajout d'une section publique FR/AR factuelle qui distingue le site officiel de l'application et rend le support joignable; aucune annonce, base de donnees, authentification ou application mobile n'est modifiee.
+- `docs/agent/marketing-seo.md` documente la regle durable: contenu exact, pas de promesse de classement Google ou de citation par une IA, verification Search Console avant toute suite.
+- Deploiement web du commit `120d4ba`: build release valide, bascule atomique avec conservation de `config.json`, puis `www`, `app` et `api` verifies HTTP 200. Le nouveau rollback `dzmarket-web-rollback-20261103-113936` est conserve; le nettoyage des rollbacks plus anciens et de l'archive temporaire a ete refuse avant execution par la protection de l'environnement, donc rien n'a ete supprime.

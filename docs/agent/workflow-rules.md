@@ -9,6 +9,8 @@ Read this before changing code, config, deploy scripts, or project instructions.
 3. Make the smallest safe change that solves the current task.
 4. Run targeted tests or checks that match the changed area.
 5. Update the smallest relevant file in `docs/agent/` when behavior, release steps, server operations, database rules, or known issues changed.
+   Also update `JOURNAL-IA.md` after any production operation, deploy, cleanup,
+   release, audit, or meaningful agent handoff, even when no code changed.
 6. Commit only intentional files.
 7. Push after verification when the remote and credentials are available.
 
