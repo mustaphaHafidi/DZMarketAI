@@ -13,6 +13,7 @@ Token rule: when a chat becomes long or mixed-topic, ask for or create a fresh 5
 - SEO, page marketing, Google Search Console et presence IA: read `marketing-seo.md`.
 - PC2 mobile deployment: read `mobile-pc2-deploy.md`.
 - Hetzner, Supabase stack, prod logs, web deploy: read `server-ops.md`.
+- Web build artifacts and their pre-deploy gate: read `web-release.md`.
 - SQL, RPC, schema, migrations, RLS: read `db-and-migrations.md`.
 - Tests, USB checks, regression safety: read `qa-regression.md`.
 - Recent bugs and release cautions: read `known-issues.md`.
