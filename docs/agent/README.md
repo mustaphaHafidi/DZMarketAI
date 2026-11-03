@@ -10,6 +10,7 @@ Token rule: when a chat becomes long or mixed-topic, ask for or create a fresh 5
 - Admin, COD, transporteurs, erreurs et conversations: read [admin-couriers-cod-audit-2026-09-08.md](admin-couriers-cod-audit-2026-09-08.md).
 - New or unclear task: read this file, then `project-map.md`.
 - Mobile build, Codemagic, TestFlight, Play Console, Firebase, APNs: read `mobile-release.md`.
+- SEO, page marketing, Google Search Console et presence IA: read `marketing-seo.md`.
 - PC2 mobile deployment: read `mobile-pc2-deploy.md`.
 - Hetzner, Supabase stack, prod logs, web deploy: read `server-ops.md`.
 - SQL, RPC, schema, migrations, RLS: read `db-and-migrations.md`.

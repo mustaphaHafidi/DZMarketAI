@@ -20,6 +20,52 @@
   <meta name="twitter:description" content="DZMarket permet de voir les annonces, publier un produit, discuter et suivre la livraison en Algérie.">
   <meta name="twitter:image" content="https://www.dzmarket.pro/icons/Icon-512.png">
   <link id="canonical-link" rel="canonical" href="https://www.dzmarket.pro/">
+  <script id="org-jsonld" type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": ["Organization", "OnlineStore"],
+          "@id": "https://www.dzmarket.pro/#organization",
+          "name": "DZMarket",
+          "alternateName": "DZMarket Algérie",
+          "url": "https://www.dzmarket.pro/",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://www.dzmarket.pro/icons/Icon-512.png"
+          },
+          "description": "Marketplace algérienne pour acheter, vendre, discuter et suivre la livraison.",
+          "areaServed": {
+            "@type": "Country",
+            "name": "Algeria"
+          },
+          "knowsLanguage": ["fr", "ar"],
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "contactType": "customer support",
+            "email": "support@dzmarket.pro",
+            "availableLanguage": ["French", "Arabic"]
+          },
+          "sameAs": [
+            "https://www.facebook.com/DZMarketpro",
+            "https://www.youtube.com/@DZMarketpro",
+            "https://apps.apple.com/dz/app/dzmarket/id6760047432",
+            "https://play.google.com/store/apps/details?id=com.dzmarket.app"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://www.dzmarket.pro/#website",
+          "url": "https://www.dzmarket.pro/",
+          "name": "DZMarket",
+          "inLanguage": ["fr", "ar"],
+          "publisher": {
+            "@id": "https://www.dzmarket.pro/#organization"
+          }
+        }
+      ]
+    }
+  </script>
 
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
@@ -589,29 +635,23 @@
       var canonicalLink = document.getElementById('canonical-link');
       if (canonicalLink) canonicalLink.setAttribute('href', canonical);
 
-      var schema = {
-        '@context': 'https://schema.org',
-        '@type': 'Organization',
-        name: 'DZMarket',
-        url: isMarketingHost ? 'https://www.dzmarket.pro/' : 'https://app.dzmarket.pro/',
-        logo: baseHost + '/icons/Icon-512.png',
-        sameAs: [
-          'https://www.facebook.com/DZMarketpro',
-          'https://www.youtube.com/@DZMarketpro',
-          'https://apps.apple.com/dz/app/dzmarket/id6760047432',
-          'https://play.google.com/store/apps/details?id=com.dzmarket.app'
-        ],
-        description: 'Marketplace algérienne pour acheter, vendre, discuter et suivre la livraison.'
-      };
-
       var existing = document.getElementById('org-jsonld');
-      if (!existing) {
-        existing = document.createElement('script');
-        existing.type = 'application/ld+json';
-        existing.id = 'org-jsonld';
-        document.head.appendChild(existing);
+      if (!isMarketingHost && existing) {
+        existing.textContent = JSON.stringify({
+          '@context': 'https://schema.org',
+          '@type': 'Organization',
+          name: 'DZMarket',
+          url: 'https://app.dzmarket.pro/',
+          logo: 'https://app.dzmarket.pro/icons/Icon-512.png',
+          sameAs: [
+            'https://www.facebook.com/DZMarketpro',
+            'https://www.youtube.com/@DZMarketpro',
+            'https://apps.apple.com/dz/app/dzmarket/id6760047432',
+            'https://play.google.com/store/apps/details?id=com.dzmarket.app'
+          ],
+          description: 'Marketplace algérienne pour acheter, vendre, discuter et suivre la livraison.'
+        });
       }
-      existing.textContent = JSON.stringify(schema);
     })();
   </script>
 </head>
@@ -827,6 +867,45 @@
         <figure class="dz-screen">
           <img src="/assets/marketing/web-tutorial/final/fr/04_delivery_fr.png" alt="Configuration livraison DZMarket">
         </figure>
+      </div>
+    </section>
+
+    <section class="dz-shell dz-section" aria-labelledby="dz-faq-title">
+      <h2 id="dz-faq-title">
+        <span class="dz-lang-fr">DZMarket en bref.</span>
+        <span class="dz-lang-ar">DZMarket باختصار.</span>
+      </h2>
+      <div class="dz-grid-3">
+        <article class="dz-card">
+          <h3>
+            <span class="dz-lang-fr">Qu'est-ce que DZMarket ?</span>
+            <span class="dz-lang-ar">ما هي DZMarket؟</span>
+          </h3>
+          <p>
+            <span class="dz-lang-fr">DZMarket est une marketplace algérienne qui réunit annonces, discussion entre acheteur et vendeur, commandes et suivi de livraison.</span>
+            <span class="dz-lang-ar">DZMarket منصة جزائرية تجمع الإعلانات والدردشة بين المشتري والبائع والطلبات ومتابعة التوصيل.</span>
+          </p>
+        </article>
+        <article class="dz-card">
+          <h3>
+            <span class="dz-lang-fr">Où voir les annonces ?</span>
+            <span class="dz-lang-ar">أين أجد الإعلانات؟</span>
+          </h3>
+          <p>
+            <span class="dz-lang-fr">Le site officiel est www.dzmarket.pro. Les annonces, achats, ventes et messages sont accessibles sur app.dzmarket.pro.</span>
+            <span class="dz-lang-ar">الموقع الرسمي هو www.dzmarket.pro. الإعلانات والشراء والبيع والرسائل متاحة على app.dzmarket.pro.</span>
+          </p>
+        </article>
+        <article class="dz-card">
+          <h3>
+            <span class="dz-lang-fr">Comment obtenir de l'aide ?</span>
+            <span class="dz-lang-ar">كيف أحصل على المساعدة؟</span>
+          </h3>
+          <p>
+            <span class="dz-lang-fr">Pour une question sur le service ou le compte, contactez le support DZMarket à support@dzmarket.pro.</span>
+            <span class="dz-lang-ar">لأي سؤال حول الخدمة أو الحساب، تواصل مع دعم DZMarket عبر support@dzmarket.pro.</span>
+          </p>
+        </article>
       </div>
     </section>
 
