@@ -117,6 +117,15 @@ log) → dans ce cas, passer par la voie 1.
 
 ## Journal des changements (plus récent en haut)
 
+### 2026-11-03 - Claude - nettoyage serveur/local autorisé (safe-space-cleanup)
+
+- Suite au déploiement du correctif polices/favicon (entrée précédente), le fondateur a explicitement autorisé le nettoyage disque multi-serveurs ("/safe-space-cleanup", puis précision "tout les serveurs sans rien casser de mihna et elhimma, nettoie les anciens build et fichiers non utilisés dzmarket").
+- Baseline relevée sur les 3 serveurs DZMarket avant toute suppression : `dzm-app-01` 88% utilisé (9.0G libre), `dzm-db-01` 4% (70G libre, rien à nettoyer), `dzm-storage-01` 3% (141G libre, 1 image Docker 100% active, rien à nettoyer).
+- `dzm-app-01` : supprimé les dossiers devenus orphelins après vérification de taille/contenu (tous 53M, aucun n'est le rollback le plus récent) — `dzmarket-web.release.20260914-121425`, `dzmarket-web.rollback.20260914-1327-admin-phone`, `dzmarket-web-rollback-20261009-1554`, `dzmarket-web-rollback-20261103-113936` (rollback de l'ancien déploiement SEO, confirmé vide de besoin puisque le rollback `dzmarket-web-rollback-20261103-122702` du déploiement du jour reste disponible), le dossier vide `dzmarket-web-rollbacks`, et l'archive `/tmp/dzmarket-web-seo-20261103-113936.zip` déjà extraite. ~212 Mo libérés ; conforme à la règle "actif + exactement un rollback" de `docs/agent/server-ops.md`.
+- Local (`C:\src\dzmarket`) : supprimé 4 anciennes archives de packaging web (`dzmarket-web-ba7aeca.zip`, `dzmarket-web-deploy-20261009-1430.tar.gz`/`.zip`, `dzmarket-web.zip`) et les caches de build non suivis par git `.codex-tmp/` (219 Mo — `gradle-8.14-all.zip` + `gen_snapshot-copy.EXE`, régénérables) et `android/build/` (132K).
+- Vérification après coup : `www`/`app`/`api` + les 2 URLs de polices + favicon toujours HTTP 200 ; conteneurs Supabase sur `dzm-app-01` inchangés (13/13 actifs).
+- Hors périmètre, non touché : le serveur partagé Mihna/El-Himma (`mihna.pro`) a reçu un nettoyage séparé et strictement conservateur (cache de build Docker + 2 images orphelines + archives `/tmp` déjà extraites) — journalisé côté El-Himma, pas dans ce dépôt.
+
 ### 2026-11-03 - Claude - finalise le correctif polices/favicon web et deploie
 
 - Reprise d'une tache commencee par Codex (quota epuise avant la bascule) : le commit `f97dfe4` (garde `scripts/verify_web_artifact.ps1` + `docs/agent/web-release.md`) etait deja pousse sur `origin/main`, et `build/web` contenait deja les 3 ressources manquantes (favicon, MaterialIcons, CupertinoIcons) suite au rebuild sans tree-shaking d'icones.
