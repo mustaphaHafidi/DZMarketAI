@@ -11,7 +11,9 @@ $requiredFiles = @(
   'robots.txt',
   'sitemap.xml',
   'assets\fonts\MaterialIcons-Regular.otf',
-  'assets\packages\cupertino_icons\assets\CupertinoIcons.ttf'
+  'assets\packages\cupertino_icons\assets\CupertinoIcons.ttf',
+  'auth-email\confirmation.html',
+  'auth-email\recovery.html'
 )
 
 $missing = @(

@@ -39,9 +39,17 @@ flutter run -d <DEVICE_ID> --flavor prod -t lib/main.dart --dart-define-from-fil
 
 ### Build web + package
 ```powershell
-flutter build web --release --dart-define-from-file=test/test_env.json
+flutter build web --release --no-tree-shake-icons --dart-define-from-file=test/test_env.json
+powershell -ExecutionPolicy Bypass -File .\scripts\verify_web_artifact.ps1
 powershell -NoProfile -Command "Compress-Archive -Path '.\\build\\web\\*' -DestinationPath '.\\dzmarket-web.zip' -Force"
 ```
+`--no-tree-shake-icons` is required: without it, Flutter strips the
+MaterialIcons/CupertinoIcons glyph data down to near-zero bytes, which
+previously caused missing icons in production (see
+`docs/agent/web-release.md`). Always run `verify_web_artifact.ps1`
+before packaging/deploying — it now also checks `auth-email/*.html`
+(GoTrue's custom confirmation/recovery email templates), which was found
+missing from the last two production deploys.
 
 ### Qualite locale
 ```powershell

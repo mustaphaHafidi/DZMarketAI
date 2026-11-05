@@ -117,6 +117,73 @@ log) → dans ce cas, passer par la voie 1.
 
 ## Journal des changements (plus récent en haut)
 
+### 2026-11-05 (suite) - Claude - correctif prod : templates mot de passe oublié/confirmation 404 + permissions
+
+Demande fondateur : avant de préparer une nouvelle version iOS/Android/web,
+vérifier la table d'anomalies (`public.app_errors`, lecture seule via
+`docker exec -i supabase-db psql ...` sur `dzm-app-01`, méthode déjà
+documentée plus bas) et tester même le parcours « mot de passe oublié »,
+sans risque ni régression.
+
+- **Anomalies des 14 derniers jours** : 3 seulement, aucune critique —
+  sélecteur d'images Android déclenché en double-tap (04/11, déjà corrigé
+  par le commit `64716b0`, testé), coupure réseau client (30/10), horloge
+  téléphone en avance `JWT issued at future` (29/10, jamais revu). `www`/
+  `app`/`api` → 200. Livraison (`public.seller_delivery_settings`) :
+  Yalidine/Ecotrack/Guepex valides, 1 config ZR Express invalide depuis le
+  30/06 — propre à un vendeur, pas un bug plateforme.
+- **Tests** : `dart analyze` propre (2 avertissements de style
+  préexistants, sans rapport), `flutter test` 151/151 verts, phase smoke
+  `integration_test` (auth, RLS, ZR Express E.164) rejouée en réel sur le
+  Samsung branché en USB (`R5CNC13Y7WN`) via
+  `scripts/run_quality_gate.ps1 -RunIntegration` — tout vert.
+- **Anomalie réelle trouvée en testant le mot de passe oublié** (invisible
+  dans `app_errors`, car côté serveur GoTrue, pas côté client) : les
+  templates e-mail personnalisés `auth-email/confirmation.html` et
+  `auth-email/recovery.html` (configurés dans
+  `GOTRUE_MAILER_TEMPLATES_CONFIRMATION`/`RECOVERY`, requis par GoTrue
+  pour l'envoi) répondaient **404** en prod sur `app.dzmarket.pro`. Vérifié
+  présent dans le rollback précédent aussi (`dzmarket-web-rollback-
+  20261103-122702`) : régression antérieure à cette session, pas introduite
+  aujourd'hui — jamais détectée car `verify_web_artifact.ps1` ne vérifiait
+  que favicon/polices, pas ce dossier.
+- **Corrigé** : rebuild propre (`flutter build web --release
+  --no-tree-shake-icons --dart-define-from-file=test/test_env.json`,
+  confirmé nécessaire : sans ce flag, les polices d'icônes repartent en
+  quasi-zéro octet) ; `auth-email/*.html` bien présents dans ce build.
+  `scripts/verify_web_artifact.ps1` étendu pour vérifier aussi
+  `auth-email/confirmation.html`/`recovery.html` (évite la régression
+  silencieuse à l'avenir). `README.md` corrigé : la commande de build web
+  documentée omettait `--no-tree-shake-icons`.
+- **Incident rencontré pendant le déploiement et corrigé** : l'archive
+  zip créée par `Compress-Archive` (PowerShell) stocke les chemins avec
+  des barres obliques inverses ; `unzip` côté Linux a extrait les fichiers
+  correctement mais a laissé 7 répertoires sans bit d'exécution (`assets/
+  packages`, `assets/packages/cupertino_icons`, `assets/marketing/*`,
+  `assets/assets`) — Caddy renvoyait alors **403** sur
+  `CupertinoIcons.ttf` (fichier présent, répertoire parent non
+  traversable). Corrigé par `chmod 755` récursif sur tous les répertoires
+  du déploiement actif ; plus aucun répertoire sans bit d'exécution après
+  vérification.
+- **Déployé** : bascule atomique habituelle (nouvelle release
+  `/var/www/dzmarket-web-releases/20261105-172631` → `config.json` prod
+  copié sans affichage → ancien actif renommé en rollback, nouvelle
+  release promue active). Ancien rollback `dzmarket-web-rollback-
+  20261103-122702` supprimé avant la bascule pour rester à « actif +
+  exactement un rollback » ; nouveau rollback conservé :
+  `dzmarket-web-rollback-20261105-172631`.
+- **Vérifié après coup** : `www`/`app`/`api` → 200 ; favicon, les deux
+  polices d'icônes et les deux templates `auth-email` → 200 publiquement ;
+  page d'accueil chargée en Playwright, 0 erreur/avertissement console ;
+  13 conteneurs Supabase toujours actifs (compte inchangé).
+- **Hors périmètre cette fois** (signalé, pas corrigé) : config ZR Express
+  invalide d'un vendeur précis depuis le 30/06 — décision vendeur, pas
+  correctif plateforme. Préparation ASO (textes Play/App Store) déjà prête
+  dans `docs/agent/store-aso-dzmarket.md` (travail du même jour) ; bump de
+  version mobile (build 43 déjà distribué en 1.0.8) et déclenchement
+  Codemagic/Play restent à faire — en attente des accès (JSON compte de
+  service Play, déclenchement Codemagic) avant de poursuivre.
+
 ### 2026-11-03 - Claude - nettoyage serveur/local autorisé (safe-space-cleanup)
 
 - Suite au déploiement du correctif polices/favicon (entrée précédente), le fondateur a explicitement autorisé le nettoyage disque multi-serveurs ("/safe-space-cleanup", puis précision "tout les serveurs sans rien casser de mihna et elhimma, nettoie les anciens build et fichiers non utilisés dzmarket").

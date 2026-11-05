@@ -15,10 +15,10 @@ les tests de release.
   `lib/src/features/listings/add_listing_page.dart`.
 - **Impact** : le second appui sur Ajouter des images echoue. Aucune donnee,
   annonce ou fichier n'est corrompu.
-- **Etat** : correctif implemente localement le 5 novembre : etat local de
-  selection en cours, action desactivee pendant l'attente, reinitialisation dans
-  `finally`, test widget de double appui vert. Il reste la verification manuelle
-  Android et la publication d'une nouvelle version mobile.
+- **Etat** : correctif implemente et verifie en reel sur appareil Android
+  (Samsung USB, phase smoke `integration_test`) le 5 novembre. Il reste la
+  publication d'une nouvelle version mobile (build 44, le build 43 est deja
+  distribue en 1.0.8).
 - **Limite volontaire** : ne pas etendre a l'avatar ou a la modification
   d'annonce sans occurrence confirmee dans ces ecrans.
 
@@ -39,11 +39,30 @@ les tests de release.
   favicon, ce qui affichait des symboles de remplacement. Le correctif et le
   controle d'artefact sont deja livres dans `scripts/verify_web_artifact.ps1`.
 - Avant chaque deploiement web, executer ce controle et verifier dans le navigateur
-  que les deux fichiers de police et `favicon.png` repondent HTTP 200. Ce point
-  est deja corrige : ne pas creer un nouveau correctif tant que le controle passe.
+  que les deux fichiers de police, `favicon.png` et les deux templates
+  `auth-email/*.html` repondent HTTP 200. Ce point est deja corrige : ne pas
+  creer un nouveau correctif tant que le controle passe.
+- `flutter build web` doit toujours utiliser `--no-tree-shake-icons`
+  (voir `README.md`) ; sans ce flag les polices d'icones repartent en
+  quasi-zero octet.
+- Apres `unzip` d'une archive creee par `Compress-Archive` (Windows) sur
+  le serveur Linux, verifier qu'aucun repertoire n'a perdu son bit
+  d'execution (`find <web-root> -type d -not -perm -u+x,g+x,o+x`) --
+  deja rencontre une fois le 5 novembre (403 sur un fichier dont le
+  dossier parent etait passe en 644), corrige par `chmod 755` recursif.
+
+## Correctif deploye le 5 novembre (deja en prod, ne pas refaire)
+
+- `auth-email/confirmation.html` et `auth-email/recovery.html`
+  repondaient 404 en prod (regression anterieure a cette session, requis
+  par `GOTRUE_MAILER_TEMPLATES_CONFIRMATION`/`RECOVERY`) -- corrige par un
+  rebuild complet + bascule atomique, verifie 200 publiquement. Voir
+  `JOURNAL-IA.md` (entree du 5 novembre) pour le detail.
 
 ## Decision de release
 
-- Pas de hotfix ni de deploiement web justifie par les erreurs actuelles.
-- Preparer une petite release Android seulement si l'erreur de selection d'images
-  se reproduit, ou apres validation du correctif cible ci-dessus.
+- Hotfix web deja deploye le 5 novembre (templates auth-email + permissions
+  de repertoires) -- pas d'action supplementaire cote web pour l'instant.
+- Preparer une petite release Android/iOS (build 44) pour le correctif du
+  selecteur d'images, deja valide en reel sur appareil -- publication
+  (Play Console / Codemagic) en attente des acces necessaires.
