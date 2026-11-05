@@ -17,6 +17,7 @@ Token rule: when a chat becomes long or mixed-topic, ask for or create a fresh 5
 - SQL, RPC, schema, migrations, RLS: read `db-and-migrations.md`.
 - Tests, USB checks, regression safety: read `qa-regression.md`.
 - Recent bugs and release cautions: read `known-issues.md`.
+- Open items for the next release: read `next-release-follow-ups.md`.
 - Old documentation cleanup decisions: read `doc-inventory.md`.
 - Agent workflow, commits, pushes, and doc hygiene: read `workflow-rules.md`.
 
