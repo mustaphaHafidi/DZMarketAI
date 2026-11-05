@@ -8,6 +8,8 @@ if ([string]::IsNullOrWhiteSpace($WebRoot)) {
 
 $requiredFiles = @(
   'favicon.png',
+  'robots.txt',
+  'sitemap.xml',
   'assets\fonts\MaterialIcons-Regular.otf',
   'assets\packages\cupertino_icons\assets\CupertinoIcons.ttf'
 )

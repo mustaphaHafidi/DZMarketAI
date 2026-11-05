@@ -15,11 +15,12 @@ les tests de release.
   `lib/src/features/listings/add_listing_page.dart`.
 - **Impact** : le second appui sur Ajouter des images echoue. Aucune donnee,
   annonce ou fichier n'est corrompu.
-- **Correctif cible** : ajouter un etat local de selection en cours, desactiver
-  l'action pendant l'attente et le reinitialiser dans `finally`.
-- **Tests requis** : test widget du double appui et verification manuelle Android
-  sur ajout d'annonce. Etendre la meme protection a l'avatar et a la modification
-  d'annonce seulement apres avoir confirme le meme risque dans ces ecrans.
+- **Etat** : correctif implemente localement le 5 novembre : etat local de
+  selection en cours, action desactivee pendant l'attente, reinitialisation dans
+  `finally`, test widget de double appui vert. Il reste la verification manuelle
+  Android et la publication d'une nouvelle version mobile.
+- **Limite volontaire** : ne pas etendre a l'avatar ou a la modification
+  d'annonce sans occurrence confirmee dans ces ecrans.
 
 ## A surveiller - pas de correctif ni de release urgente
 

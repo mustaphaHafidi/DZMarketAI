@@ -67,6 +67,7 @@ class _AddListingPageState extends State<AddListingPage> {
   bool _declaredValueManuallyEdited = false;
   bool _syncingDeclaredValue = false;
   final List<PlatformFile> _pickedFiles = [];
+  bool _pickingImages = false;
   static const int _minPhotos = 2;
   static const int _maxPhotos = 5;
   static const String _recentCategoriesKey = 'listing.add.recent_categories.v1';
@@ -681,6 +682,7 @@ class _AddListingPageState extends State<AddListingPage> {
   }
 
   Future<void> _pickImages() async {
+    if (_pickingImages) return;
     final remainingSlots = _maxPhotos - _pickedFiles.length;
     if (remainingSlots <= 0) {
       _setError(
@@ -692,34 +694,40 @@ class _AddListingPageState extends State<AddListingPage> {
       );
       return;
     }
-    final result = await FilePicker.platform.pickFiles(
-      allowMultiple: true,
-      withData: true,
-      type: FileType.image,
-    );
-    if (!mounted) return;
-    if (result == null || result.files.isEmpty) return;
-    final supported = result.files.where(_isSupportedImageFile).toList();
-    final unsupportedCount = result.files.length - supported.length;
-    if (supported.isEmpty) {
-      _setError(L10n.tr(context, 'listing.add.error_unsupported_image'));
-      return;
-    }
-    final selected = supported.take(remainingSlots).toList();
     setState(() {
-      _pickedFiles.addAll(selected);
+      _pickingImages = true;
     });
-    _scheduleSuggestionRefresh();
-    if (unsupportedCount > 0) {
-      _setError(L10n.tr(context, 'listing.add.error_unsupported_image'));
-    } else if (supported.length > remainingSlots) {
-      _setError(
-        L10n.tr(
-          context,
-          'listing.add.error_max_photos',
-          params: {'max': _maxPhotos.toString()},
-        ),
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        allowMultiple: true,
+        withData: true,
+        type: FileType.image,
       );
+      if (!mounted || result == null || result.files.isEmpty) return;
+      final supported = result.files.where(_isSupportedImageFile).toList();
+      final unsupportedCount = result.files.length - supported.length;
+      if (supported.isEmpty) {
+        _setError(L10n.tr(context, 'listing.add.error_unsupported_image'));
+        return;
+      }
+      final selected = supported.take(remainingSlots).toList();
+      setState(() {
+        _pickedFiles.addAll(selected);
+      });
+      _scheduleSuggestionRefresh();
+      if (unsupportedCount > 0) {
+        _setError(L10n.tr(context, 'listing.add.error_unsupported_image'));
+      } else if (supported.length > remainingSlots) {
+        _setError(
+          L10n.tr(
+            context,
+            'listing.add.error_max_photos',
+            params: {'max': _maxPhotos.toString()},
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _pickingImages = false);
     }
   }
 
@@ -1774,7 +1782,7 @@ class _AddListingPageState extends State<AddListingPage> {
                         ],
                       ),
                     InkWell(
-                      onTap: _pickedFiles.length >= _maxPhotos
+                      onTap: _pickedFiles.length >= _maxPhotos || _pickingImages
                           ? null
                           : _pickImages,
                       child: Container(
@@ -1789,8 +1797,12 @@ class _AddListingPageState extends State<AddListingPage> {
                         child: Icon(
                           _pickedFiles.length >= _maxPhotos
                               ? Icons.check_circle_outline
+                              : _pickingImages
+                              ? Icons.hourglass_top_outlined
                               : Icons.add_photo_alternate_outlined,
                           color: _pickedFiles.length >= _maxPhotos
+                              ? Theme.of(context).disabledColor
+                              : _pickingImages
                               ? Theme.of(context).disabledColor
                               : null,
                         ),

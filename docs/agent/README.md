@@ -11,6 +11,7 @@ Token rule: when a chat becomes long or mixed-topic, ask for or create a fresh 5
 - New or unclear task: read this file, then `project-map.md`.
 - Mobile build, Codemagic, TestFlight, Play Console, Firebase, APNs: read `mobile-release.md`.
 - SEO, page marketing, Google Search Console et presence IA: read `marketing-seo.md`.
+- ASO Android/iOS arabe et francais: read `store-aso-dzmarket.md`.
 - PC2 mobile deployment: read `mobile-pc2-deploy.md`.
 - Hetzner, Supabase stack, prod logs, web deploy: read `server-ops.md`.
 - Web build artifacts and their pre-deploy gate: read `web-release.md`.

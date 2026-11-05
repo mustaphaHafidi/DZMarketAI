@@ -481,3 +481,21 @@ log) → dans ce cas, passer par la voie 1.
 - Ajout d'une section publique FR/AR factuelle qui distingue le site officiel de l'application et rend le support joignable; aucune annonce, base de donnees, authentification ou application mobile n'est modifiee.
 - `docs/agent/marketing-seo.md` documente la regle durable: contenu exact, pas de promesse de classement Google ou de citation par une IA, verification Search Console avant toute suite.
 - Deploiement web du commit `120d4ba`: build release valide, bascule atomique avec conservation de `config.json`, puis `www`, `app` et `api` verifies HTTP 200. Le nouveau rollback `dzmarket-web-rollback-20261103-113936` est conserve; le nettoyage des rollbacks plus anciens et de l'archive temporaire a ete refuse avant execution par la protection de l'environnement, donc rien n'a ete supprime.
+
+### 2026-11-05 - Codex - garde-fou image et preparation ASO FR/AR
+
+- Une erreur Android confirmee du 4 novembre (`File picker is already active`)
+  est corrigee localement: l'ajout d'images ignore les doubles appuis pendant
+  l'ouverture du selecteur et redevient disponible dans `finally`. Aucun
+  changement de donnees, de schema, d'authentification ou de configuration.
+- Un test widget couvre le double-appui; `flutter analyze --no-pub` garde les
+  deux warnings historiques dans `auth_service.dart`, et la suite complete est
+  verte (`151 OK, 2 ignores`). Le correctif n'est pas encore deploye ni publie
+  dans les stores.
+- Audit public: Play et App Store sont accessibles; l'arabe est deja visible
+  dans la description Play, mais les champs d'indexation arabe/francais sont
+  prepares dans `docs/agent/store-aso-dzmarket.md`. App Store exige une nouvelle
+  version avec un build frais pour ces changements de nom/sous-titre/mots-cles.
+- `robots.txt` et `sitemap.xml` existent dans le depot mais repondaient 404 en
+  production au controle. Le gate web exige maintenant leur presence dans tout
+  futur artefact; aucune bascule web n'a ete faite dans cette intervention.
