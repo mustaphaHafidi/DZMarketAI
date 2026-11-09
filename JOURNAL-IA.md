@@ -117,6 +117,21 @@ log) → dans ce cas, passer par la voie 1.
 
 ## Journal des changements (plus récent en haut)
 
+### 2026-11-09 - Codex - lecture seule des erreurs Android recentes
+
+- Controle live de `public.app_errors` et des URLs publiques, sans ecriture.
+  Les trois domaines `www`, `app` et `api` repondent HTTP 200; aucun 5xx Caddy
+  n'a ete observe sur les sept derniers jours et les conteneurs Supabase sont en
+  service.
+- Les quatre nouveaux enregistrements des 7-8 novembre sont Android et reseau:
+  trois echecs de resolution DNS de `api.dzmarket.pro` et un delai de connexion.
+  Ils ne prouvent pas une panne serveur. Sur 30 jours: 12 erreurs, dont 11
+  reseau/horloge terminal et une double ouverture du selecteur d'images, deja
+  corrigee et publiee dans la release 1.0.9 (44).
+- La table ne stocke pas la version/build de l'application dans `context`; ne
+  pas attribuer ces erreurs a une release sans telemetrie supplementaire. Aucune
+  correction ou migration declenchee par cet audit.
+
 ### 2026-11-05 (suite 2) - Claude - release 1.0.9 (44) Android+iOS + ASO arabe, via navigateur piloté (session déjà connectée)
 
 Suite du correctif web : version mobile 1.0.9+44 (`pubspec.yaml`, `codemagic.yaml`,
