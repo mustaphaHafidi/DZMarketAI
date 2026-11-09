@@ -33,6 +33,27 @@ les tests de release.
   sans 5xx observe. Les lignes Caddy `client disconnected` ne sont pas une panne
   applicative sans hausse de 5xx ou erreur utilisateur correlee.
 
+## A concevoir - supervision admin complete
+
+L'ecran admin actuel ne couvre que les erreurs Flutter remontees dans
+`app_errors`. Une evolution doit donner une vue claire, agregée et protegee de
+l'etat de la plateforme, sans exposer de donnees personnelles ni de secrets.
+
+- **Experience utilisateur** : erreurs de parcours, blocages, lenteurs, ecrans
+  inaccessibles, erreurs par plateforme/version et regressions apres release.
+- **Application et services** : API, Auth, Edge Functions, notifications,
+  stockage, chat, commandes et integrations transporteurs.
+- **Donnees** : anomalies de coherence, echecs de jobs et migrations, sans
+  permettre de modifier ou supprimer des donnees depuis un tableau d'erreurs.
+- **Securite** : synthese d'evenements suspects et echec d'autorisation, sans
+  afficher tokens, mots de passe, contenus prives ou traces sensibles.
+- **Qualite release** : resultat des tests, version deployee, Crashlytics et
+  alertes de regression, avec liens vers les preuves techniques reservees aux
+  administrateurs autorises.
+
+Commencer par une synthese de sante et des compteurs anonymises; ajouter les
+sources une a une, avec tests RLS, pagination et retenue limitee des journaux.
+
 ## Garde-fou web a conserver
 
 - Une ancienne livraison web avait omis les polices Material/Cupertino et le
