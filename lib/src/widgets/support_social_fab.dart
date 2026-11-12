@@ -1,5 +1,6 @@
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class SupportSocialFab extends StatefulWidget {
@@ -14,11 +15,11 @@ class SupportSocialFab extends StatefulWidget {
 class _SupportSocialFabState extends State<SupportSocialFab> {
   bool _isOpen = false;
 
-  static const _destinations = <_SocialDestination>[
+  static final _destinations = <_SocialDestination>[
     _SocialDestination(
       keyName: 'support.contact',
       uri: 'https://m.me/DZMarketpro',
-      icon: Icons.forum_rounded,
+      icon: FontAwesomeIcons.facebookMessenger.data,
       color: Color(0xFF0084FF),
     ),
     _SocialDestination(
@@ -30,7 +31,7 @@ class _SupportSocialFabState extends State<SupportSocialFab> {
     _SocialDestination(
       keyName: 'support.instagram',
       uri: 'https://www.instagram.com/dzmarketpro/',
-      icon: Icons.camera_alt_rounded,
+      icon: FontAwesomeIcons.instagram.data,
       color: Color(0xFFC13584),
     ),
     _SocialDestination(
@@ -93,11 +94,11 @@ class _SupportSocialFabState extends State<SupportSocialFab> {
             label: title,
             expanded: _isOpen,
             child: _CircleButton(
-              color: Theme.of(context).colorScheme.surface,
-              icon: _isOpen ? Icons.close_rounded : Icons.help_outline_rounded,
-              iconColor: Theme.of(context).colorScheme.primary,
+              color: Theme.of(context).colorScheme.primary,
+              icon: _isOpen
+                  ? Icons.close_rounded
+                  : Icons.support_agent_rounded,
               onPressed: () => setState(() => _isOpen = !_isOpen),
-              outlined: true,
             ),
           ),
         ),
@@ -111,33 +112,25 @@ class _CircleButton extends StatelessWidget {
     required this.color,
     required this.icon,
     required this.onPressed,
-    this.iconColor,
-    this.outlined = false,
   });
 
   final Color color;
   final IconData icon;
   final VoidCallback onPressed;
-  final Color? iconColor;
-  final bool outlined;
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: color,
       elevation: 3,
-      shape: CircleBorder(
-        side: outlined
-            ? BorderSide(color: Theme.of(context).dividerColor)
-            : BorderSide.none,
-      ),
+      shape: const CircleBorder(),
       child: InkWell(
         onTap: onPressed,
         customBorder: const CircleBorder(),
         child: SizedBox(
           width: 44,
           height: 44,
-          child: Icon(icon, color: iconColor ?? Colors.white, size: 22),
+          child: Icon(icon, color: Colors.white, size: 22),
         ),
       ),
     );
