@@ -117,6 +117,15 @@ log) → dans ce cas, passer par la voie 1.
 
 ## Journal des changements (plus récent en haut)
 
+### 2026-11-12 - Codex - prochaines evolutions acquisition, sans code
+
+- Ajout documentaire uniquement dans `next-release-follow-ups.md` et
+  `marketing-seo.md`: audit du lien et de l'apercu de partage d'annonce
+  WhatsApp/Facebook, puis mise en place de Google Search Console pour mesurer
+  les requetes FR/AR, clics, impressions et pages indexees.
+- Aucun code, donnee, configuration Google, configuration serveur ou deploiement
+  ne sont modifies. Les donnees Search Console devront guider toute priorite SEO.
+
 ### 2026-11-09 - Codex - lecture seule des erreurs Android recentes
 
 - Controle live de `public.app_errors` et des URLs publiques, sans ecriture.

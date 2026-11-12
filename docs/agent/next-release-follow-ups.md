@@ -1,6 +1,6 @@
 # DZMarket - Suivi prochaine version
 
-Mis a jour : 2026-11-05. Cette fiche ne contient que les constats utiles
+Mis a jour : 2026-11-12. Cette fiche ne contient que les constats utiles
 depuis les dernieres releases. Elle ne remplace ni les logs de production ni
 les tests de release.
 
@@ -32,6 +32,27 @@ les tests de release.
   repondaient HTTP 200; Caddy, Auth, Edge Functions et PostgreSQL etaient sains,
   sans 5xx observe. Les lignes Caddy `client disconnected` ne sont pas une panne
   applicative sans hausse de 5xx ou erreur utilisateur correlee.
+
+## A planifier - acquisition et decouverte
+
+### Partage d'annonce
+
+- Les vendeurs partagent deja leurs annonces vers WhatsApp et Facebook. Avant
+  toute evolution, verifier que chaque partage utilise une URL publique,
+  canonique et durable de l'annonce, puis que son apercu (titre, image, prix et
+  localisation si publique) est correct sur WhatsApp et Facebook.
+- Ne pas ajouter de tracking intrusif ni modifier les donnees produit. Mesurer
+  plus tard les ouvertures et conversions seulement si un besoin produit est
+  confirme et avec une telemetrie anonymisee.
+
+### Google Search Console
+
+- Creer/verifier la propriete de domaine `dzmarket.pro`, soumettre le sitemap
+  public apres verification qu'il repond bien publiquement, puis relever chaque
+  mois les requetes en arabe et francais, impressions, clics, pages indexees,
+  appareils et pays.
+- Utiliser ces donnees avant de changer contenu ou SEO. Ne pas promettre une
+  position Google; les priorites doivent venir des requetes et pages reelles.
 
 ## A concevoir - supervision admin complete
 
