@@ -80,4 +80,9 @@ void main() {
     picker.completer.complete(null);
     await tester.pump();
   });
+
+  test('image removal rejects an index made stale by an earlier gesture', () {
+    expect(AddListingPage.canRemovePickedFile(index: 2, count: 1), isFalse);
+    expect(AddListingPage.canRemovePickedFile(index: 0, count: 1), isTrue);
+  });
 }

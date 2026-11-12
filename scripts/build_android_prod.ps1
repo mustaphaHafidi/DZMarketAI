@@ -2,6 +2,8 @@ param(
   [string]$EnvJson = "test/test_env.json",
   [string]$BuildName = "",
   [string]$BuildNumber = "",
+  [ValidateSet("aab", "apk")]
+  [string]$Artifact = "aab",
   [switch]$Clean
 )
 
@@ -81,13 +83,14 @@ flutter pub get --enforce-lockfile
 
 $logDir = Join-Path "build" "release-logs"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-$rawLog = Join-Path $logDir "android-prod-build.raw.log"
-$safeLog = Join-Path $logDir "android-prod-build.log"
+$rawLog = Join-Path $logDir "android-prod-$Artifact-build.raw.log"
+$safeLog = Join-Path $logDir "android-prod-$Artifact-build.log"
 
 $oldErrorActionPreference = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
 try {
-  & flutter build appbundle `
+  $buildCommand = if ($Artifact -eq "apk") { "apk" } else { "appbundle" }
+  & flutter build $buildCommand `
     --no-pub `
     --android-skip-build-dependency-validation `
     --release `
@@ -115,12 +118,16 @@ if ($buildExit -ne 0) {
   throw "Android build failed. See sanitized log: $safeLog"
 }
 
-$aab = "build/app/outputs/bundle/prodRelease/app-prod-release.aab"
-if (-not (Test-Path -LiteralPath $aab)) {
-  throw "AAB not generated: $aab"
+$output = if ($Artifact -eq "apk") {
+  "build/app/outputs/flutter-apk/app-prod-release.apk"
+} else {
+  "build/app/outputs/bundle/prodRelease/app-prod-release.aab"
+}
+if (-not (Test-Path -LiteralPath $output)) {
+  throw "Android $Artifact not generated: $output"
 }
 
-Write-Host "AAB generated: $aab"
+Write-Host "Android $Artifact generated: $output"
 Write-Host "Build: $BuildName+$BuildNumber"
 Write-Host "Sanitized build log: $safeLog"
 Clear-Content -LiteralPath $definesPath -ErrorAction SilentlyContinue

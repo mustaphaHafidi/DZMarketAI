@@ -22,6 +22,10 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide StorageException;
 class AddListingPage extends StatefulWidget {
   const AddListingPage({super.key});
 
+  @visibleForTesting
+  static bool canRemovePickedFile({required int index, required int count}) =>
+      index >= 0 && index < count;
+
   @override
   State<AddListingPage> createState() => _AddListingPageState();
 }
@@ -732,6 +736,12 @@ class _AddListingPageState extends State<AddListingPage> {
   }
 
   void _removeImage(int index) {
+    if (!AddListingPage.canRemovePickedFile(
+      index: index,
+      count: _pickedFiles.length,
+    )) {
+      return;
+    }
     setState(() {
       _pickedFiles.removeAt(index);
     });

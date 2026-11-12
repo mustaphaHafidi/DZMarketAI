@@ -59,6 +59,19 @@ The script creates and clears a temporary whitelisted dart-define file under
 `build/`, excluding test users, test passwords, courier test secrets, and other
 fixtures.
 
+For an Android USB smoke test only, use the same guarded entrypoint to create a
+signed release APK. Do not upload this APK to Play:
+
+```powershell
+.\scripts\build_android_prod.ps1 -Artifact apk
+```
+
+Do not install this local APK over an app installed from Google Play: Play App
+Signing uses a different device signature and Android will correctly refuse the
+update. Use a clean test device/profile for USB smoke tests, or upload the AAB
+to the Play internal-testing track and test the Play-signed build. Never
+uninstall a production user app merely to bypass this safeguard.
+
 Current PC2 tooling note: Flutter 3.47.2 requires Gradle wrapper 8.14+ before
 Android build. The guarded script also passes
 `--android-skip-build-dependency-validation` because the project still uses

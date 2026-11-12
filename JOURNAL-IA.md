@@ -665,3 +665,22 @@ sans risque ni régression.
   d'une image d'annonce: index devenu invalide apres une action rapprochee dans
   `_removeImage`. Correctif recommande pour la prochaine release: borne d'index
   et test widget; rien n'est modifie ni deploye dans cet audit.
+
+### 2026-11-12 - Codex - preparation version interne aide et correction image
+
+- Le retrait d'image ignore maintenant un index devenu invalide apres des actions
+  rapprochees; un test existant couvre le double appui du selecteur et la suite
+  ajoute la protection de suppression.
+- Un bouton d'aide discret existe uniquement dans Parcourir: il ouvre les liens
+  officiels DZMarket (contact Messenger, Facebook, Instagram, TikTok, YouTube),
+  reste oppose au bouton vendre et utilise les labels FR/AR avec position RTL.
+  Aucun bouton n'est ajoute aux ecrans Messages, Profil, annonce, commande ou suivi.
+- Verification locale: tests cibles OK, suite Flutter `154 OK, 2 ignores`,
+  analyse sans nouvelle erreur (2 warnings historiques), build Web release et
+  controle visuel bureau/mobile OK. Aucun deploiement ni publication.
+- USB Android detecte: APK release signe construit avec le script garde. Son
+  installation a ete refusee sans effet par Android car le telephone porte la
+  version installee depuis Google Play, signee par Play App Signing. Aucune
+  desinstallation ni donnee utilisateur n'a ete touchee. Le smoke test doit
+  desormais se faire soit sur un appareil/profil vierge, soit via la piste de
+  test interne Play (build signe par Play), avant toute publication.

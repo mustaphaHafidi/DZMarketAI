@@ -19,6 +19,7 @@ import 'package:dzmarket/src/services/saved_search_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/widgets/refresh_controller.dart';
+import 'package:dzmarket/src/widgets/support_social_fab.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -140,9 +141,9 @@ class _ListingsPageState extends State<ListingsPage> {
         }
       }
       if (categoryId == null) {
-        final favoriteIds = await FavoriteService().streamFavorites(
-          userId,
-        ).first;
+        final favoriteIds = await FavoriteService()
+            .streamFavorites(userId)
+            .first;
         if (favoriteIds.isNotEmpty) {
           final ids = favoriteIds
               .take(50)
@@ -256,196 +257,212 @@ class _ListingsPageState extends State<ListingsPage> {
             ),
         ],
       ),
-      body: Column(
+      body: Stack(
         children: [
-          if (userId != null)
-            _SavedSearchesRow(
-              userId: userId,
-              clearFilters: _clearFilters,
-              openSavedFilters: _openSavedFiltersSheet,
-              saveSearch: _saveSearch,
-              canSave: _canSaveCurrentSearch(),
-              refreshTick: _savedSearchesRefreshTick,
-            ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-            child: SizedBox(
-              height: 44,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
-                  _FilterPill(
-                    icon: Icons.tune,
-                    label: _allFiltersLabel(context),
-                    compact: isCompactMobile,
-                    onPressed: () => _showFilters(context),
-                  ),
-                  const SizedBox(width: 8),
-                  _FilterPill(
-                    label: _category == 'any'
-                        ? L10n.tr(context, 'listing.filters.all_categories')
-                        : _categoryLabel(
-                            context,
-                            _categories.firstWhere(
-                              (c) => c['id'] == _category,
-                              orElse: () => {'id': _category},
-                            ),
-                          ),
-                    compact: isCompactMobile,
-                    onPressed: () => _openCategoryQuick(context),
-                  ),
-                  const SizedBox(width: 8),
-                  _FilterPill(
-                    label: _formatPriceQuickLabel(context),
-                    compact: isCompactMobile,
-                    onPressed: () => _openPriceQuick(context),
-                  ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    label: Text(L10n.tr(context, 'listing.filters.nearby')),
-                    selected: _nearbyOnly,
-                    visualDensity: isCompactMobile
-                        ? VisualDensity.compact
-                        : VisualDensity.standard,
-                    onSelected: (value) {
-                      if (_buyerWilaya == null || _buyerWilaya!.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              L10n.tr(
-                                context,
-                                'listing.filters.nearby_unavailable',
-                              ),
-                            ),
-                          ),
-                        );
-                        return;
-                      }
-                      setState(() => _nearbyOnly = value);
-                      _refresh();
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    selected: _quickNewOnly,
-                    label: Text(
-                      L10n.tr(context, 'listing.quick.new', fallback: 'Neuf'),
-                    ),
-                    visualDensity: isCompactMobile
-                        ? VisualDensity.compact
-                        : VisualDensity.standard,
-                    onSelected: (value) {
-                      setState(() => _quickNewOnly = value);
-                      _refresh();
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    selected: _quickDeliveryOnly,
-                    label: Text(
-                      L10n.tr(
-                        context,
-                        'listing.quick.delivery',
-                        fallback: 'Livraison',
-                      ),
-                    ),
-                    visualDensity: isCompactMobile
-                        ? VisualDensity.compact
-                        : VisualDensity.standard,
-                    onSelected: (value) {
-                      setState(() => _quickDeliveryOnly = value);
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    selected: _quickPickupOnly,
-                    label: Text(
-                      L10n.tr(
-                        context,
-                        'listing.add.delivery_pickup',
-                        fallback: 'Livraison a convenir',
-                      ),
-                    ),
-                    visualDensity: isCompactMobile
-                        ? VisualDensity.compact
-                        : VisualDensity.standard,
-                    onSelected: (value) {
-                      setState(() => _quickPickupOnly = value);
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (userId == null)
-            _GuestValueBanner(onSignIn: () => _goToSignIn('/?tab=listings')),
-          ValueListenableBuilder<bool>(
-            valueListenable: ConnectivityService.instance.isOnline,
-            builder: (context, isOnline, _) {
-              if (isOnline && !_loading && _products.isNotEmpty) {
-                return const SizedBox.shrink();
-              }
-              return Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-                child: Row(
-                  children: [
-                    if (!isOnline)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.wifi_off_rounded, size: 16),
-                            const SizedBox(width: 6),
-                            Text(
-                              L10n.tr(
-                                context,
-                                'common.offline_chip',
-                                fallback: 'Hors ligne',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    const Spacer(),
-                    if (!isOnline)
-                      TextButton(
-                        onPressed: _refresh,
-                        child: Text(L10n.tr(context, 'common.retry')),
-                      ),
-                  ],
+          Column(
+            children: [
+              if (userId != null)
+                _SavedSearchesRow(
+                  userId: userId,
+                  clearFilters: _clearFilters,
+                  openSavedFilters: _openSavedFiltersSheet,
+                  saveSearch: _saveSearch,
+                  canSave: _canSaveCurrentSearch(),
+                  refreshTick: _savedSearchesRefreshTick,
                 ),
-              );
-            },
-          ),
-          Expanded(
-            child: StreamBuilder<Set<String>>(
-              stream: userId != null
-                  ? FavoriteService().streamFavorites(userId)
-                  : const Stream.empty(),
-              builder: (context, favSnapshot) {
-                final favorites = favSnapshot.data ?? const <String>{};
-                return RefreshIndicator(
-                  onRefresh: () => _refreshController.run(context, _refresh),
-                  child: _buildProductsGrid(
-                    favorites,
-                    userId,
-                    currency,
-                    crossAxisCount,
-                    gridAspectRatio,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                child: SizedBox(
+                  height: 44,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      _FilterPill(
+                        icon: Icons.tune,
+                        label: _allFiltersLabel(context),
+                        compact: isCompactMobile,
+                        onPressed: () => _showFilters(context),
+                      ),
+                      const SizedBox(width: 8),
+                      _FilterPill(
+                        label: _category == 'any'
+                            ? L10n.tr(context, 'listing.filters.all_categories')
+                            : _categoryLabel(
+                                context,
+                                _categories.firstWhere(
+                                  (c) => c['id'] == _category,
+                                  orElse: () => {'id': _category},
+                                ),
+                              ),
+                        compact: isCompactMobile,
+                        onPressed: () => _openCategoryQuick(context),
+                      ),
+                      const SizedBox(width: 8),
+                      _FilterPill(
+                        label: _formatPriceQuickLabel(context),
+                        compact: isCompactMobile,
+                        onPressed: () => _openPriceQuick(context),
+                      ),
+                      const SizedBox(width: 8),
+                      FilterChip(
+                        label: Text(L10n.tr(context, 'listing.filters.nearby')),
+                        selected: _nearbyOnly,
+                        visualDensity: isCompactMobile
+                            ? VisualDensity.compact
+                            : VisualDensity.standard,
+                        onSelected: (value) {
+                          if (_buyerWilaya == null || _buyerWilaya!.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  L10n.tr(
+                                    context,
+                                    'listing.filters.nearby_unavailable',
+                                  ),
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+                          setState(() => _nearbyOnly = value);
+                          _refresh();
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      FilterChip(
+                        selected: _quickNewOnly,
+                        label: Text(
+                          L10n.tr(
+                            context,
+                            'listing.quick.new',
+                            fallback: 'Neuf',
+                          ),
+                        ),
+                        visualDensity: isCompactMobile
+                            ? VisualDensity.compact
+                            : VisualDensity.standard,
+                        onSelected: (value) {
+                          setState(() => _quickNewOnly = value);
+                          _refresh();
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      FilterChip(
+                        selected: _quickDeliveryOnly,
+                        label: Text(
+                          L10n.tr(
+                            context,
+                            'listing.quick.delivery',
+                            fallback: 'Livraison',
+                          ),
+                        ),
+                        visualDensity: isCompactMobile
+                            ? VisualDensity.compact
+                            : VisualDensity.standard,
+                        onSelected: (value) {
+                          setState(() => _quickDeliveryOnly = value);
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      FilterChip(
+                        selected: _quickPickupOnly,
+                        label: Text(
+                          L10n.tr(
+                            context,
+                            'listing.add.delivery_pickup',
+                            fallback: 'Livraison a convenir',
+                          ),
+                        ),
+                        visualDensity: isCompactMobile
+                            ? VisualDensity.compact
+                            : VisualDensity.standard,
+                        onSelected: (value) {
+                          setState(() => _quickPickupOnly = value);
+                        },
+                      ),
+                    ],
                   ),
-                );
-              },
-            ),
+                ),
+              ),
+              if (userId == null)
+                _GuestValueBanner(
+                  onSignIn: () => _goToSignIn('/?tab=listings'),
+                ),
+              ValueListenableBuilder<bool>(
+                valueListenable: ConnectivityService.instance.isOnline,
+                builder: (context, isOnline, _) {
+                  if (isOnline && !_loading && _products.isNotEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+                    child: Row(
+                      children: [
+                        if (!isOnline)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.wifi_off_rounded, size: 16),
+                                const SizedBox(width: 6),
+                                Text(
+                                  L10n.tr(
+                                    context,
+                                    'common.offline_chip',
+                                    fallback: 'Hors ligne',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        const Spacer(),
+                        if (!isOnline)
+                          TextButton(
+                            onPressed: _refresh,
+                            child: Text(L10n.tr(context, 'common.retry')),
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              Expanded(
+                child: StreamBuilder<Set<String>>(
+                  stream: userId != null
+                      ? FavoriteService().streamFavorites(userId)
+                      : const Stream.empty(),
+                  builder: (context, favSnapshot) {
+                    final favorites = favSnapshot.data ?? const <String>{};
+                    return RefreshIndicator(
+                      onRefresh: () =>
+                          _refreshController.run(context, _refresh),
+                      child: _buildProductsGrid(
+                        favorites,
+                        userId,
+                        currency,
+                        crossAxisCount,
+                        gridAspectRatio,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+          const PositionedDirectional(
+            start: 16,
+            bottom: 16,
+            child: SupportSocialFab(),
           ),
         ],
       ),

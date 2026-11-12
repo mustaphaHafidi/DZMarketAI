@@ -32,6 +32,10 @@ flutter test test\app_error_service_test.dart --no-test-assets
 ## Manual Mobile Checks
 
 - Android USB: install/run intended flavor and verify login, browse, chat, order, push.
+- Support social: on Browse only, open and close the icon menu, verify its
+  opposite placement from the sell button in FR and Arabic RTL, then open one
+  official external link. It must not appear on Chat, Profile, listing form,
+  checkout, or tracking.
 - iOS TestFlight: verify exact version/build, Google sign-in, push permission, background push, chat/order flows.
 - For push, test app in background or locked state; foreground behavior can differ.
 
