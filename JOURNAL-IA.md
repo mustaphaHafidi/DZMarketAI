@@ -693,3 +693,12 @@ sans risque ni régression.
 - La piste Android interne est disponible pour `45`; la production reste sur
   `44`. La publication production attend les tests Play internes Android et
   TestFlight iOS, ainsi que les controles web post-deploiement.
+
+### 2026-11-12 - Codex - correction version iOS avant TestFlight
+
+- Codemagic a construit, signe et valide localement l'IPA `1.0.9 (45)`, mais
+  App Store Connect a refuse son televersement: Apple exige une version
+  marketing superieure a la version `1.0.9` deja approuvee.
+- La prochaine tentative est donc alignee sur `1.0.10+46` pour Android et iOS.
+  Aucun comportement applicatif, secret, certificat ou profil de signature
+  n'est modifie par cette correction de version.
