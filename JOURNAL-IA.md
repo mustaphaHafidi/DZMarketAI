@@ -125,6 +125,20 @@ log) → dans ce cas, passer par la voie 1.
   les requetes FR/AR, clics, impressions et pages indexees.
 - Aucun code, donnee, configuration Google, configuration serveur ou deploiement
   ne sont modifies. Les donnees Search Console devront guider toute priorite SEO.
+- La propriete de domaine `dzmarket.pro` est preparee dans Search Console sous
+  le compte Google deja connecte. La verification reste en attente du TXT DNS
+  chez OVH; aucun token de verification, mot de passe ou autre secret n'est
+  consigne dans le depot.
+
+### 2026-11-12 - Codex - evolution reponse vendeur, sans code
+
+- Audit live agrege des conversations: 125 demarrees par un acheteur, dont 65
+  sans reponse vendeur; 68 conversations ont eu des messages des deux cotes.
+- Le backlog suivante est ajoute a `next-release-follow-ups.md`: accompagnement
+  manuel cible, rappel limite et desactivable, badge calcule sur 30 jours, puis
+  mise en avant reversible sans retrait automatique d'annonce.
+- Aucune conversation, donnee personnelle, code ou configuration de production
+  n'est modifiee.
 
 ### 2026-11-09 - Codex - lecture seule des erreurs Android recentes
 
