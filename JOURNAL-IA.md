@@ -129,6 +129,9 @@ log) → dans ce cas, passer par la voie 1.
   le compte Google deja connecte. La verification reste en attente du TXT DNS
   chez OVH; aucun token de verification, mot de passe ou autre secret n'est
   consigne dans le depot.
+- Tentative de configuration DNS le meme jour: le compte OVH connecte ne donne
+  pas acces a la zone `dzmarket.pro` (aucun domaine disponible dans la console).
+  Aucun enregistrement DNS ni validation Search Console n'a ete effectue.
 
 ### 2026-11-12 - Codex - evolution reponse vendeur, sans code
 
