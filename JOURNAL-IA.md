@@ -654,3 +654,14 @@ sans risque ni régression.
 - `robots.txt` et `sitemap.xml` existent dans le depot mais repondaient 404 en
   production au controle. Le gate web exige maintenant leur presence dans tout
   futur artefact; aucune bascule web n'a ete faite dans cette intervention.
+
+### 2026-11-12 - Codex - audit lecture seule des anomalies recentes
+
+- Stack Supabase saine et URLs publiques `app`, `api` et `www` en HTTP 200.
+- `app_errors`: 2 erreurs sur 48 h, 8 sur 7 jours et 16 sur 30 jours. Les erreurs
+  reseau/DNS et l'horloge JWT d'un telephone ne sont pas correlees a une panne
+  serveur. Les resets Caddy observes sont des deconnexions client isolees.
+- Un nouveau `RangeError` Android a touche un utilisateur lors de la suppression
+  d'une image d'annonce: index devenu invalide apres une action rapprochee dans
+  `_removeImage`. Correctif recommande pour la prochaine release: borne d'index
+  et test widget; rien n'est modifie ni deploye dans cet audit.
