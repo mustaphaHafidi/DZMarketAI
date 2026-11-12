@@ -117,6 +117,19 @@ log) → dans ce cas, passer par la voie 1.
 
 ## Journal des changements (plus récent en haut)
 
+### 2026-11-12 - Codex - Search Console verifiee, sans code
+
+- La propriete de domaine `dzmarket.pro` est maintenant verifiee dans Google
+  Search Console via l'enregistrement TXT OVH. Le token de verification et les
+  informations de compte ne sont pas consignes dans le depot.
+- Le sitemap officiel `https://www.dzmarket.pro/sitemap.xml` etait deja soumis,
+  avec le statut `Success`, lu le 2026-11-11 et cinq pages decouvertes. Aucune
+  soumission en doublon ni deploiement n'a ete fait.
+- Search Console indique que les donnees de la nouvelle propriete sont en cours
+  de traitement. Attendre environ 24 h avant toute analyse de performance ou
+  d'indexation. Les anciennes entrees de sitemap en echec ont ete laissees
+  intactes, sans nettoyage non demande.
+
 ### 2026-11-12 - Codex - prochaines evolutions acquisition, sans code
 
 - Ajout documentaire uniquement dans `next-release-follow-ups.md` et
