@@ -684,3 +684,12 @@ sans risque ni régression.
   desinstallation ni donnee utilisateur n'a ete touchee. Le smoke test doit
   desormais se faire soit sur un appareil/profil vierge, soit via la piste de
   test interne Play (build signe par Play), avant toute publication.
+
+### 2026-11-12 - Codex - preparation test interne 1.0.9+45
+
+- La version marketing reste `1.0.9`; le numero de build Android/iOS passe de
+  `44` a `45` pour tester le correctif de retrait d'image et le bouton d'aide
+  social sans ecraser la production.
+- La piste Android interne est disponible pour `45`; la production reste sur
+  `44`. La publication production attend les tests Play internes Android et
+  TestFlight iOS, ainsi que les controles web post-deploiement.
