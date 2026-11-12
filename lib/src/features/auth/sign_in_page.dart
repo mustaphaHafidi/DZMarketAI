@@ -364,6 +364,7 @@ class _SignInPageState extends State<SignInPage> {
                                   onSubmitted: (_) =>
                                       _passwordFocusNode.requestFocus(),
                                   textAlign: TextAlign.left,
+                                  textDirection: TextDirection.ltr,
                                   decoration: InputDecoration(
                                     labelText: _t(
                                       'auth.email',

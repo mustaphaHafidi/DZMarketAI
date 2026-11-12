@@ -381,6 +381,7 @@ class _SignUpPageState extends State<SignUpPage> {
                                   onSubmitted: (_) =>
                                       _phoneFocusNode.requestFocus(),
                                   textAlign: TextAlign.left,
+                                  textDirection: TextDirection.ltr,
                                   decoration: InputDecoration(
                                     labelText: _t(
                                       'auth.email',
