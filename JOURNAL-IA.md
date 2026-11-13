@@ -702,3 +702,33 @@ sans risque ni régression.
 - La prochaine tentative est donc alignee sur `1.0.10+46` pour Android et iOS.
   Aucun comportement applicatif, secret, certificat ou profil de signature
   n'est modifie par cette correction de version.
+
+### 2026-11-13 - Codex - audit anomalies et lien TikTok Android
+
+- Controle lecture seule: les conteneurs de production sont sains. Sur 48 h,
+  les erreurs observees sont surtout des echecs DNS/reseau Android isoles, un
+  timeout API et un `RangeError` isole; aucun pic de 5xx serveur ne confirme
+  une panne generale. Aucun correctif ni deploiement n'est fait.
+- Le lien TikTok HTTPS actuel depend de l'association de liens Android. Sur le
+  Samsung de test, TikTok est installe mais ne prend pas les liens
+  `tiktok.com`. Un schema TikTok non documente a ete teste puis abandonne: il
+  ne cible pas le profil de maniere fiable. Ne pas le livrer.
+- Suite requise pour une ouverture native fiable: obtenir le
+  `profile_deep_link` officiel du compte `@dzmarketpro` via TikTok Developer,
+  puis faire un changement cible et les tests mobile. Aucun code applicatif,
+  build USB ou release n'est conserve dans cette intervention.
+
+### 2026-11-13 - Codex - retrait du lien TikTok du menu d'aide
+
+- Decision produit: le lien et le logo TikTok sont retires du bouton d'aide,
+  car son ouverture Android n'est pas fiable. Messenger, Facebook, Instagram
+  et YouTube restent inchanges.
+- Le retour de TikTok exige un lien profond officiel valide sur Android et iOS;
+  aucune approximation de schema n'est publiee.
+- Verification: tests cibles et suite Flutter complete (`154 OK`, `2 ignores`),
+  analyse sans nouvelle erreur (2 warnings historiques), artefact Web controle
+  localement et APK `dev` installe sur Samsung USB. Parcourir, le menu d'aide
+  et les onglets Chat/Profil ont ete verifies; TikTok est absent du menu.
+- L'AAB Android signe `1.0.10+48` est genere. Les tests d'integration distants
+  complets ne sont pas lances car leur scenario d'authentification cree un
+  compte de test sur la base de production.

@@ -1,6 +1,6 @@
 # DZMarket - Suivi prochaine version
 
-Mis a jour : 2026-11-12. Cette fiche ne contient que les constats utiles
+Mis a jour : 2026-11-13. Cette fiche ne contient que les constats utiles
 depuis les dernieres releases. Elle ne remplace ni les logs de production ni
 les tests de release.
 
@@ -15,14 +15,21 @@ les tests de release.
   `lib/src/features/listings/add_listing_page.dart`.
 - **Impact** : le second appui sur Ajouter des images echoue. Aucune donnee,
   annonce ou fichier n'est corrompu.
-- **Etat** : correctif implemente et verifie en reel sur appareil Android
-  (Samsung USB, phase smoke `integration_test`) le 5 novembre. Il reste la
-  publication d'une nouvelle version mobile (build 44, le build 43 est deja
-  distribue en 1.0.8).
+- **Etat** : correctif implemente et valide sur Samsung USB. Il est inclus dans
+  l'artefact Android `1.0.10+48`, prepare pour publication.
 - **Limite volontaire** : ne pas etendre a l'avatar ou a la modification
   d'annonce sans occurrence confirmee dans ces ecrans.
 
 ## A surveiller - pas de correctif ni de release urgente
+
+### Lien TikTok retire du menu d'aide
+
+- **Decision du 13 novembre** : TikTok est retire du bouton d'aide sur Web,
+  Android et iOS. Sur le Samsung de test, l'association des liens ne cible pas
+  fiablement l'application TikTok; conserver ce lien donnerait une sortie
+  incoherente de DZMarket.
+- **Retour possible** : uniquement avec un `profile_deep_link` officiel du
+  compte `@dzmarketpro`, valide sur Android et iOS avant publication.
 
 - **Reseau mobile Android** : deux erreurs entre le 29 octobre et le 4 novembre
   correspondent a une connexion interrompue vers l'API et a une horloge de

@@ -21,7 +21,7 @@ void main() {
     expect(find.byTooltip('Contacter DZMarket'), findsOneWidget);
     expect(find.byTooltip('Facebook'), findsOneWidget);
     expect(find.byTooltip('Instagram'), findsOneWidget);
-    expect(find.byTooltip('TikTok'), findsOneWidget);
+    expect(find.byTooltip('TikTok'), findsNothing);
     expect(find.byTooltip('YouTube'), findsOneWidget);
   });
 

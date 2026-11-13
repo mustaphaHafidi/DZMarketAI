@@ -35,12 +35,6 @@ class _SupportSocialFabState extends State<SupportSocialFab> {
       color: Color(0xFFC13584),
     ),
     _SocialDestination(
-      keyName: 'support.tiktok',
-      uri: 'https://www.tiktok.com/@dzmarketpro',
-      icon: Icons.music_note_rounded,
-      color: Color(0xFF111111),
-    ),
-    _SocialDestination(
       keyName: 'support.youtube',
       uri: 'https://www.youtube.com/@dzmarketpro',
       icon: Icons.play_arrow_rounded,
@@ -95,9 +89,7 @@ class _SupportSocialFabState extends State<SupportSocialFab> {
             expanded: _isOpen,
             child: _CircleButton(
               color: Theme.of(context).colorScheme.primary,
-              icon: _isOpen
-                  ? Icons.close_rounded
-                  : Icons.support_agent_rounded,
+              icon: _isOpen ? Icons.close_rounded : Icons.support_agent_rounded,
               onPressed: () => setState(() => _isOpen = !_isOpen),
             ),
           ),
