@@ -732,3 +732,9 @@ sans risque ni régression.
 - L'AAB Android signe `1.0.10+48` est genere. Les tests d'integration distants
   complets ne sont pas lances car leur scenario d'authentification cree un
   compte de test sur la base de production.
+- Deploiement Web non effectue: le controle SSH et les URLs publiques etaient
+  sains, mais la commande de transfert/bascule a ete refusee par la politique
+  d'execution avant tout envoi ou changement serveur.
+- iOS: le build `47` precedent est bien charge et traite par App Store Connect,
+  mais la soumission TestFlight a recu `422 Another build is in review`. Ne pas
+  declencher le build `48` tant que cette beta review Apple n'est pas terminee.

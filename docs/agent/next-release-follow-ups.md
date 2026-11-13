@@ -133,6 +133,7 @@ sources une a une, avec tests RLS, pagination et retenue limitee des journaux.
 
 - Hotfix web deja deploye le 5 novembre (templates auth-email + permissions
   de repertoires) -- pas d'action supplementaire cote web pour l'instant.
-- Preparer une petite release Android/iOS (build 44) pour le correctif du
-  selecteur d'images, deja valide en reel sur appareil -- publication
-  (Play Console / Codemagic) en attente des acces necessaires.
+- La release `1.0.10+48` est construite et validee localement pour retirer
+  TikTok du menu d'aide. Sa publication multi-plateforme est en attente de la
+  fin de la beta review Apple existante et d'un canal d'execution autorisant la
+  bascule Web. Ne pas publier Android seul afin de garder les menus coherents.
