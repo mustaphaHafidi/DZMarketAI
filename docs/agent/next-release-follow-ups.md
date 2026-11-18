@@ -174,9 +174,10 @@ sources une a une, avec tests RLS, pagination et retenue limitee des journaux.
 
 ## Nouvelle categorie "Vehicules" (code livre 2026-11-18, pas encore deploye)
 
-- **Perimetre** : categorie racine `vehicles` + 4 sous-categories
-  (Voitures, Motos & Scooters, Camions & Utilitaires, Pieces & Accessoires
-  auto). Champs specifiques a la creation d'annonce (modele, annee,
+- **Perimetre** : categorie racine `vehicles` + 6 sous-categories
+  (Voitures, Motos & Scooters, Utilitaires, Camions, Engins, Bateaux --
+  decision revisee le 18/11, voir plus bas). Champs specifiques a la
+  creation d'annonce (modele, annee,
   kilometrage, carburant, boite, carrosserie) -- marque/annee/kilometrage
   recommandes, rien de bloquant pour le vendeur presse. Pas de
   plaque/VIN/papiers (volontairement exclu). Livraison forcee en retrait en
@@ -211,13 +212,19 @@ sources une a une, avec tests RLS, pagination et retenue limitee des journaux.
   jour de la liste) et deja protegee par `canRemovePickedFile` -- pas de
   risque de double-suppression comme pour l'ancien bug du selecteur de
   fichiers. Rien a corriger ici sans cas reproductible.
-- **Decision a confirmer avec le fondateur** : liste des sous-categories
-  vehicules. Version livree ici (validee par le fondateur le 18/11) :
-  Voitures / Motos & Scooters / Camions & Utilitaires / Pieces &
-  Accessoires auto (4). Un second avis propose plutot Voitures / Motos &
-  scooters / Utilitaires / Camions / Engins / Bateaux (6, sans "Pieces &
-  Accessoires"). Pas tranche unilateralement ici car ca contredit un choix
-  deja fait explicitement -- a confirmer avant d'ajuster la migration.
+- **Decision tranchee par le fondateur (2026-11-18, revision)** : la liste
+  des sous-categories vehicules passe de 4 (Voitures / Motos & Scooters /
+  Camions & Utilitaires / Pieces & Accessoires auto) a 6 : Voitures / Motos
+  & Scooters / Utilitaires / Camions / Engins / Bateaux -- "Pieces &
+  Accessoires" retiree. Verifie contre le concurrent principal du marche
+  algerien (Ouedkniss) : son propre menu vehicules liste Voitures,
+  Utilitaire, Motos & Scooters, Camion, Engin (entre autres) -- "Utilitaires"
+  / "Camions" / "Engins" correspondent donc a une segmentation deja eprouvee
+  sur ce marche. Aucune trace d'une categorie "Bateaux" chez ce concurrent
+  (pas de precedent trouve), gardee ici par decision du fondateur -- a
+  surveiller comme categorie a faible volume potentiel. Migration et tests
+  mis a jour en consequence (slugs `vehicles-utility`, `vehicles-equipment`,
+  `vehicles-boats` ajoutes ; `vehicles-parts` retire).
 - **Sequencement de release (suite 2e avis, accepte)** : ce correctif ne
   doit pas partir dans le meme build que les correctifs de fiabilite
   (demarrage Android, erreur admin). Deux versions separees : "Release A"

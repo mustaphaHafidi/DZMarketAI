@@ -10,8 +10,10 @@ void main() {
     test('true for any vehicles-* child slug', () {
       expect(VehicleSpecs.isVehicleCategory('vehicles-cars'), isTrue);
       expect(VehicleSpecs.isVehicleCategory('vehicles-motorcycles'), isTrue);
+      expect(VehicleSpecs.isVehicleCategory('vehicles-utility'), isTrue);
       expect(VehicleSpecs.isVehicleCategory('vehicles-trucks'), isTrue);
-      expect(VehicleSpecs.isVehicleCategory('vehicles-parts'), isTrue);
+      expect(VehicleSpecs.isVehicleCategory('vehicles-equipment'), isTrue);
+      expect(VehicleSpecs.isVehicleCategory('vehicles-boats'), isTrue);
     });
 
     test('false for unrelated categories', () {

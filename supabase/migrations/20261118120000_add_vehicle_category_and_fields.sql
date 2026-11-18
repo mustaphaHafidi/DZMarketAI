@@ -3,6 +3,12 @@
 -- new nullable columns on public.products, new rows in public.categories.
 -- No existing row, column type, or RLS policy is changed.
 -- No plate/VIN/papers field is added on purpose (privacy/security).
+-- 6 sub-categories (decision 2026-11-18, revised from an earlier 4-way
+-- split): Voitures / Motos & Scooters / Utilitaires / Camions / Engins /
+-- Bateaux. "Utilitaires", "Camions" and "Engins" match the Algerian
+-- market leader's own vehicle taxonomy (Ouedkniss: Voitures, Utilitaire,
+-- Motos & Scooters, Camion, Engin, among others); "Bateaux" has no direct
+-- competitor precedent found but is kept per founder decision.
 
 alter table public.products
   add column if not exists vehicle_model text,
@@ -25,7 +31,9 @@ from parent,
   (values
     ('vehicles-cars', 'Voitures', 'سيارات', 1),
     ('vehicles-motorcycles', 'Motos & Scooters', 'دراجات نارية وسكوتر', 2),
-    ('vehicles-trucks', 'Camions & Utilitaires', 'شاحنات ومركبات نفعية', 3),
-    ('vehicles-parts', 'Pieces & Accessoires auto', 'قطع غيار واكسسوارات', 4)
+    ('vehicles-utility', 'Utilitaires', 'مركبات نفعية', 3),
+    ('vehicles-trucks', 'Camions', 'شاحنات', 4),
+    ('vehicles-equipment', 'Engins', 'آليات ثقيلة', 5),
+    ('vehicles-boats', 'Bateaux', 'قوارب', 6)
   ) as v(slug, name_fr, name_ar, sort_order)
 on conflict (slug) do nothing;
