@@ -776,3 +776,57 @@ sans risque ni régression.
   casse ou stream HTTP/2 ferme), sans preuve de blocage. Aucune correction,
   donnee, configuration ou release n'est justifiee a ce stade; surveiller une
   recurrence de `504` ou une hausse des erreurs DNS.
+
+### 2026-11-18 - Codex - gate vehicules avant release
+
+- Le parcours vehicule est en cours de finalisation: champs techniques
+  optionnels, retrait des champs colis et filtres dedies. Toute nouvelle
+  colonne passe par une migration additive distincte; ne jamais modifier une
+  migration deja appliquee.
+- Verifications locales: analyse Flutter sans nouvelle erreur (2 warnings
+  historiques) et tests vehicule/i18n passes. La suite Flutter a ete lancee
+  mais sa sortie finale n'a pas ete capturee de facon exploitable; ne pas la
+  compter comme validee avant un run avec resultat final explicite.
+- Android USB: appareil detecte, mais la compilation APK de test est restee
+  inactive sans artefact et a ete arretee. Aucune APK, migration, mise en
+  production web, Play Console ou TestFlight n'a ete lancee. Etat: NO-GO.
+- Le gate obligatoire est documente dans `docs/agent/vehicle-release.md`:
+  migration verifiee, tests, scenario USB FR/AR et controle web sont requis
+  avant tout deploiement ou soumission mobile.
+
+### 2026-11-18 - Codex - preuve USB pre-release vehicules
+
+- Suite Flutter complete: succes (`exit 0`). L'APK signe `1.0.10+48` a ete
+  construit uniquement avec `scripts/build_android_prod.ps1`, puis installe
+  sur le Samsung USB Android 15. L'application atteint Parcourir en environ
+  trois secondes et ne produit ni crash fatal ni erreur de configuration.
+- Le chargement des annonces affiche toutefois le message actionnable
+  « Impossible de charger les annonces pour le moment. / Reessayer ». Le
+  telephone atteint le port HTTPS de l'API et la configuration cible le bon
+  domaine: ce resultat bloque donc la validation du nouveau select produit
+  tant que la migration additive `20261118190000_add_vehicle_engine_and_power.sql`
+  n'est pas appliquee et verifiee.
+- Aucun scenario vehicule connecte, migration, deploiement web, Play Console
+  ni TestFlight n'est valide. Etat conserve: NO-GO.
+
+### 2026-11-18 - Codex - filtres vehicules et moderation paginee
+
+- Parcourir: les filtres suivent maintenant `categorie -> sous-categorie`.
+  Les criteres vehicule apparaissent seulement pour Vehicules, les champs
+  taille/couleur et les raccourcis livraison sont retires dans ce contexte,
+  et les actions Reset/Afficher restent fixes en bas de la feuille.
+- Moderation: la liste utilisateurs charge une premiere page de 50 puis les
+  suivantes au defilement; recherche et statut sont executes cote serveur.
+  Le total global reste un count exact. Les appels admin ont un timeout de
+  15 secondes et n'affichent plus l'exception reseau brute.
+- Base production: sauvegarde de schema ciblee creee sur `dzm-app-01`, puis
+  migrations additives appliquees pour `vehicle_engine` et
+  `vehicle_power_hp`. Les sept libelles Arabic Vehicules ont ete verifies
+  en UTF-8. Une migration corrective distincte a ete ajoutee apres la
+  detection d'echappements litteraux; aucune migration appliquee n'a ete
+  modifiee.
+- Verification locale: `flutter analyze --no-pub` sans nouvelle erreur (2
+  warnings historiques) et suite complete `171 OK, 2 ignores`.
+- USB: APK `1.0.10+48` installee sans effacer les donnees; demarrage et
+  feuille de filtres valides. L'appareil n'a ni DNS ni route Internet, donc
+  le scenario connecte Vehicules reste NO-GO jusqu'au retablissement du reseau.

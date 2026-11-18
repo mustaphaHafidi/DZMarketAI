@@ -52,8 +52,10 @@ class _ListingsPageState extends State<ListingsPage> {
   final _vehicleYearMin = TextEditingController();
   final _vehicleYearMax = TextEditingController();
   final _vehicleMileageMax = TextEditingController();
+  final _vehicleModel = TextEditingController();
   String? _vehicleFuel;
   String? _vehicleTransmission;
+  String? _vehicleBodyType;
   final _scrollController = ScrollController();
   Timer? _searchDebounce;
   String _condition = 'any';
@@ -210,6 +212,7 @@ class _ListingsPageState extends State<ListingsPage> {
     _vehicleYearMin.dispose();
     _vehicleYearMax.dispose();
     _vehicleMileageMax.dispose();
+    _vehicleModel.dispose();
     _scrollController.dispose();
     _searchDebounce?.cancel();
     widget.browseResetSignal?.removeListener(_onBrowseResetSignal);
@@ -356,39 +359,41 @@ class _ListingsPageState extends State<ListingsPage> {
                         },
                       ),
                       const SizedBox(width: 8),
-                      FilterChip(
-                        selected: _quickDeliveryOnly,
-                        label: Text(
-                          L10n.tr(
-                            context,
-                            'listing.quick.delivery',
-                            fallback: 'Livraison',
+                      if (!_isVehicleCategorySelected()) ...[
+                        FilterChip(
+                          selected: _quickDeliveryOnly,
+                          label: Text(
+                            L10n.tr(
+                              context,
+                              'listing.quick.delivery',
+                              fallback: 'Livraison',
+                            ),
                           ),
+                          visualDensity: isCompactMobile
+                              ? VisualDensity.compact
+                              : VisualDensity.standard,
+                          onSelected: (value) {
+                            setState(() => _quickDeliveryOnly = value);
+                          },
                         ),
-                        visualDensity: isCompactMobile
-                            ? VisualDensity.compact
-                            : VisualDensity.standard,
-                        onSelected: (value) {
-                          setState(() => _quickDeliveryOnly = value);
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      FilterChip(
-                        selected: _quickPickupOnly,
-                        label: Text(
-                          L10n.tr(
-                            context,
-                            'listing.add.delivery_pickup',
-                            fallback: 'Livraison a convenir',
+                        const SizedBox(width: 8),
+                        FilterChip(
+                          selected: _quickPickupOnly,
+                          label: Text(
+                            L10n.tr(
+                              context,
+                              'listing.add.delivery_pickup',
+                              fallback: 'Livraison a convenir',
+                            ),
                           ),
+                          visualDensity: isCompactMobile
+                              ? VisualDensity.compact
+                              : VisualDensity.standard,
+                          onSelected: (value) {
+                            setState(() => _quickPickupOnly = value);
+                          },
                         ),
-                        visualDensity: isCompactMobile
-                            ? VisualDensity.compact
-                            : VisualDensity.standard,
-                        onSelected: (value) {
-                          setState(() => _quickPickupOnly = value);
-                        },
-                      ),
+                      ],
                     ],
                   ),
                 ),
@@ -509,6 +514,71 @@ class _ListingsPageState extends State<ListingsPage> {
   String _safeCategory() =>
       InputSanitizer.sanitizeText(_category, maxLength: 40);
 
+  List<String>? _effectiveCategoryIds() {
+    final selected = _selectedCategory;
+    if (selected == null || selected['slug'] != 'vehicles') {
+      return null;
+    }
+    final rootId = selected['id'];
+    return _categories
+        .where(
+          (category) =>
+              category['id'] == rootId || category['parent_id'] == rootId,
+        )
+        .map((category) => category['id'] ?? '')
+        .where((id) => id.isNotEmpty)
+        .toList();
+  }
+
+  List<Map<String, String>> get _rootCategories => _categories
+      .where(
+        (category) =>
+            category['id'] == 'any' ||
+            category['parent_id'] == null ||
+            category['parent_id']!.isEmpty,
+      )
+      .toList(growable: false);
+
+  Map<String, String>? get _selectedCategory {
+    for (final category in _categories) {
+      if (category['id'] == _category) return category;
+    }
+    return null;
+  }
+
+  String? get _selectedRootCategoryId {
+    final selected = _selectedCategory;
+    if (selected == null || selected['id'] == 'any') return null;
+    final parentId = selected['parent_id'];
+    return parentId == null || parentId.isEmpty ? selected['id'] : parentId;
+  }
+
+  List<Map<String, String>> _childrenFor(String rootId) => _categories
+      .where((category) => category['parent_id'] == rootId)
+      .toList(growable: false);
+
+  String? get _selectedCategorySlug => _selectedCategory?['slug'];
+
+  void _setCategory(String categoryId) {
+    final wasVehicle = _isVehicleCategorySelected();
+    _category = categoryId;
+    final isVehicle = _isVehicleCategorySelected();
+    if (isVehicle) {
+      _size.clear();
+      _color.clear();
+      _quickDeliveryOnly = false;
+      _quickPickupOnly = false;
+    } else if (wasVehicle) {
+      _vehicleYearMin.clear();
+      _vehicleYearMax.clear();
+      _vehicleMileageMax.clear();
+      _vehicleModel.clear();
+      _vehicleFuel = null;
+      _vehicleTransmission = null;
+      _vehicleBodyType = null;
+    }
+  }
+
   String _safeBrand() =>
       InputSanitizer.sanitizeText(_brand.text, maxLength: 40);
 
@@ -562,6 +632,8 @@ class _ListingsPageState extends State<ListingsPage> {
       _safeVehicleMileageMax()?.toString() ?? '',
       _vehicleFuel ?? '',
       _vehicleTransmission ?? '',
+      _vehicleModel.text.trim().toLowerCase(),
+      _vehicleBodyType ?? '',
       _nearbyOnly ? (_buyerWilaya ?? '') : '',
       _sort,
       _quickDeliveryOnly ? 'delivery_only' : '',
@@ -595,6 +667,7 @@ class _ListingsPageState extends State<ListingsPage> {
           .fetchProducts(
             search: _safeSearch(),
             categoryId: _safeCategory(),
+            categoryIds: _effectiveCategoryIds(),
             condition: _effectiveCondition(),
             minPrice: min,
             maxPrice: max,
@@ -607,6 +680,8 @@ class _ListingsPageState extends State<ListingsPage> {
             vehicleMileageMax: _safeVehicleMileageMax(),
             vehicleFuel: _vehicleFuel,
             vehicleTransmission: _vehicleTransmission,
+            vehicleModel: _vehicleModel.text,
+            vehicleBodyType: _vehicleBodyType,
             sort: _sort,
             limit: _pageSize,
             offset: 0,
@@ -681,6 +756,7 @@ class _ListingsPageState extends State<ListingsPage> {
           .fetchProducts(
             search: _safeSearch(),
             categoryId: _safeCategory(),
+            categoryIds: _effectiveCategoryIds(),
             condition: _effectiveCondition(),
             minPrice: min,
             maxPrice: max,
@@ -693,6 +769,8 @@ class _ListingsPageState extends State<ListingsPage> {
             vehicleMileageMax: _safeVehicleMileageMax(),
             vehicleFuel: _vehicleFuel,
             vehicleTransmission: _vehicleTransmission,
+            vehicleModel: _vehicleModel.text,
+            vehicleBodyType: _vehicleBodyType,
             sort: _sort,
             limit: _pageSize,
             offset: _page * _pageSize,
@@ -868,9 +946,7 @@ class _ListingsPageState extends State<ListingsPage> {
   }
 
   bool _isVehicleCategorySelected() {
-    final match = _categories.where((c) => c['id'] == _category).toList();
-    if (match.isEmpty) return false;
-    return VehicleSpecs.isVehicleCategory(match.first['slug']);
+    return VehicleSpecs.isVehicleCategory(_selectedCategorySlug);
   }
 
   String _categoryLabel(BuildContext context, Map<String, String> category) {
@@ -947,6 +1023,13 @@ class _ListingsPageState extends State<ListingsPage> {
       _brand.text = f['brand']?.toString() ?? '';
       _size.text = f['size']?.toString() ?? '';
       _color.text = f['color']?.toString() ?? '';
+      _vehicleYearMin.text = f['vehicleYearMin']?.toString() ?? '';
+      _vehicleYearMax.text = f['vehicleYearMax']?.toString() ?? '';
+      _vehicleMileageMax.text = f['vehicleMileageMax']?.toString() ?? '';
+      _vehicleModel.text = f['vehicleModel']?.toString() ?? '';
+      _vehicleFuel = f['vehicleFuel'] as String?;
+      _vehicleTransmission = f['vehicleTransmission'] as String?;
+      _vehicleBodyType = f['vehicleBodyType'] as String?;
       _sort = (f['sort'] as String?) ?? 'newest';
       _showFavoritesOnly = (f['favoritesOnly'] as bool?) ?? false;
       _nearbyOnly = (f['nearbyOnly'] as bool?) ?? false;
@@ -967,6 +1050,16 @@ class _ListingsPageState extends State<ListingsPage> {
       'brand': _safeBrand(),
       'size': _safeSize(),
       'color': _safeColor(),
+      'vehicleYearMin': _safeVehicleYearMin()?.toString() ?? '',
+      'vehicleYearMax': _safeVehicleYearMax()?.toString() ?? '',
+      'vehicleMileageMax': _safeVehicleMileageMax()?.toString() ?? '',
+      'vehicleModel': InputSanitizer.sanitizeText(
+        _vehicleModel.text,
+        maxLength: 60,
+      ),
+      'vehicleFuel': _vehicleFuel ?? '',
+      'vehicleTransmission': _vehicleTransmission ?? '',
+      'vehicleBodyType': _vehicleBodyType ?? '',
       'sort': _sort,
       'favoritesOnly': _showFavoritesOnly,
       'nearbyOnly': _nearbyOnly,
@@ -1044,8 +1137,10 @@ class _ListingsPageState extends State<ListingsPage> {
                 _vehicleYearMin.clear();
                 _vehicleYearMax.clear();
                 _vehicleMileageMax.clear();
+                _vehicleModel.clear();
                 _vehicleFuel = null;
                 _vehicleTransmission = null;
+                _vehicleBodyType = null;
                 _sort = 'newest';
                 _showFavoritesOnly = false;
                 _nearbyOnly = false;
@@ -1056,331 +1151,476 @@ class _ListingsPageState extends State<ListingsPage> {
             }
 
             return SafeArea(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-                  left: 16,
-                  right: 16,
-                  top: 8,
-                ),
+              child: SizedBox(
+                height: MediaQuery.sizeOf(context).height * 0.88,
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Text(
-                          L10n.tr(context, 'listing.filters.title'),
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const Spacer(),
-                        TextButton(
-                          onPressed: resetLocal,
-                          child: Text(L10n.tr(context, 'common.reset')),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      L10n.tr(context, 'listing.add.condition_label'),
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _conditions
-                          .map(
-                            (c) => ChoiceChip(
-                              label: Text(_conditionLabel(context, c)),
-                              selected: _condition == c,
-                              onSelected: (_) =>
-                                  updateFilters(() => _condition = c),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      child: Row(
+                        children: [
+                          Text(
+                            L10n.tr(context, 'listing.filters.title'),
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
                             ),
-                          )
-                          .toList(),
+                          ),
+                          const Spacer(),
+                          TextButton(
+                            onPressed: resetLocal,
+                            child: Text(L10n.tr(context, 'common.reset')),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      L10n.tr(context, 'listing.filters.category_quick'),
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _categories
-                          .map(
-                            (c) => ChoiceChip(
-                              label: Text(
-                                c['id'] == 'any'
-                                    ? L10n.tr(
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            DropdownButtonFormField<String>(
+                              value: _selectedRootCategoryId ?? 'any',
+                              decoration: InputDecoration(
+                                labelText: L10n.tr(
+                                  context,
+                                  'listing.filters.category_quick',
+                                ),
+                              ),
+                              items: _rootCategories
+                                  .map(
+                                    (category) => DropdownMenuItem(
+                                      value: category['id'],
+                                      child: Text(
+                                        category['id'] == 'any'
+                                            ? L10n.tr(
+                                                context,
+                                                'listing.filters.all_categories',
+                                              )
+                                            : _categoryLabel(context, category),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (value) => updateFilters(
+                                () => _setCategory(value ?? 'any'),
+                              ),
+                            ),
+                            if (_selectedRootCategoryId != null &&
+                                _childrenFor(
+                                  _selectedRootCategoryId!,
+                                ).isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              DropdownButtonFormField<String>(
+                                value: _category,
+                                decoration: InputDecoration(
+                                  labelText: L10n.tr(
+                                    context,
+                                    _isVehicleCategorySelected()
+                                        ? 'listing.filters.vehicle_type'
+                                        : 'listing.filters.subcategory',
+                                  ),
+                                ),
+                                items: [
+                                  DropdownMenuItem(
+                                    value: _selectedRootCategoryId,
+                                    child: Text(
+                                      L10n.tr(
                                         context,
                                         'listing.filters.all_categories',
-                                      )
-                                    : _categoryLabel(context, c),
+                                      ),
+                                    ),
+                                  ),
+                                  ..._childrenFor(_selectedRootCategoryId!).map(
+                                    (category) => DropdownMenuItem(
+                                      value: category['id'],
+                                      child: Text(
+                                        _categoryLabel(context, category),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                onChanged: (value) => updateFilters(
+                                  () => _setCategory(
+                                    value ?? _selectedRootCategoryId!,
+                                  ),
+                                ),
                               ),
-                              selected: _category == c['id'],
-                              onSelected: (_) => updateFilters(
-                                () => _category = c['id'] ?? 'any',
+                            ],
+                            const SizedBox(height: 12),
+                            Text(
+                              L10n.tr(context, 'listing.filters.price_quick'),
+                              style: Theme.of(context).textTheme.labelLarge,
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: _priceMin,
+                                    keyboardType: TextInputType.number,
+                                    decoration: InputDecoration(
+                                      labelText: L10n.tr(
+                                        context,
+                                        'listing.filters.min_price',
+                                      ),
+                                    ),
+                                    onChanged: (_) => setModalState(() {}),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: TextField(
+                                    controller: _priceMax,
+                                    keyboardType: TextInputType.number,
+                                    decoration: InputDecoration(
+                                      labelText: L10n.tr(
+                                        context,
+                                        'listing.filters.max_price',
+                                      ),
+                                    ),
+                                    onChanged: (_) => setModalState(() {}),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              L10n.tr(context, 'listing.add.condition_label'),
+                              style: Theme.of(context).textTheme.labelLarge,
+                            ),
+                            const SizedBox(height: 6),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: _conditions
+                                  .map(
+                                    (condition) => ChoiceChip(
+                                      label: Text(
+                                        _conditionLabel(context, condition),
+                                      ),
+                                      selected: _condition == condition,
+                                      onSelected: (_) => updateFilters(
+                                        () => _condition = condition,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
+                            if (_isVehicleCategorySelected()) ...[
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: _brand,
+                                decoration: InputDecoration(
+                                  labelText: L10n.tr(
+                                    context,
+                                    'listing.filters.brand',
+                                  ),
+                                ),
+                                onChanged: (_) => setModalState(() {}),
+                              ),
+                              const SizedBox(height: 8),
+                              TextField(
+                                controller: _vehicleModel,
+                                decoration: InputDecoration(
+                                  labelText: L10n.tr(
+                                    context,
+                                    'listing.filters.vehicle_model',
+                                  ),
+                                ),
+                                onChanged: (_) => setModalState(() {}),
+                              ),
+                              const SizedBox(height: 6),
+                              ExpansionTile(
+                                tilePadding: EdgeInsets.zero,
+                                title: Text(
+                                  L10n.tr(
+                                    context,
+                                    'listing.filters.vehicle_details',
+                                  ),
+                                  style: Theme.of(context).textTheme.labelLarge,
+                                ),
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _vehicleYearMin,
+                                          keyboardType: TextInputType.number,
+                                          decoration: InputDecoration(
+                                            labelText: L10n.tr(
+                                              context,
+                                              'listing.filters.year_min',
+                                            ),
+                                          ),
+                                          onChanged: (_) =>
+                                              setModalState(() {}),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _vehicleYearMax,
+                                          keyboardType: TextInputType.number,
+                                          decoration: InputDecoration(
+                                            labelText: L10n.tr(
+                                              context,
+                                              'listing.filters.year_max',
+                                            ),
+                                          ),
+                                          onChanged: (_) =>
+                                              setModalState(() {}),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextField(
+                                    controller: _vehicleMileageMax,
+                                    keyboardType: TextInputType.number,
+                                    decoration: InputDecoration(
+                                      labelText: L10n.tr(
+                                        context,
+                                        'listing.filters.mileage_max',
+                                      ),
+                                    ),
+                                    onChanged: (_) => setModalState(() {}),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: VehicleSpecs.fuels
+                                        .map(
+                                          (value) => ChoiceChip(
+                                            label: Text(
+                                              VehicleSpecs.fuelLabel(
+                                                context,
+                                                value,
+                                              ),
+                                            ),
+                                            selected: _vehicleFuel == value,
+                                            onSelected: (_) => updateFilters(
+                                              () => _vehicleFuel =
+                                                  _vehicleFuel == value
+                                                  ? null
+                                                  : value,
+                                            ),
+                                          ),
+                                        )
+                                        .toList(),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: VehicleSpecs.transmissions
+                                        .map(
+                                          (value) => ChoiceChip(
+                                            label: Text(
+                                              VehicleSpecs.transmissionLabel(
+                                                context,
+                                                value,
+                                              ),
+                                            ),
+                                            selected:
+                                                _vehicleTransmission == value,
+                                            onSelected: (_) => updateFilters(
+                                              () => _vehicleTransmission =
+                                                  _vehicleTransmission == value
+                                                  ? null
+                                                  : value,
+                                            ),
+                                          ),
+                                        )
+                                        .toList(),
+                                  ),
+                                  if (VehicleSpecs.supportsBodyType(
+                                    _selectedCategorySlug,
+                                  )) ...[
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: VehicleSpecs.bodyTypes
+                                          .map(
+                                            (value) => ChoiceChip(
+                                              label: Text(
+                                                VehicleSpecs.bodyTypeLabel(
+                                                  context,
+                                                  value,
+                                                ),
+                                              ),
+                                              selected:
+                                                  _vehicleBodyType == value,
+                                              onSelected: (_) => updateFilters(
+                                                () => _vehicleBodyType =
+                                                    _vehicleBodyType == value
+                                                    ? null
+                                                    : value,
+                                              ),
+                                            ),
+                                          )
+                                          .toList(),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
+                            const SizedBox(height: 12),
+                            DropdownButtonFormField<String>(
+                              value: _sort,
+                              decoration: InputDecoration(
+                                labelText: L10n.tr(
+                                  context,
+                                  'listing.filters.sort',
+                                ),
+                              ),
+                              items: [
+                                DropdownMenuItem(
+                                  value: 'newest',
+                                  child: Text(
+                                    L10n.tr(context, 'listing.sort.newest'),
+                                  ),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'price_low',
+                                  child: Text(
+                                    L10n.tr(context, 'listing.sort.price_low'),
+                                  ),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'price_high',
+                                  child: Text(
+                                    L10n.tr(context, 'listing.sort.price_high'),
+                                  ),
+                                ),
+                              ],
+                              onChanged: (value) {
+                                if (value != null) {
+                                  updateFilters(() => _sort = value);
+                                }
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            SwitchListTile(
+                              value: _nearbyOnly,
+                              onChanged: (value) {
+                                if (_buyerWilaya == null ||
+                                    _buyerWilaya!.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        L10n.tr(
+                                          context,
+                                          'listing.filters.nearby_unavailable',
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
+                                updateFilters(() => _nearbyOnly = value);
+                              },
+                              title: Text(
+                                L10n.tr(context, 'listing.filters.nearby'),
+                              ),
+                              subtitle: Text(
+                                L10n.tr(
+                                  context,
+                                  'listing.filters.nearby_hint',
+                                  params: {'wilaya': _buyerWilaya ?? '-'},
+                                ),
                               ),
                             ),
-                          )
-                          .toList(),
-                    ),
-                    if (_isVehicleCategorySelected()) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        L10n.tr(context, 'listing.filters.vehicle_section'),
-                        style: Theme.of(context).textTheme.labelLarge,
+                            if (!_isVehicleCategorySelected()) ...[
+                              const SizedBox(height: 6),
+                              ExpansionTile(
+                                tilePadding: EdgeInsets.zero,
+                                title: Text(
+                                  L10n.tr(context, 'listing.filters.more'),
+                                  style: Theme.of(context).textTheme.labelLarge,
+                                ),
+                                children: [
+                                  TextField(
+                                    controller: _brand,
+                                    decoration: InputDecoration(
+                                      labelText: L10n.tr(
+                                        context,
+                                        'listing.filters.brand',
+                                      ),
+                                    ),
+                                    onChanged: (_) => setModalState(() {}),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextField(
+                                    controller: _size,
+                                    decoration: InputDecoration(
+                                      labelText: L10n.tr(
+                                        context,
+                                        'listing.filters.size',
+                                      ),
+                                    ),
+                                    onChanged: (_) => setModalState(() {}),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextField(
+                                    controller: _color,
+                                    decoration: InputDecoration(
+                                      labelText: L10n.tr(
+                                        context,
+                                        'listing.filters.color',
+                                      ),
+                                    ),
+                                    onChanged: (_) => setModalState(() {}),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 6),
-                      Row(
+                    ),
+                    Container(
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        12,
+                        16,
+                        MediaQuery.viewInsetsOf(context).bottom + 12,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          top: BorderSide(
+                            color: Theme.of(context).dividerColor,
+                          ),
+                        ),
+                      ),
+                      child: Row(
                         children: [
                           Expanded(
-                            child: TextField(
-                              controller: _vehicleYearMin,
-                              keyboardType: TextInputType.number,
-                              decoration: InputDecoration(
-                                labelText: L10n.tr(
-                                  context,
-                                  'listing.filters.year_min',
-                                ),
-                              ),
-                              onChanged: (_) => setModalState(() {}),
+                            child: OutlinedButton(
+                              onPressed: resetLocal,
+                              child: Text(L10n.tr(context, 'common.reset')),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 12),
                           Expanded(
-                            child: TextField(
-                              controller: _vehicleYearMax,
-                              keyboardType: TextInputType.number,
-                              decoration: InputDecoration(
-                                labelText: L10n.tr(
+                            child: ElevatedButton(
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                                _refresh();
+                              },
+                              child: Text(
+                                L10n.tr(
                                   context,
-                                  'listing.filters.year_max',
+                                  'listing.filters.show_results',
                                 ),
                               ),
-                              onChanged: (_) => setModalState(() {}),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _vehicleMileageMax,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: L10n.tr(
-                            context,
-                            'listing.filters.mileage_max',
-                          ),
-                        ),
-                        onChanged: (_) => setModalState(() {}),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: VehicleSpecs.fuels
-                            .map(
-                              (value) => ChoiceChip(
-                                label: Text(
-                                  VehicleSpecs.fuelLabel(context, value),
-                                ),
-                                selected: _vehicleFuel == value,
-                                onSelected: (_) => updateFilters(
-                                  () => _vehicleFuel = _vehicleFuel == value
-                                      ? null
-                                      : value,
-                                ),
-                              ),
-                            )
-                            .toList(),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: VehicleSpecs.transmissions
-                            .map(
-                              (value) => ChoiceChip(
-                                label: Text(
-                                  VehicleSpecs.transmissionLabel(
-                                    context,
-                                    value,
-                                  ),
-                                ),
-                                selected: _vehicleTransmission == value,
-                                onSelected: (_) => updateFilters(
-                                  () => _vehicleTransmission =
-                                      _vehicleTransmission == value
-                                      ? null
-                                      : value,
-                                ),
-                              ),
-                            )
-                            .toList(),
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-                    Text(
-                      L10n.tr(context, 'listing.filters.price_quick'),
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _priceMin,
-                            keyboardType: TextInputType.number,
-                            decoration: InputDecoration(
-                              labelText: L10n.tr(
-                                context,
-                                'listing.filters.min_price',
-                              ),
-                            ),
-                            onChanged: (_) => setModalState(() {}),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TextField(
-                            controller: _priceMax,
-                            keyboardType: TextInputType.number,
-                            decoration: InputDecoration(
-                              labelText: L10n.tr(
-                                context,
-                                'listing.filters.max_price',
-                              ),
-                            ),
-                            onChanged: (_) => setModalState(() {}),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: _sort,
-                      decoration: InputDecoration(
-                        labelText: L10n.tr(context, 'listing.filters.sort'),
-                      ),
-                      items: [
-                        DropdownMenuItem(
-                          value: 'newest',
-                          child: Text(L10n.tr(context, 'listing.sort.newest')),
-                        ),
-                        DropdownMenuItem(
-                          value: 'price_low',
-                          child: Text(
-                            L10n.tr(context, 'listing.sort.price_low'),
-                          ),
-                        ),
-                        DropdownMenuItem(
-                          value: 'price_high',
-                          child: Text(
-                            L10n.tr(context, 'listing.sort.price_high'),
-                          ),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        if (value == null) return;
-                        updateFilters(() => _sort = value);
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    SwitchListTile(
-                      value: _nearbyOnly,
-                      onChanged: (value) {
-                        if (_buyerWilaya == null || _buyerWilaya!.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                L10n.tr(
-                                  context,
-                                  'listing.filters.nearby_unavailable',
-                                ),
-                              ),
-                            ),
-                          );
-                          return;
-                        }
-                        updateFilters(() => _nearbyOnly = value);
-                      },
-                      title: Text(L10n.tr(context, 'listing.filters.nearby')),
-                      subtitle: Text(
-                        L10n.tr(
-                          context,
-                          'listing.filters.nearby_hint',
-                          params: {'wilaya': _buyerWilaya ?? '-'},
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    ExpansionTile(
-                      tilePadding: EdgeInsets.zero,
-                      title: Text(
-                        L10n.tr(context, 'listing.filters.more'),
-                        style: Theme.of(context).textTheme.labelLarge,
-                      ),
-                      children: [
-                        TextField(
-                          controller: _brand,
-                          decoration: InputDecoration(
-                            labelText: L10n.tr(
-                              context,
-                              'listing.filters.brand',
-                            ),
-                          ),
-                          onChanged: (_) => setModalState(() {}),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _size,
-                          decoration: InputDecoration(
-                            labelText: L10n.tr(context, 'listing.filters.size'),
-                          ),
-                          onChanged: (_) => setModalState(() {}),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _color,
-                          decoration: InputDecoration(
-                            labelText: L10n.tr(
-                              context,
-                              'listing.filters.color',
-                            ),
-                          ),
-                          onChanged: (_) => setModalState(() {}),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: resetLocal,
-                            child: Text(L10n.tr(context, 'common.reset')),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                              _refresh();
-                            },
-                            child: Text(
-                              L10n.tr(context, 'listing.filters.show_results'),
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                 ),
@@ -1573,6 +1813,14 @@ class _ListingsPageState extends State<ListingsPage> {
     if (_safeBrand().isNotEmpty) count++;
     if (_safeSize().isNotEmpty) count++;
     if (_safeColor().isNotEmpty) count++;
+    if (_safeVehicleYearMin() != null || _safeVehicleYearMax() != null) {
+      count++;
+    }
+    if (_safeVehicleMileageMax() != null) count++;
+    if (_vehicleModel.text.trim().isNotEmpty) count++;
+    if (_vehicleFuel != null) count++;
+    if (_vehicleTransmission != null) count++;
+    if (_vehicleBodyType != null) count++;
     if (_sort != 'newest') count++;
     if (_nearbyOnly) count++;
     if (_showFavoritesOnly) count++;
@@ -1604,30 +1852,51 @@ class _ListingsPageState extends State<ListingsPage> {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _categories
-                    .map(
-                      (c) => ChoiceChip(
-                        label: Text(
-                          c['id'] == 'any'
-                              ? L10n.tr(
-                                  context,
-                                  'listing.filters.all_categories',
-                                )
-                              : _categoryLabel(context, c),
+              ..._rootCategories.map((category) {
+                final id = category['id'] ?? 'any';
+                final children = id == 'any'
+                    ? const <Map<String, String>>[]
+                    : _childrenFor(id);
+                return ExpansionTile(
+                  initiallyExpanded: _selectedRootCategoryId == id,
+                  tilePadding: EdgeInsets.zero,
+                  title: Text(
+                    id == 'any'
+                        ? L10n.tr(context, 'listing.filters.all_categories')
+                        : _categoryLabel(context, category),
+                  ),
+                  onExpansionChanged: (expanded) {
+                    if (expanded && children.isEmpty) {
+                      setState(() => _setCategory(id));
+                      Navigator.pop(context);
+                      _refresh();
+                    }
+                  },
+                  children: [
+                    if (children.isNotEmpty)
+                      ListTile(
+                        title: Text(
+                          L10n.tr(context, 'listing.filters.all_categories'),
                         ),
-                        selected: _category == c['id'],
-                        onSelected: (_) {
-                          setState(() => _category = c['id'] ?? 'any');
+                        onTap: () {
+                          setState(() => _setCategory(id));
                           Navigator.pop(context);
                           _refresh();
                         },
                       ),
-                    )
-                    .toList(),
-              ),
+                    ...children.map(
+                      (child) => ListTile(
+                        title: Text(_categoryLabel(context, child)),
+                        onTap: () {
+                          setState(() => _setCategory(child['id'] ?? 'any'));
+                          Navigator.pop(context);
+                          _refresh();
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              }),
             ],
           ),
         );
@@ -1727,6 +1996,13 @@ class _ListingsPageState extends State<ListingsPage> {
       _brand.clear();
       _size.clear();
       _color.clear();
+      _vehicleYearMin.clear();
+      _vehicleYearMax.clear();
+      _vehicleMileageMax.clear();
+      _vehicleModel.clear();
+      _vehicleFuel = null;
+      _vehicleTransmission = null;
+      _vehicleBodyType = null;
       _sort = 'newest';
       _showFavoritesOnly = false;
       _nearbyOnly = false;

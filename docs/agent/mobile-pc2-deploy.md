@@ -146,6 +146,12 @@ Check presence only, never values:
 
 ## Go / No-Go
 
+Never run a raw Flutter Android command containing
+`--dart-define-from-file` in an interactive terminal: Gradle can echo encoded
+defines. Use `scripts/build_android_prod.ps1` for release artifacts and keep
+test-environment builds in sanitized logs only. A successful build is not a
+deployment and is never evidence of an installed, working app.
+
 GO only when all are true:
 
 - `dart analyze` passes.

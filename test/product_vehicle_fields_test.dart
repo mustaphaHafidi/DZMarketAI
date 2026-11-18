@@ -15,6 +15,8 @@ void main() {
         'vehicle_fuel': 'diesel',
         'vehicle_transmission': 'manual',
         'vehicle_body_type': 'hatchback',
+        'vehicle_engine': '1.5 dCi',
+        'vehicle_power_hp': 90,
       });
 
       expect(product.vehicleModel, 'Golf 7');
@@ -23,22 +25,29 @@ void main() {
       expect(product.vehicleFuel, 'diesel');
       expect(product.vehicleTransmission, 'manual');
       expect(product.vehicleBodyType, 'hatchback');
+      expect(product.vehicleEngine, '1.5 dCi');
+      expect(product.vehiclePowerHp, 90);
     });
 
-    test('defaults every vehicle_* field to null for a non-vehicle listing', () {
-      final product = Product.fromJson({
-        'id': '2',
-        'title': 'Robe',
-        'price': 3500,
-        'owner_id': 'owner-2',
-      });
+    test(
+      'defaults every vehicle_* field to null for a non-vehicle listing',
+      () {
+        final product = Product.fromJson({
+          'id': '2',
+          'title': 'Robe',
+          'price': 3500,
+          'owner_id': 'owner-2',
+        });
 
-      expect(product.vehicleModel, isNull);
-      expect(product.vehicleYear, isNull);
-      expect(product.vehicleMileageKm, isNull);
-      expect(product.vehicleFuel, isNull);
-      expect(product.vehicleTransmission, isNull);
-      expect(product.vehicleBodyType, isNull);
-    });
+        expect(product.vehicleModel, isNull);
+        expect(product.vehicleYear, isNull);
+        expect(product.vehicleMileageKm, isNull);
+        expect(product.vehicleFuel, isNull);
+        expect(product.vehicleTransmission, isNull);
+        expect(product.vehicleBodyType, isNull);
+        expect(product.vehicleEngine, isNull);
+        expect(product.vehiclePowerHp, isNull);
+      },
+    );
   });
 }

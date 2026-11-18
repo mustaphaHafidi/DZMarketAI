@@ -29,6 +29,19 @@ class VehicleSpecs {
     return categorySlug == 'vehicles' || categorySlug.startsWith('vehicles-');
   }
 
+  static bool supportsRoadSpecs(String? categorySlug) {
+    return categorySlug == 'vehicles-cars' ||
+        categorySlug == 'vehicles-motorcycles' ||
+        categorySlug == 'vehicles-utility' ||
+        categorySlug == 'vehicles-trucks';
+  }
+
+  static bool supportsBodyType(String? categorySlug) {
+    return categorySlug == 'vehicles-cars' ||
+        categorySlug == 'vehicles-utility' ||
+        categorySlug == 'vehicles-trucks';
+  }
+
   static String fuelLabel(BuildContext context, String value) {
     return L10n.tr(context, 'vehicle.fuel.$value', fallback: value);
   }

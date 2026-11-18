@@ -501,6 +501,7 @@ class L10n {
     'listing.add.allow_stopdesk': 'Autoriser point relais / bureau poste',
     'listing.add.back': 'Retour',
     'listing.add.brand_label': 'Marque (optionnel)',
+    'listing.add.body_type_label': 'Carrosserie (optionnel)',
     'listing.add.category_back_to_root': 'Retour aux catégories principales',
     'listing.add.category_label': 'Catégorie',
     'listing.add.choose_category_cta': 'Choisir cette catégorie',
@@ -533,6 +534,8 @@ class L10n {
     'listing.add.error_invalid_cost': 'Prix d\'achat invalide',
     'listing.add.error_invalid_location': 'Localisation invalide.',
     'listing.add.error_invalid_stock': 'Stock invalide.',
+    'listing.add.error_vehicle_required':
+        'Renseignez au minimum la marque et le modele.',
     'listing.add.error_max_photos': 'Maximum {max} photos.',
     'listing.add.error_min_photo': 'Ajoutez au moins 2 photos.',
     'listing.add.error_missing_info': 'Informations manquantes.',
@@ -554,6 +557,13 @@ class L10n {
     'listing.add.negotiable_hint':
         'Autoriser les acheteurs a envoyer des offres.',
     'listing.add.negotiable_label': 'Prix negociable',
+    'listing.add.engine_label': 'Moteur (optionnel)',
+    'listing.add.power_hp_label': 'Puissance (ch, optionnel)',
+    'listing.add.model_label': 'Modele',
+    'listing.add.year_label': 'Annee (optionnel)',
+    'listing.add.mileage_label': 'Kilometrage (km, optionnel)',
+    'listing.add.fuel_label': 'Carburant (optionnel)',
+    'listing.add.transmission_label': 'Boite de vitesses (optionnel)',
     'listing.add.photos_count': 'Photos: {count}/{max}',
     'listing.add.photos_hint':
         'Ajoutez entre 2 et 5 photos pour vendre plus vite.',
@@ -574,6 +584,8 @@ class L10n {
     'listing.add.preview_stock': 'Stock',
     'listing.add.preview_weight': 'Poids (kg)',
     'listing.add.preview_width': 'Largeur (cm)',
+    'listing.add.vehicle_meeting_label': 'Remise',
+    'listing.add.vehicle_meeting_value': 'A convenir avec l\'acheteur',
     'listing.add.price_field_label': 'Prix',
     'listing.add.price_helper': 'Prix de vente en DZD.',
     'listing.add.price_label': 'Prix de vente (DZD)',
@@ -630,6 +642,10 @@ class L10n {
     'listing.filters.all_categories': 'Toutes catégories',
     'listing.filters.all_filters': 'Tous les filtres',
     'listing.filters.brand': 'Marque',
+    'listing.filters.vehicle_model': 'Modele',
+    'listing.filters.subcategory': 'Sous-categorie',
+    'listing.filters.vehicle_type': 'Type de vehicule',
+    'listing.filters.vehicle_details': 'Caracteristiques du vehicule',
     'listing.filters.category_quick': 'Catégorie',
     'listing.filters.color': 'Couleur',
     'listing.filters.max_price': 'Max DA',
@@ -646,6 +662,8 @@ class L10n {
     'listing.filters.title': 'Filtres',
     'listing.load_error_friendly':
         'Impossible de charger les annonces pour le moment.',
+    'listing.vehicle_engine': 'Moteur: {value}',
+    'listing.vehicle_power_hp': '{value} ch',
     'listing.location_unknown': 'Localisation inconnue',
     'listing.negotiable': 'Prix negociable',
     'listing.no_description': 'Pas de description.',
@@ -2087,6 +2105,36 @@ class L10n {
   };
 
   static const Map<String, String> _runtimeFixesAr = {
+    'listing.vehicle_engine': '\u0627\u0644\u0645\u062d\u0631\u0643: {value}',
+    'listing.vehicle_power_hp': '{value} \u062d\u0635\u0627\u0646',
+    'listing.filters.vehicle_model': '\u0627\u0644\u0637\u0631\u0627\u0632',
+    'listing.filters.subcategory':
+        '\u0627\u0644\u0641\u0626\u0629 \u0627\u0644\u0641\u0631\u0639\u064A\u0629',
+    'listing.filters.vehicle_type':
+        '\u0646\u0648\u0639 \u0627\u0644\u0645\u0631\u0643\u0628\u0629',
+    'listing.filters.vehicle_details':
+        '\u0645\u0648\u0627\u0635\u0641\u0627\u062A \u0627\u0644\u0645\u0631\u0643\u0628\u0629',
+    'listing.add.body_type_label':
+        '\u0646\u0648\u0639 \u0627\u0644\u0647\u064a\u0643\u0644 (\u0627\u062e\u062a\u064a\u0627\u0631\u064a)',
+    'listing.add.error_vehicle_required':
+        '\u0623\u062f\u062e\u0644 \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644 \u0627\u0644\u0639\u0644\u0627\u0645\u0629 \u0648\u0627\u0644\u0637\u0631\u0627\u0632.',
+    'listing.add.engine_label':
+        '\u0627\u0644\u0645\u062d\u0631\u0643 (\u0627\u062e\u062a\u064a\u0627\u0631\u064a)',
+    'listing.add.power_hp_label':
+        '\u0627\u0644\u0642\u0648\u0629 (\u062d\u0635\u0627\u0646\u060c \u0627\u062e\u062a\u064a\u0627\u0631\u064a)',
+    'listing.add.model_label': '\u0627\u0644\u0637\u0631\u0627\u0632',
+    'listing.add.year_label':
+        '\u0627\u0644\u0633\u0646\u0629 (\u0627\u062e\u062a\u064a\u0627\u0631\u064a)',
+    'listing.add.mileage_label':
+        '\u0627\u0644\u0645\u0633\u0627\u0641\u0629 \u0627\u0644\u0645\u0642\u0637\u0648\u0639\u0629 (\u0643\u0645\u060c \u0627\u062e\u062a\u064a\u0627\u0631\u064a)',
+    'listing.add.fuel_label':
+        '\u0627\u0644\u0648\u0642\u0648\u062f (\u0627\u062e\u062a\u064a\u0627\u0631\u064a)',
+    'listing.add.transmission_label':
+        '\u0646\u0627\u0642\u0644 \u0627\u0644\u062d\u0631\u0643\u0629 (\u0627\u062e\u062a\u064a\u0627\u0631\u064a)',
+    'listing.add.vehicle_meeting_label':
+        '\u0627\u0644\u0627\u0633\u062a\u0644\u0627\u0645',
+    'listing.add.vehicle_meeting_value':
+        '\u0628\u0627\u0644\u0627\u062a\u0641\u0627\u0642 \u0645\u0639 \u0627\u0644\u0645\u0634\u062a\u0631\u064a',
     'courier_settings.web_notice': 'يتم التحقق من بيانات API على الخادم.',
     'profile.delete_account': 'طلب حذف الحساب',
     'profile.delete_account_confirm_title': 'طلب حذف الحساب',

@@ -42,6 +42,8 @@ class _AddListingPageState extends State<AddListingPage> {
   final _vehicleModelCtrl = TextEditingController();
   final _vehicleYearCtrl = TextEditingController();
   final _vehicleMileageCtrl = TextEditingController();
+  final _vehicleEngineCtrl = TextEditingController();
+  final _vehiclePowerHpCtrl = TextEditingController();
   String? _vehicleFuel;
   String? _vehicleTransmission;
   String? _vehicleBodyType;
@@ -143,6 +145,8 @@ class _AddListingPageState extends State<AddListingPage> {
     _vehicleModelCtrl.dispose();
     _vehicleYearCtrl.dispose();
     _vehicleMileageCtrl.dispose();
+    _vehicleEngineCtrl.dispose();
+    _vehiclePowerHpCtrl.dispose();
     _declaredValueCtrl.dispose();
     _weightCtrl.dispose();
     _heightCtrl.dispose();
@@ -861,19 +865,9 @@ class _AddListingPageState extends State<AddListingPage> {
           return false;
         }
         if (_isVehicleListing) {
-          final hasBrandOrModel =
-              _brandCtrl.text.trim().isNotEmpty ||
-              _vehicleModelCtrl.text.trim().isNotEmpty;
-          final hasYear = _parseDigitsNullable(
-            _vehicleYearCtrl.text.trim(),
-          ) != null;
-          final hasMileage = _parseDigitsNullable(
-            _vehicleMileageCtrl.text.trim(),
-          ) != null;
-          if (!hasBrandOrModel || !hasYear || !hasMileage) {
-            _setError(
-              L10n.tr(context, 'listing.add.error_vehicle_required'),
-            );
+          if (_brandCtrl.text.trim().isEmpty ||
+              _vehicleModelCtrl.text.trim().isEmpty) {
+            _setError(L10n.tr(context, 'listing.add.error_vehicle_required'));
             return false;
           }
         }
@@ -881,6 +875,7 @@ class _AddListingPageState extends State<AddListingPage> {
       case 3:
         try {
           InputSanitizer.parseAmount(_priceCtrl.text, min: 1);
+          if (_isVehicleListing) return true;
           final stock = _parseDigits(_stockCtrl.text.trim());
           if (stock <= 0) {
             _setError(L10n.tr(context, 'listing.add.error_invalid_stock'));
@@ -1294,21 +1289,21 @@ class _AddListingPageState extends State<AddListingPage> {
     _clearError();
     if (!_validateStep(_step)) return;
     setState(() {
-      _step = (_step + 1).clamp(0, 7);
+      _step = (_step + 1).clamp(0, _isVehicleListing ? 5 : 7);
     });
   }
 
   void _back() {
     if (_step == 0) return;
     setState(() {
-      _step = (_step - 1).clamp(0, 6);
+      _step = (_step - 1).clamp(0, _isVehicleListing ? 5 : 7);
     });
   }
 
   Future<void> _publish() async {
     if (_saving) return;
     _clearError();
-    if (!_validateStep(6)) {
+    if (!_validateStep(_isVehicleListing ? 4 : 6)) {
       if (_error != null) _showErrorSnack(_error!);
       return;
     }
@@ -1322,23 +1317,24 @@ class _AddListingPageState extends State<AddListingPage> {
         allowNewlines: true,
       );
       final price = InputSanitizer.parseAmount(_priceCtrl.text, min: 1);
-      final stock = _parseDigits(_stockCtrl.text.trim());
+      final stock = _isVehicleListing
+          ? 1
+          : _parseDigits(_stockCtrl.text.trim());
       if (stock <= 0) {
         throw FormatException(
           L10n.tr(context, 'listing.add.error_invalid_stock'),
         );
       }
-      final costPrice = _costCtrl.text.trim().isEmpty
+      final costPrice = _isVehicleListing || _costCtrl.text.trim().isEmpty
           ? null
           : InputSanitizer.parseAmount(_costCtrl.text, min: 0);
       final brand = InputSanitizer.sanitizeOptionalText(
         _brandCtrl.text,
         maxLength: 40,
       );
-      final size = InputSanitizer.sanitizeOptionalText(
-        _sizeCtrl.text,
-        maxLength: 40,
-      );
+      final size = _isVehicleListing
+          ? null
+          : InputSanitizer.sanitizeOptionalText(_sizeCtrl.text, maxLength: 40);
       final wilaya = InputSanitizer.sanitizeText(
         _wilayaNameOnly(context),
         maxLength: 60,
@@ -1397,15 +1393,19 @@ class _AddListingPageState extends State<AddListingPage> {
         throw FormatException(_moderationListingMessage(moderation));
       }
       final requiresReview = moderation.action == 'review';
-      final deliveryOptions = _effectiveDeliveryOptions();
-      final weight = _parseDigits(_weightCtrl.text.trim(), fallback: 1);
-      final height = _parseDigits(_heightCtrl.text.trim());
-      final width = _parseDigits(_widthCtrl.text.trim());
-      final length = _parseDigits(_lengthCtrl.text.trim());
-      final declaredValue = _declaredValueCtrl.text.trim().isEmpty
+      final isVehicle = _isVehicleListing;
+      final deliveryOptions = isVehicle
+          ? const <String>['pickup']
+          : _effectiveDeliveryOptions();
+      final weight = isVehicle
+          ? null
+          : _parseDigits(_weightCtrl.text.trim(), fallback: 1);
+      final height = isVehicle ? null : _parseDigits(_heightCtrl.text.trim());
+      final width = isVehicle ? null : _parseDigits(_widthCtrl.text.trim());
+      final length = isVehicle ? null : _parseDigits(_lengthCtrl.text.trim());
+      final declaredValue = isVehicle || _declaredValueCtrl.text.trim().isEmpty
           ? null
           : InputSanitizer.parseAmount(_declaredValueCtrl.text, min: 0);
-      final isVehicle = _isVehicleListing;
       final vehicleModel = isVehicle
           ? InputSanitizer.sanitizeOptionalText(
               _vehicleModelCtrl.text,
@@ -1421,6 +1421,15 @@ class _AddListingPageState extends State<AddListingPage> {
       final vehicleFuel = isVehicle ? _vehicleFuel : null;
       final vehicleTransmission = isVehicle ? _vehicleTransmission : null;
       final vehicleBodyType = isVehicle ? _vehicleBodyType : null;
+      final vehicleEngine = isVehicle
+          ? InputSanitizer.sanitizeOptionalText(
+              _vehicleEngineCtrl.text,
+              maxLength: 60,
+            )
+          : null;
+      final vehiclePowerHp = isVehicle
+          ? _parseDigitsNullable(_vehiclePowerHpCtrl.text.trim())
+          : null;
 
       try {
         await ProductService().createProduct(
@@ -1440,16 +1449,18 @@ class _AddListingPageState extends State<AddListingPage> {
           vehicleFuel: vehicleFuel,
           vehicleTransmission: vehicleTransmission,
           vehicleBodyType: vehicleBodyType,
+          vehicleEngine: vehicleEngine,
+          vehiclePowerHp: vehiclePowerHp,
           locationWilaya: wilaya,
           locationDaira: daira,
           deliveryOptions: deliveryOptions,
           isNegotiable: _isNegotiable,
           stockQuantity: stock,
           costPrice: costPrice,
-          shippingFree: _freeShipping,
-          exchangeAfterDelivery: _exchangeAfterDelivery,
-          insuranceActive: _insuranceActive,
-          allowStopdesk: _allowStopdesk,
+          shippingFree: isVehicle ? false : _freeShipping,
+          exchangeAfterDelivery: isVehicle ? false : _exchangeAfterDelivery,
+          insuranceActive: isVehicle ? false : _insuranceActive,
+          allowStopdesk: isVehicle ? false : _allowStopdesk,
           declaredValue: declaredValue,
           weightKg: weight,
           heightCm: height,
@@ -1658,6 +1669,7 @@ class _AddListingPageState extends State<AddListingPage> {
       case 3:
         try {
           InputSanitizer.parseAmount(_priceCtrl.text, min: 1);
+          if (_isVehicleListing) return true;
           final stock = _parseDigits(_stockCtrl.text.trim());
           if (stock <= 0) return false;
           if (_costCtrl.text.trim().isNotEmpty) {
@@ -1715,11 +1727,14 @@ class _AddListingPageState extends State<AddListingPage> {
 
   @override
   Widget build(BuildContext context) {
+    final lastStep = _isVehicleListing ? 5 : 7;
     return Scaffold(
       appBar: AppBar(title: Text(L10n.tr(context, 'listing.add.title'))),
       body: Stepper(
         currentStep: _step,
-        onStepContinue: _step == 6 ? null : (_canContinue() ? _next : null),
+        onStepContinue: _step == lastStep
+            ? null
+            : (_canContinue() ? _next : null),
         onStepCancel: _back,
         onStepTapped: (index) {
           if (index <= _step) {
@@ -1737,7 +1752,7 @@ class _AddListingPageState extends State<AddListingPage> {
                     child: Text(L10n.tr(context, 'listing.add.back')),
                   ),
                 const Spacer(),
-                if (_step < 7)
+                if (_step < lastStep)
                   FilledButton(
                     onPressed: _canContinue() ? _next : null,
                     child: Text(L10n.tr(context, 'listing.add.continue')),
@@ -2119,13 +2134,15 @@ class _AddListingPageState extends State<AddListingPage> {
                     labelText: L10n.tr(context, 'listing.add.brand_label'),
                   ),
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _sizeCtrl,
-                  decoration: InputDecoration(
-                    labelText: L10n.tr(context, 'listing.add.size_label'),
+                if (!_isVehicleListing) ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _sizeCtrl,
+                    decoration: InputDecoration(
+                      labelText: L10n.tr(context, 'listing.add.size_label'),
+                    ),
                   ),
-                ),
+                ],
                 if (_isVehicleListing) ...[
                   const SizedBox(height: 16),
                   Text(
@@ -2139,6 +2156,40 @@ class _AddListingPageState extends State<AddListingPage> {
                       labelText: L10n.tr(context, 'listing.add.model_label'),
                     ),
                   ),
+                  if (VehicleSpecs.supportsRoadSpecs(_categorySlug)) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _vehicleEngineCtrl,
+                            decoration: InputDecoration(
+                              labelText: L10n.tr(
+                                context,
+                                'listing.add.engine_label',
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _vehiclePowerHpCtrl,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            decoration: InputDecoration(
+                              labelText: L10n.tr(
+                                context,
+                                'listing.add.power_hp_label',
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Row(
                     children: [
@@ -2187,13 +2238,12 @@ class _AddListingPageState extends State<AddListingPage> {
                     children: VehicleSpecs.fuels
                         .map(
                           (value) => ChoiceChip(
-                            label: Text(
-                              VehicleSpecs.fuelLabel(context, value),
-                            ),
+                            label: Text(VehicleSpecs.fuelLabel(context, value)),
                             selected: _vehicleFuel == value,
                             onSelected: (_) => setState(
-                              () => _vehicleFuel =
-                                  _vehicleFuel == value ? null : value,
+                              () => _vehicleFuel = _vehicleFuel == value
+                                  ? null
+                                  : value,
                             ),
                           ),
                         )
@@ -2217,46 +2267,38 @@ class _AddListingPageState extends State<AddListingPage> {
                             selected: _vehicleTransmission == value,
                             onSelected: (_) => setState(
                               () => _vehicleTransmission =
-                                  _vehicleTransmission == value
-                                  ? null
-                                  : value,
+                                  _vehicleTransmission == value ? null : value,
                             ),
                           ),
                         )
                         .toList(),
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    L10n.tr(context, 'listing.add.body_type_label'),
-                    style: Theme.of(context).textTheme.labelMedium,
-                  ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: VehicleSpecs.bodyTypes
-                        .map(
-                          (value) => ChoiceChip(
-                            label: Text(
-                              VehicleSpecs.bodyTypeLabel(context, value),
-                            ),
-                            selected: _vehicleBodyType == value,
-                            onSelected: (_) => setState(
-                              () => _vehicleBodyType =
-                                  _vehicleBodyType == value ? null : value,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    L10n.tr(
-                      context,
-                      'listing.add.delivery_auto_arranged',
+                  if (VehicleSpecs.supportsBodyType(_categorySlug)) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      L10n.tr(context, 'listing.add.body_type_label'),
+                      style: Theme.of(context).textTheme.labelMedium,
                     ),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: VehicleSpecs.bodyTypes
+                          .map(
+                            (value) => ChoiceChip(
+                              label: Text(
+                                VehicleSpecs.bodyTypeLabel(context, value),
+                              ),
+                              selected: _vehicleBodyType == value,
+                              onSelected: (_) => setState(
+                                () => _vehicleBodyType =
+                                    _vehicleBodyType == value ? null : value,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
                 ],
               ],
             ),
@@ -2408,186 +2450,201 @@ class _AddListingPageState extends State<AddListingPage> {
                     ],
                   ),
           ),
-          Step(
-            title: Text(L10n.tr(context, 'listing.add.step_delivery')),
-            isActive: _step >= 5,
-            content: Column(
-              children: [
-                if (_isLargeVolumeListing())
-                  Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.secondaryContainer,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      L10n.tr(context, 'listing.add.delivery_pickup_required'),
-                    ),
-                  ),
-                if (!_sellerHasEnabledCouriers)
-                  Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.secondaryContainer,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      L10n.tr(context, 'checkout.no_courier_enabled'),
-                    ),
-                  ),
-                SwitchListTile(
-                  value: _usesCourierDelivery(),
-                  onChanged: _isForcedArrangedDelivery()
-                      ? null
-                      : (value) => setState(() => _deliveryEnabled = value),
-                  title: Text(L10n.tr(context, 'listing.add.delivery_toggle')),
-                  subtitle: Text(
-                    L10n.tr(context, 'listing.add.delivery_toggle_hint'),
-                  ),
-                ),
-                Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.only(top: 6),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Theme.of(context).dividerColor),
-                  ),
-                  child: Text(
-                    _usesCourierDelivery()
-                        ? L10n.tr(context, 'listing.add.delivery_auto_courier')
-                        : L10n.tr(
-                            context,
-                            'listing.add.delivery_auto_arranged',
-                          ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Step(
-            title: Text(L10n.tr(context, 'listing.add.step_shipping')),
-            isActive: _step >= 6,
-            content: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (_sellerHasEnabledCouriers) _buildParcelRulesCard(context),
-                CheckboxListTile(
-                  value: _freeShipping,
-                  onChanged: (v) => setState(() => _freeShipping = v ?? false),
-                  title: Text(L10n.tr(context, 'checkout.free_shipping')),
-                ),
-                if (_courierCaps.supportsExchange)
-                  CheckboxListTile(
-                    value: _exchangeAfterDelivery,
-                    onChanged: (v) =>
-                        setState(() => _exchangeAfterDelivery = v ?? false),
-                    title: Text(
-                      L10n.tr(context, 'checkout.exchange_after_delivery'),
-                    ),
-                  ),
-                if (_courierCaps.supportsStopdesk)
-                  CheckboxListTile(
-                    value: _allowStopdesk,
-                    onChanged: (v) =>
-                        setState(() => _allowStopdesk = v ?? true),
-                    title: Text(L10n.tr(context, 'listing.add.allow_stopdesk')),
-                  ),
-                if (_courierCaps.supportsInsurance) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    L10n.tr(context, 'checkout.insurance'),
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  SwitchListTile(
-                    value: _insuranceActive,
-                    onChanged: (v) => setState(() {
-                      _insuranceActive = v;
-                      if (v && !_declaredValueManuallyEdited) {
-                        _syncDeclaredValueFromPrice();
-                      }
-                    }),
-                    title: Text(L10n.tr(context, 'checkout.insurance_active')),
-                  ),
-                  TextField(
-                    controller: _declaredValueCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: L10n.tr(context, 'checkout.declared_value'),
-                      prefixText: 'DA ',
-                      helperText: L10n.tr(
-                        context,
-                        'listing.add.declared_value_helper',
-                        fallback:
-                            'Par défaut = prix de vente. Vous pouvez le modifier si nécessaire.',
+          if (!_isVehicleListing)
+            Step(
+              title: Text(L10n.tr(context, 'listing.add.step_delivery')),
+              isActive: _step >= 5,
+              content: Column(
+                children: [
+                  if (_isLargeVolumeListing())
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.secondaryContainer,
+                        borderRadius: BorderRadius.circular(10),
                       ),
+                      child: Text(
+                        L10n.tr(
+                          context,
+                          'listing.add.delivery_pickup_required',
+                        ),
+                      ),
+                    ),
+                  if (!_sellerHasEnabledCouriers)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.secondaryContainer,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        L10n.tr(context, 'checkout.no_courier_enabled'),
+                      ),
+                    ),
+                  SwitchListTile(
+                    value: _usesCourierDelivery(),
+                    onChanged: _isForcedArrangedDelivery()
+                        ? null
+                        : (value) => setState(() => _deliveryEnabled = value),
+                    title: Text(
+                      L10n.tr(context, 'listing.add.delivery_toggle'),
+                    ),
+                    subtitle: Text(
+                      L10n.tr(context, 'listing.add.delivery_toggle_hint'),
+                    ),
+                  ),
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(top: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Theme.of(context).dividerColor),
+                    ),
+                    child: Text(
+                      _usesCourierDelivery()
+                          ? L10n.tr(
+                              context,
+                              'listing.add.delivery_auto_courier',
+                            )
+                          : L10n.tr(
+                              context,
+                              'listing.add.delivery_auto_arranged',
+                            ),
                     ),
                   ),
                 ],
-                const SizedBox(height: 12),
-                Text(
-                  L10n.tr(context, 'checkout.dimensions_weight'),
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                _buildNumericDropdown(
-                  controller: _weightCtrl,
-                  label: L10n.tr(context, 'checkout.weight_kg'),
-                  helperText: L10n.tr(
-                    context,
-                    'checkout.weight_hint',
-                    params: {
-                      'min': _parcelRules.minWeightKg.toString(),
-                      'max': _parcelRules.maxWeightKg.toString(),
-                    },
-                  ),
-                  options: _buildWeightOptions(),
-                ),
-                const SizedBox(height: 8),
-                _buildNumericDropdown(
-                  controller: _heightCtrl,
-                  label: L10n.tr(context, 'checkout.height_cm'),
-                  helperText: L10n.tr(
-                    context,
-                    'checkout.height_hint',
-                    params: {'max': _parcelRules.maxHeightCm.toString()},
-                  ),
-                  options: _buildDimensionOptions(_parcelRules.maxHeightCm),
-                ),
-                const SizedBox(height: 8),
-                _buildNumericDropdown(
-                  controller: _widthCtrl,
-                  label: L10n.tr(context, 'checkout.width_cm'),
-                  helperText: L10n.tr(
-                    context,
-                    'checkout.width_hint',
-                    params: {'max': _parcelRules.maxWidthCm.toString()},
-                  ),
-                  options: _buildDimensionOptions(_parcelRules.maxWidthCm),
-                ),
-                const SizedBox(height: 8),
-                _buildNumericDropdown(
-                  controller: _lengthCtrl,
-                  label: L10n.tr(context, 'checkout.length_cm'),
-                  helperText: L10n.tr(
-                    context,
-                    'checkout.length_hint',
-                    params: {'max': _parcelRules.maxLengthCm.toString()},
-                  ),
-                  options: _buildDimensionOptions(_parcelRules.maxLengthCm),
-                ),
-              ],
+              ),
             ),
-          ),
+          if (!_isVehicleListing)
+            Step(
+              title: Text(L10n.tr(context, 'listing.add.step_shipping')),
+              isActive: _step >= 6,
+              content: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_sellerHasEnabledCouriers) _buildParcelRulesCard(context),
+                  CheckboxListTile(
+                    value: _freeShipping,
+                    onChanged: (v) =>
+                        setState(() => _freeShipping = v ?? false),
+                    title: Text(L10n.tr(context, 'checkout.free_shipping')),
+                  ),
+                  if (_courierCaps.supportsExchange)
+                    CheckboxListTile(
+                      value: _exchangeAfterDelivery,
+                      onChanged: (v) =>
+                          setState(() => _exchangeAfterDelivery = v ?? false),
+                      title: Text(
+                        L10n.tr(context, 'checkout.exchange_after_delivery'),
+                      ),
+                    ),
+                  if (_courierCaps.supportsStopdesk)
+                    CheckboxListTile(
+                      value: _allowStopdesk,
+                      onChanged: (v) =>
+                          setState(() => _allowStopdesk = v ?? true),
+                      title: Text(
+                        L10n.tr(context, 'listing.add.allow_stopdesk'),
+                      ),
+                    ),
+                  if (_courierCaps.supportsInsurance) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      L10n.tr(context, 'checkout.insurance'),
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    SwitchListTile(
+                      value: _insuranceActive,
+                      onChanged: (v) => setState(() {
+                        _insuranceActive = v;
+                        if (v && !_declaredValueManuallyEdited) {
+                          _syncDeclaredValueFromPrice();
+                        }
+                      }),
+                      title: Text(
+                        L10n.tr(context, 'checkout.insurance_active'),
+                      ),
+                    ),
+                    TextField(
+                      controller: _declaredValueCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: L10n.tr(context, 'checkout.declared_value'),
+                        prefixText: 'DA ',
+                        helperText: L10n.tr(
+                          context,
+                          'listing.add.declared_value_helper',
+                          fallback:
+                              'Par défaut = prix de vente. Vous pouvez le modifier si nécessaire.',
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  Text(
+                    L10n.tr(context, 'checkout.dimensions_weight'),
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  _buildNumericDropdown(
+                    controller: _weightCtrl,
+                    label: L10n.tr(context, 'checkout.weight_kg'),
+                    helperText: L10n.tr(
+                      context,
+                      'checkout.weight_hint',
+                      params: {
+                        'min': _parcelRules.minWeightKg.toString(),
+                        'max': _parcelRules.maxWeightKg.toString(),
+                      },
+                    ),
+                    options: _buildWeightOptions(),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildNumericDropdown(
+                    controller: _heightCtrl,
+                    label: L10n.tr(context, 'checkout.height_cm'),
+                    helperText: L10n.tr(
+                      context,
+                      'checkout.height_hint',
+                      params: {'max': _parcelRules.maxHeightCm.toString()},
+                    ),
+                    options: _buildDimensionOptions(_parcelRules.maxHeightCm),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildNumericDropdown(
+                    controller: _widthCtrl,
+                    label: L10n.tr(context, 'checkout.width_cm'),
+                    helperText: L10n.tr(
+                      context,
+                      'checkout.width_hint',
+                      params: {'max': _parcelRules.maxWidthCm.toString()},
+                    ),
+                    options: _buildDimensionOptions(_parcelRules.maxWidthCm),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildNumericDropdown(
+                    controller: _lengthCtrl,
+                    label: L10n.tr(context, 'checkout.length_cm'),
+                    helperText: L10n.tr(
+                      context,
+                      'checkout.length_hint',
+                      params: {'max': _parcelRules.maxLengthCm.toString()},
+                    ),
+                    options: _buildDimensionOptions(_parcelRules.maxLengthCm),
+                  ),
+                ],
+              ),
+            ),
           Step(
             title: Text(L10n.tr(context, 'listing.add.step_preview')),
-            isActive: _step >= 7,
+            isActive: _step >= lastStep,
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2642,12 +2699,13 @@ class _AddListingPageState extends State<AddListingPage> {
                       ? '-'
                       : 'DA ${_priceCtrl.text.trim()}',
                 ),
-                _PreviewRow(
-                  label: L10n.tr(context, 'listing.add.preview_stock'),
-                  value: _stockCtrl.text.trim().isEmpty
-                      ? '-'
-                      : _stockCtrl.text.trim(),
-                ),
+                if (!_isVehicleListing)
+                  _PreviewRow(
+                    label: L10n.tr(context, 'listing.add.preview_stock'),
+                    value: _stockCtrl.text.trim().isEmpty
+                        ? '-'
+                        : _stockCtrl.text.trim(),
+                  ),
                 _PreviewRow(
                   label: L10n.tr(
                     context,
@@ -2658,12 +2716,13 @@ class _AddListingPageState extends State<AddListingPage> {
                       ? L10n.tr(context, 'common.yes')
                       : L10n.tr(context, 'common.no'),
                 ),
-                if (_costCtrl.text.trim().isNotEmpty)
+                if (!_isVehicleListing && _costCtrl.text.trim().isNotEmpty)
                   _PreviewRow(
                     label: L10n.tr(context, 'listing.add.preview_cost'),
                     value: 'DA ${_costCtrl.text.trim()}',
                   ),
-                if (_declaredValueCtrl.text.trim().isNotEmpty)
+                if (!_isVehicleListing &&
+                    _declaredValueCtrl.text.trim().isNotEmpty)
                   _PreviewRow(
                     label: L10n.tr(
                       context,
@@ -2677,31 +2736,44 @@ class _AddListingPageState extends State<AddListingPage> {
                       '${_wilayaLabel(context)} - ${_selectedCommuneLabel(context)}'
                           .trim(),
                 ),
-                _PreviewRow(
-                  label: L10n.tr(context, 'listing.add.preview_delivery'),
-                  value: _deliveryOptionsPreview(context).join(', '),
-                ),
-                _PreviewRow(
-                  label: L10n.tr(context, 'checkout.free_shipping'),
-                  value: _freeShipping
-                      ? L10n.tr(context, 'common.yes')
-                      : L10n.tr(context, 'common.no'),
-                ),
-                if (_courierCaps.supportsExchange)
+                if (_isVehicleListing)
+                  _PreviewRow(
+                    label: L10n.tr(
+                      context,
+                      'listing.add.vehicle_meeting_label',
+                    ),
+                    value: L10n.tr(
+                      context,
+                      'listing.add.vehicle_meeting_value',
+                    ),
+                  )
+                else ...[
+                  _PreviewRow(
+                    label: L10n.tr(context, 'listing.add.preview_delivery'),
+                    value: _deliveryOptionsPreview(context).join(', '),
+                  ),
+                  _PreviewRow(
+                    label: L10n.tr(context, 'checkout.free_shipping'),
+                    value: _freeShipping
+                        ? L10n.tr(context, 'common.yes')
+                        : L10n.tr(context, 'common.no'),
+                  ),
+                ],
+                if (!_isVehicleListing && _courierCaps.supportsExchange)
                   _PreviewRow(
                     label: L10n.tr(context, 'checkout.exchange_after_delivery'),
                     value: _exchangeAfterDelivery
                         ? L10n.tr(context, 'common.yes')
                         : L10n.tr(context, 'common.no'),
                   ),
-                if (_courierCaps.supportsStopdesk)
+                if (!_isVehicleListing && _courierCaps.supportsStopdesk)
                   _PreviewRow(
                     label: L10n.tr(context, 'listing.add.allow_stopdesk'),
                     value: _allowStopdesk
                         ? L10n.tr(context, 'common.yes')
                         : L10n.tr(context, 'common.no'),
                   ),
-                if (_courierCaps.supportsInsurance) ...[
+                if (!_isVehicleListing && _courierCaps.supportsInsurance) ...[
                   _PreviewRow(
                     label: L10n.tr(context, 'checkout.insurance_active'),
                     value: _insuranceActive
@@ -2715,30 +2787,47 @@ class _AddListingPageState extends State<AddListingPage> {
                         : _declaredValueCtrl.text.trim(),
                   ),
                 ],
-                _PreviewRow(
-                  label: L10n.tr(context, 'checkout.weight_kg'),
-                  value: _weightCtrl.text.trim().isEmpty
-                      ? '-'
-                      : _weightCtrl.text.trim(),
-                ),
-                _PreviewRow(
-                  label: L10n.tr(context, 'checkout.height_cm'),
-                  value: _heightCtrl.text.trim().isEmpty
-                      ? '-'
-                      : _heightCtrl.text.trim(),
-                ),
-                _PreviewRow(
-                  label: L10n.tr(context, 'checkout.width_cm'),
-                  value: _widthCtrl.text.trim().isEmpty
-                      ? '-'
-                      : _widthCtrl.text.trim(),
-                ),
-                _PreviewRow(
-                  label: L10n.tr(context, 'checkout.length_cm'),
-                  value: _lengthCtrl.text.trim().isEmpty
-                      ? '-'
-                      : _lengthCtrl.text.trim(),
-                ),
+                if (_isVehicleListing) ...[
+                  _PreviewRow(
+                    label: L10n.tr(context, 'listing.add.model_label'),
+                    value: _vehicleModelCtrl.text.trim(),
+                  ),
+                  if (_vehicleYearCtrl.text.trim().isNotEmpty)
+                    _PreviewRow(
+                      label: L10n.tr(context, 'listing.add.year_label'),
+                      value: _vehicleYearCtrl.text.trim(),
+                    ),
+                  if (_vehicleMileageCtrl.text.trim().isNotEmpty)
+                    _PreviewRow(
+                      label: L10n.tr(context, 'listing.add.mileage_label'),
+                      value: _vehicleMileageCtrl.text.trim(),
+                    ),
+                ] else ...[
+                  _PreviewRow(
+                    label: L10n.tr(context, 'checkout.weight_kg'),
+                    value: _weightCtrl.text.trim().isEmpty
+                        ? '-'
+                        : _weightCtrl.text.trim(),
+                  ),
+                  _PreviewRow(
+                    label: L10n.tr(context, 'checkout.height_cm'),
+                    value: _heightCtrl.text.trim().isEmpty
+                        ? '-'
+                        : _heightCtrl.text.trim(),
+                  ),
+                  _PreviewRow(
+                    label: L10n.tr(context, 'checkout.width_cm'),
+                    value: _widthCtrl.text.trim().isEmpty
+                        ? '-'
+                        : _widthCtrl.text.trim(),
+                  ),
+                  _PreviewRow(
+                    label: L10n.tr(context, 'checkout.length_cm'),
+                    value: _lengthCtrl.text.trim().isEmpty
+                        ? '-'
+                        : _lengthCtrl.text.trim(),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 if (_descCtrl.text.trim().isNotEmpty)
                   Text(

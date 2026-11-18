@@ -400,6 +400,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (_product == null) return const [];
     final tags = <String>[];
     final product = _product!;
+    final isVehicle = VehicleSpecs.isVehicleCategory(product.categorySlug);
     if (product.condition?.isNotEmpty ?? false) {
       tags.add(product.condition!);
     }
@@ -412,7 +413,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         ),
       );
     }
-    if (product.size?.isNotEmpty ?? false) {
+    if (!isVehicle && (product.size?.isNotEmpty ?? false)) {
       tags.add(
         L10n.tr(context, 'listing.size', params: {'value': product.size ?? ''}),
       );
@@ -458,6 +459,26 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (product.vehicleBodyType?.isNotEmpty ?? false) {
       tags.add(VehicleSpecs.bodyTypeLabel(context, product.vehicleBodyType!));
     }
+    if (product.vehicleEngine?.isNotEmpty ?? false) {
+      tags.add(
+        L10n.tr(
+          context,
+          'listing.vehicle_engine',
+          fallback: 'Moteur: {value}',
+          params: {'value': product.vehicleEngine!},
+        ),
+      );
+    }
+    if (product.vehiclePowerHp != null) {
+      tags.add(
+        L10n.tr(
+          context,
+          'listing.vehicle_power_hp',
+          fallback: '{value} ch',
+          params: {'value': product.vehiclePowerHp.toString()},
+        ),
+      );
+    }
     if ((product.categoryNameFr?.isNotEmpty ?? false) ||
         (product.category?.isNotEmpty ?? false)) {
       tags.add(
@@ -486,7 +507,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         ),
       );
     }
-    if (product.deliveryOptions.isNotEmpty) {
+    if (!isVehicle && product.deliveryOptions.isNotEmpty) {
       tags.add(
         L10n.tr(
           context,
@@ -505,6 +526,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   List<String> _buildPrimaryTags(BuildContext context) {
     if (_product == null) return const [];
     final product = _product!;
+    final isVehicle = VehicleSpecs.isVehicleCategory(product.categorySlug);
     final tags = <String>[];
     if (product.condition?.isNotEmpty ?? false) {
       tags.add(product.condition!);
@@ -518,7 +540,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         ),
       );
     }
-    if (product.deliveryOptions.isNotEmpty) {
+    if (!isVehicle && product.deliveryOptions.isNotEmpty) {
       tags.add(
         L10n.tr(
           context,
@@ -1683,6 +1705,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         ? Colors.red.shade600
         : Theme.of(context).colorScheme.primary;
     final isNegotiable = _product!.isNegotiable;
+    final isVehicle = VehicleSpecs.isVehicleCategory(_product!.categorySlug);
     final primaryTags = _buildPrimaryTags(context);
     final allTags = _buildDetailTags(context);
     final sellerIsPublic = isTruthyFlag(_sellerProfile?['is_public']);
@@ -2006,32 +2029,34 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 onPressed: () => _showAllTagsSheet(context, allTags),
               ),
             ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              Chip(
-                label: Text(
-                  L10n.tr(
-                    context,
-                    'listing.detail.stock',
-                    params: {'value': _product!.stockQuantity.toString()},
-                  ),
-                ),
-              ),
-              if (_product!.soldCount > 0)
+          if (!isVehicle) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
                 Chip(
                   label: Text(
                     L10n.tr(
                       context,
-                      'listing.detail.sold',
-                      params: {'value': _product!.soldCount.toString()},
+                      'listing.detail.stock',
+                      params: {'value': _product!.stockQuantity.toString()},
                     ),
                   ),
                 ),
-            ],
-          ),
+                if (_product!.soldCount > 0)
+                  Chip(
+                    label: Text(
+                      L10n.tr(
+                        context,
+                        'listing.detail.sold',
+                        params: {'value': _product!.soldCount.toString()},
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: 12),
           _SellerRowFixed(
             ownerId: _product!.ownerId,
@@ -2082,15 +2107,16 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             children: [
               if (primaryTags.isNotEmpty)
                 for (final tag in primaryTags) Chip(label: Text(tag)),
-              Chip(
-                label: Text(
-                  L10n.tr(
-                    context,
-                    'listing.detail.stock',
-                    params: {'value': _product!.stockQuantity.toString()},
+              if (!isVehicle)
+                Chip(
+                  label: Text(
+                    L10n.tr(
+                      context,
+                      'listing.detail.stock',
+                      params: {'value': _product!.stockQuantity.toString()},
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -2231,7 +2257,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          Chip(
+                          if (!isVehicle) Chip(
                             label: Text(
                               L10n.tr(
                                 context,
@@ -2243,7 +2269,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                             ),
                           ),
                           if (_product!.soldCount > 0)
-                            Chip(
+                            if (!isVehicle) Chip(
                               label: Text(
                                 L10n.tr(
                                   context,

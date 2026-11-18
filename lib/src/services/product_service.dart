@@ -16,7 +16,7 @@ class ProductService {
       'id,title,price,owner_id,image_url,image_urls,category_id,'
       'categories(name_fr, name_ar, slug),condition,brand,size,color,'
       'vehicle_model,vehicle_year,vehicle_mileage_km,vehicle_fuel,'
-      'vehicle_transmission,vehicle_body_type,'
+      'vehicle_transmission,vehicle_body_type,vehicle_engine,vehicle_power_hp,'
       'location_wilaya,location_daira,delivery_options,is_negotiable,'
       'shipping_free,stock_quantity,sold_count,is_archived,created_at';
 
@@ -69,6 +69,7 @@ class ProductService {
   Future<List<Product>> fetchProducts({
     String? search,
     String? categoryId,
+    List<String>? categoryIds,
     String? condition,
     double? minPrice,
     double? maxPrice,
@@ -81,6 +82,8 @@ class ProductService {
     int? vehicleMileageMax,
     String? vehicleFuel,
     String? vehicleTransmission,
+    String? vehicleModel,
+    String? vehicleBodyType,
     String sort = 'newest',
     int limit = 30,
     int offset = 0,
@@ -92,6 +95,12 @@ class ProductService {
       categoryId,
       maxLength: 20,
     );
+    final safeCategoryIds = (categoryIds ?? const <String>[])
+        .map((id) => InputSanitizer.sanitizeOptionalText(id, maxLength: 20))
+        .whereType<String>()
+        .where((id) => id.isNotEmpty && id != 'any')
+        .toSet()
+        .toList();
     final safeCondition = InputSanitizer.sanitizeOptionalText(
       condition,
       maxLength: 20,
@@ -111,9 +120,18 @@ class ProductService {
       vehicleTransmission,
       maxLength: 20,
     );
+    final safeVehicleModel = InputSanitizer.sanitizeOptionalText(
+      vehicleModel,
+      maxLength: 60,
+    );
+    final safeVehicleBodyType = InputSanitizer.sanitizeOptionalText(
+      vehicleBodyType,
+      maxLength: 20,
+    );
     final key = [
       'q=$q',
       'cat=${safeCategoryId ?? ''}',
+      'cats=${safeCategoryIds.join(',')}',
       'cond=${safeCondition ?? ''}',
       'min=${minPrice ?? ''}',
       'max=${maxPrice ?? ''}',
@@ -126,6 +144,8 @@ class ProductService {
       'mileageMax=${vehicleMileageMax ?? ''}',
       'fuel=${safeVehicleFuel ?? ''}',
       'transmission=${safeVehicleTransmission ?? ''}',
+      'model=${safeVehicleModel ?? ''}',
+      'body=${safeVehicleBodyType ?? ''}',
       'sort=$sort',
       'limit=$limit',
       'offset=$offset',
@@ -154,10 +174,17 @@ class ProductService {
       }
       filtered = filtered.or(orParts.join(','));
     }
-    final cat = (safeCategoryId ?? '').trim();
-    if (cat.isNotEmpty && cat != 'any') {
-      final parsed = int.tryParse(cat);
-      filtered = filtered.eq('category_id', parsed ?? cat);
+    if (safeCategoryIds.isNotEmpty) {
+      final ids = safeCategoryIds
+          .map<dynamic>((id) => int.tryParse(id) ?? id)
+          .toList();
+      filtered = filtered.inFilter('category_id', ids);
+    } else {
+      final cat = (safeCategoryId ?? '').trim();
+      if (cat.isNotEmpty && cat != 'any') {
+        final parsed = int.tryParse(cat);
+        filtered = filtered.eq('category_id', parsed ?? cat);
+      }
     }
     final cond = (safeCondition ?? '').trim().toLowerCase();
     if (cond.isNotEmpty && cond != 'any') {
@@ -200,6 +227,15 @@ class ProductService {
         safeVehicleTransmission.trim(),
       );
     }
+    if (safeVehicleModel != null && safeVehicleModel.trim().isNotEmpty) {
+      filtered = filtered.ilike(
+        'vehicle_model',
+        '%${safeVehicleModel.trim()}%',
+      );
+    }
+    if (safeVehicleBodyType != null && safeVehicleBodyType.trim().isNotEmpty) {
+      filtered = filtered.eq('vehicle_body_type', safeVehicleBodyType.trim());
+    }
 
     final ordered = switch (sort) {
       'price_low' => filtered.order('price', ascending: true),
@@ -221,6 +257,7 @@ class ProductService {
         return fetchProducts(
           search: search,
           categoryId: categoryId,
+          categoryIds: categoryIds,
           condition: condition,
           minPrice: minPrice,
           maxPrice: maxPrice,
@@ -233,6 +270,8 @@ class ProductService {
           vehicleMileageMax: vehicleMileageMax,
           vehicleFuel: vehicleFuel,
           vehicleTransmission: vehicleTransmission,
+          vehicleModel: vehicleModel,
+          vehicleBodyType: vehicleBodyType,
           sort: sort,
           limit: limit,
           offset: offset,
@@ -267,6 +306,8 @@ class ProductService {
     String? vehicleFuel,
     String? vehicleTransmission,
     String? vehicleBodyType,
+    String? vehicleEngine,
+    int? vehiclePowerHp,
     String? locationWilaya,
     String? locationDaira,
     List<String> deliveryOptions = const [],
@@ -341,6 +382,14 @@ class ProductService {
       vehicleBodyType,
       maxLength: 20,
     );
+    final safeVehicleEngine = InputSanitizer.sanitizeOptionalText(
+      vehicleEngine,
+      maxLength: 60,
+    );
+    final safeVehiclePowerHp =
+        vehiclePowerHp != null && vehiclePowerHp > 0 && vehiclePowerHp <= 3000
+        ? vehiclePowerHp
+        : null;
     final safeVehicleYear =
         (vehicleYear != null && vehicleYear > 1900 && vehicleYear < 2100)
         ? vehicleYear
@@ -458,6 +507,8 @@ class ProductService {
       'vehicle_fuel': safeVehicleFuel,
       'vehicle_transmission': safeVehicleTransmission,
       'vehicle_body_type': safeVehicleBodyType,
+      'vehicle_engine': safeVehicleEngine,
+      'vehicle_power_hp': safeVehiclePowerHp,
       'location_wilaya': safeWilaya,
       'location_daira': safeDaira,
       'delivery_options': safeDelivery,

@@ -25,6 +25,8 @@ class Product {
     this.vehicleFuel,
     this.vehicleTransmission,
     this.vehicleBodyType,
+    this.vehicleEngine,
+    this.vehiclePowerHp,
     this.searchTags = const [],
     this.searchKeywords,
     this.locationWilaya,
@@ -70,6 +72,8 @@ class Product {
   final String? vehicleFuel;
   final String? vehicleTransmission;
   final String? vehicleBodyType;
+  final String? vehicleEngine;
+  final int? vehiclePowerHp;
   final List<String> searchTags;
   final String? searchKeywords;
   final String? locationWilaya;
@@ -166,6 +170,8 @@ class Product {
     vehicleFuel: json['vehicle_fuel'] as String?,
     vehicleTransmission: json['vehicle_transmission'] as String?,
     vehicleBodyType: json['vehicle_body_type'] as String?,
+    vehicleEngine: json['vehicle_engine'] as String?,
+    vehiclePowerHp: (json['vehicle_power_hp'] as num?)?.toInt(),
     searchTags: ((json['search_tags'] as List?) ?? const [])
         .map((e) => e?.toString() ?? '')
         .where((e) => e.isNotEmpty)

@@ -32,6 +32,12 @@ flutter test test\app_error_service_test.dart --no-test-assets
 ## Manual Mobile Checks
 
 - Android USB: install/run intended flavor and verify login, browse, chat, order, push.
+- Vehicle release: select `Vehicules`, confirm the subtype picker is shown,
+  check generic parcel/delivery and size filters are absent, then apply and
+  reset price plus vehicle filters in both French and Arabic.
+- Admin moderation: confirm the exact global profile count is shown, first
+  page loads promptly, search/status resets the list, and another page loads
+  only after scrolling. Never load every profile before first render.
 - Support social: on Browse only, open and close the icon menu, verify its
   opposite placement from the sell button in FR and Arabic RTL, then open one
   official external link. It must not appear on Chat, Profile, listing form,

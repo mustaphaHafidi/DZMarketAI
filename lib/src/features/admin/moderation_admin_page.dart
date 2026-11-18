@@ -1,5 +1,7 @@
-import 'package:dzmarket/src/features/admin/paged_fetch.dart';
+import 'dart:async';
+
 import 'package:dzmarket/src/services/i18n.dart';
+import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/utils/admin_owner_display.dart';
 import 'package:flutter/material.dart';
@@ -16,10 +18,7 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
     with SingleTickerProviderStateMixin {
   static const _reportsThreshold = 10;
   static const _reportsWindowDays = 7;
-  static const _usersPageSize = 500;
-  // Safety cap on full-list pagination: 20 pages x 500 = 10 000 profiles.
-  // Well above current live volume; prevents unbounded admin page loads.
-  static const _usersMaxPages = 20;
+  static const _usersPageSize = 50;
 
   late final TabController _tabs;
   final _dateFmt = DateFormat('dd/MM HH:mm');
@@ -32,6 +31,11 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
   List<_ReportQueueItem> _reportQueue = const [];
   List<_DeletionRequestItem> _deletionRequests = const [];
   int? _totalUsersCount;
+  bool _usersLoadingMore = false;
+  bool _usersHasMore = true;
+  int _usersPage = 0;
+  int _usersRequestId = 0;
+  Timer? _userSearchDebounce;
 
   String _ownerDisplay(String ownerId) {
     return adminOwnerDisplayName(ownerId: ownerId, users: _users);
@@ -51,6 +55,11 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
       setState(() {
         _search = _searchCtrl.text.trim().toLowerCase();
       });
+      _userSearchDebounce?.cancel();
+      _userSearchDebounce = Timer(
+        const Duration(milliseconds: 350),
+        _reloadUsers,
+      );
     });
     _load();
   }
@@ -58,6 +67,7 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
   @override
   void dispose() {
     _tabs.dispose();
+    _userSearchDebounce?.cancel();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -73,7 +83,7 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
           .subtract(const Duration(days: _reportsWindowDays))
           .toIso8601String();
 
-      final usersFuture = _fetchAllUsers();
+      final usersFuture = _fetchUsersPage(page: 0);
 
       final usersCountFuture = supabase.from('profiles').count();
 
@@ -125,6 +135,9 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
 
       setState(() {
         _users = (responses[0] as List).cast<Map<String, dynamic>>();
+        _usersPage = 1;
+        _usersHasMore = _users.length == _usersPageSize;
+        _usersLoadingMore = false;
         _listings = (responses[1] as List).cast<Map<String, dynamic>>();
         _reportQueue = _buildReportQueue(
           (responses[2] as List).cast<Map<String, dynamic>>(),
@@ -136,29 +149,92 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = e.toString());
+      setState(
+        () => _error = L10n.tr(
+          context,
+          'common.offline_action',
+          fallback: 'Impossible de charger la moderation pour le moment.',
+        ),
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  // Pages through all profiles instead of a single .limit(400) query, so
-  // search/filters/actions see every user, not just the 400 most recent.
-  // Stops at the safety cap (see fetchAllPages) or as soon as a page comes
-  // back short.
-  Future<List<Map<String, dynamic>>> _fetchAllUsers() {
-    return fetchAllPages<Map<String, dynamic>>(
-      pageSize: _usersPageSize,
-      maxPages: _usersMaxPages,
-      fetchPage: (start, end) async {
-        final rows = await supabase
-            .from('profiles')
-            .select('id,email,phone,full_name,role,status,created_at')
-            .order('created_at', ascending: false)
-            .range(start, end);
-        return (rows as List).cast<Map<String, dynamic>>();
-      },
-    );
+  Future<List<Map<String, dynamic>>> _fetchUsersPage({
+    required int page,
+  }) async {
+    var query = supabase
+        .from('profiles')
+        .select('id,email,phone,full_name,role,status,created_at');
+    if (_userStatusFilter != 'all') {
+      query = query.eq('status', _userStatusFilter);
+    }
+    final search = InputSanitizer.sanitizeSearchQuery(
+      _searchCtrl.text,
+    ).replaceAll(RegExp(r'[%(),]'), '').trim();
+    if (search.isNotEmpty) {
+      query = query.or(
+        'email.ilike.%$search%,phone.ilike.%$search%,full_name.ilike.%$search%',
+      );
+    }
+    final start = page * _usersPageSize;
+    final rows = await query
+        .order('created_at', ascending: false)
+        .range(start, start + _usersPageSize - 1);
+    return (rows as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> _reloadUsers() async {
+    final requestId = ++_usersRequestId;
+    setState(() {
+      _usersLoadingMore = true;
+      _usersHasMore = true;
+      _usersPage = 0;
+    });
+    try {
+      final rows = await _fetchUsersPage(page: 0);
+      if (!mounted || requestId != _usersRequestId) return;
+      setState(() {
+        _users = rows;
+        _usersPage = 1;
+        _usersHasMore = rows.length == _usersPageSize;
+        _usersLoadingMore = false;
+      });
+    } catch (_) {
+      if (!mounted || requestId != _usersRequestId) return;
+      setState(() => _usersLoadingMore = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            L10n.tr(
+              context,
+              'common.offline_action',
+              fallback: 'Impossible de charger les utilisateurs.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _loadMoreUsers() async {
+    if (_usersLoadingMore || !_usersHasMore) return;
+    final requestId = _usersRequestId;
+    setState(() => _usersLoadingMore = true);
+    try {
+      final rows = await _fetchUsersPage(page: _usersPage);
+      if (!mounted || requestId != _usersRequestId) return;
+      setState(() {
+        _users = [..._users, ...rows];
+        _usersPage += 1;
+        _usersHasMore = rows.length == _usersPageSize;
+        _usersLoadingMore = false;
+      });
+    } catch (_) {
+      if (!mounted || requestId != _usersRequestId) return;
+      setState(() => _usersLoadingMore = false);
+    }
   }
 
   List<_ReportQueueItem> _buildReportQueue(List<Map<String, dynamic>> rows) {
@@ -225,19 +301,7 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
     return value.toLowerCase().contains(_search);
   }
 
-  List<Map<String, dynamic>> get _filteredUsers {
-    return _users.where((u) {
-      final status = (u['status']?.toString() ?? 'active').toLowerCase();
-      if (_userStatusFilter != 'all' && status != _userStatusFilter) {
-        return false;
-      }
-      final email = u['email']?.toString() ?? '';
-      final phone = u['phone']?.toString() ?? '';
-      final fullName = u['full_name']?.toString() ?? '';
-      final id = u['id']?.toString() ?? '';
-      return _matchesSearch('$email $phone $fullName $id');
-    }).toList();
-  }
+  List<Map<String, dynamic>> get _filteredUsers => _users;
 
   List<Map<String, dynamic>> get _filteredListings {
     return _listings.where((p) {
@@ -389,10 +453,9 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
     required String action,
     Map<String, dynamic> payload = const {},
   }) async {
-    final response = await supabase.functions.invoke(
-      'admin-moderation',
-      body: {'action': action, ...payload},
-    );
+    final response = await supabase.functions
+        .invoke('admin-moderation', body: {'action': action, ...payload})
+        .timeout(const Duration(seconds: 15));
     final data = response.data;
     final status = response.status;
     if (status < 200 || status >= 300) {
@@ -538,76 +601,98 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
 
   Widget _buildUsersTab() {
     final users = _filteredUsers;
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
-      children: [
-        _buildStatusFilter(
-          selected: _userStatusFilter,
-          onSelected: (value) => setState(() => _userStatusFilter = value),
-          values: const ['all', 'active', 'suspended', 'banned'],
-        ),
-        const SizedBox(height: 12),
-        if (users.isEmpty)
-          Text(L10n.tr(context, 'admin.moderation.empty_users'))
-        else
-          ...users.map((u) {
-            final id = u['id']?.toString() ?? '';
-            final status = (u['status']?.toString() ?? 'active').toLowerCase();
-            final email = u['email']?.toString() ?? '-';
-            final phone = u['phone']?.toString().trim() ?? '';
-            final role = u['role']?.toString() ?? 'buyer';
-            final fullName = u['full_name']?.toString();
-            final createdAt = _parseDate(u['created_at']);
-            return Card(
-              child: ListTile(
-                title: Text(email),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (fullName != null && fullName.trim().isNotEmpty)
-                      Text(fullName),
-                    if (phone.isNotEmpty)
-                      Text('${L10n.tr(context, 'profile.phone')}: $phone'),
-                    Text('$role - ${_statusLabel(status)}'),
-                    if (createdAt != null)
-                      Text(
-                        L10n.tr(
-                          context,
-                          'admin.moderation.created_at',
-                          params: {'date': _dateFmt.format(createdAt)},
-                        ),
-                      ),
-                  ],
-                ),
-                trailing: PopupMenuButton<String>(
-                  tooltip: L10n.tr(context, 'admin.moderation.action_user'),
-                  onSelected: (value) => _setUserStatus(id, value),
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      value: 'active',
-                      child: Text(
-                        L10n.tr(context, 'admin.moderation.status_active'),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'suspended',
-                      child: Text(
-                        L10n.tr(context, 'admin.moderation.status_suspended'),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'banned',
-                      child: Text(
-                        L10n.tr(context, 'admin.moderation.status_banned'),
-                      ),
-                    ),
-                  ],
+    final footerCount = _usersLoadingMore || _usersHasMore ? 1 : 0;
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification.metrics.extentAfter < 240) {
+          unawaited(_loadMoreUsers());
+        }
+        return false;
+      },
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        itemCount: 2 + (users.isEmpty ? 0 : users.length) + footerCount,
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return _buildStatusFilter(
+              selected: _userStatusFilter,
+              onSelected: (value) {
+                if (value == _userStatusFilter) return;
+                setState(() => _userStatusFilter = value);
+                unawaited(_reloadUsers());
+              },
+              values: const ['all', 'active', 'suspended', 'banned'],
+            );
+          }
+          if (index == 1) {
+            return Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: users.isEmpty && !_usersLoadingMore
+                  ? Text(L10n.tr(context, 'admin.moderation.empty_users'))
+                  : const SizedBox.shrink(),
+            );
+          }
+          final userIndex = index - 2;
+          if (userIndex < users.length) return _buildUserCard(users[userIndex]);
+          return const Padding(
+            padding: EdgeInsets.all(16),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildUserCard(Map<String, dynamic> user) {
+    final id = user['id']?.toString() ?? '';
+    final status = (user['status']?.toString() ?? 'active').toLowerCase();
+    final email = user['email']?.toString() ?? '-';
+    final phone = user['phone']?.toString().trim() ?? '';
+    final role = user['role']?.toString() ?? 'buyer';
+    final fullName = user['full_name']?.toString();
+    final createdAt = _parseDate(user['created_at']);
+    return Card(
+      child: ListTile(
+        title: Text(email),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (fullName != null && fullName.trim().isNotEmpty) Text(fullName),
+            if (phone.isNotEmpty)
+              Text('${L10n.tr(context, 'profile.phone')}: $phone'),
+            Text('$role - ${_statusLabel(status)}'),
+            if (createdAt != null)
+              Text(
+                L10n.tr(
+                  context,
+                  'admin.moderation.created_at',
+                  params: {'date': _dateFmt.format(createdAt)},
                 ),
               ),
-            );
-          }),
-      ],
+          ],
+        ),
+        trailing: PopupMenuButton<String>(
+          tooltip: L10n.tr(context, 'admin.moderation.action_user'),
+          onSelected: (value) => _setUserStatus(id, value),
+          itemBuilder: (context) => [
+            PopupMenuItem(
+              value: 'active',
+              child: Text(L10n.tr(context, 'admin.moderation.status_active')),
+            ),
+            PopupMenuItem(
+              value: 'suspended',
+              child: Text(
+                L10n.tr(context, 'admin.moderation.status_suspended'),
+              ),
+            ),
+            PopupMenuItem(
+              value: 'banned',
+              child: Text(L10n.tr(context, 'admin.moderation.status_banned')),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

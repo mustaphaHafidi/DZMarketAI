@@ -10,3 +10,7 @@ Use this before staging any DZMarket web artifact.
    sign-in page console has no font or favicon 404 errors.
 
 Never deploy a partial selection of files from `build\web`.
+
+For a feature with a database migration, a successful web build is not enough:
+apply and verify the migration first, then execute the feature's acceptance
+gate (for vehicles, `vehicle-release.md`) before the atomic release swap.
