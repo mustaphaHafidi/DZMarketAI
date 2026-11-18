@@ -219,6 +219,31 @@ sources une a une, avec tests RLS, pagination et retenue limitee des journaux.
   demarrage traductions, et le code client de la categorie "Vehicules"
   (picker, champs specifiques, filtres).
 
+## Bug trouve en testant la migration Vehicules en prod -- 18 novembre
+
+- **Constat** : premiere annonce reelle creee en prod (Fiat Doblo, compte
+  du fondateur, categorie Voitures) pour valider la migration de bout en
+  bout. La categorie se selectionne bien (Vehicules > Voitures), et le
+  forcage de la livraison en "a convenir" fonctionne (confirme visible a
+  l'etape 6, switch transporteur desactive). **Mais l'etape 3 "Details" ne
+  montre pas les champs specifiques vehicule** (Modele, Annee,
+  Kilometrage, Carburant, Boite, Carrosserie) attendus par
+  `add_listing_page.dart` (`if (_isVehicleListing) ...`, lignes ~2127+).
+  Reproduit 2 fois de suite (formulaire recharge a neuf, cache
+  `flutter.cache.categories.v5` vide a chaque fois) : toujours absent.
+  `VehicleSpecs.isVehicleCategory()` est un simple test de prefixe
+  (`startsWith('vehicles-')`), independant du cache -- donc pas une cause
+  de cache. A investiguer : `_isVehicleListing` ne se met peut-etre pas a
+  jour au bon moment apres la selection de categorie (setState manquant,
+  ou la section vehicule lue depuis une valeur capturee avant la
+  selection). Pas bloquant pour publier (les champs sont optionnels), mais
+  la fonctionnalite vehicule n'offre pas encore ses champs dedies en
+  prod.
+- Annonce publiee malgre tout avec succes (titre/description/prix/
+  localisation seuls) -- preuve que l'ensemble categorie+migration+
+  publication fonctionne de bout en bout, seul ce sous-ensemble de champs
+  reste a corriger.
+
 ## Migration categorie "Vehicules" appliquee en prod -- 18 novembre
 
 - Migration `20261118120000_add_vehicle_category_and_fields.sql` appliquee
