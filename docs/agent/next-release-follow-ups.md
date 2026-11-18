@@ -217,12 +217,27 @@ sources une a une, avec tests RLS, pagination et retenue limitee des journaux.
 - **Contenu livre** : correctif direction de texte FR/AR sur la fiche
   produit, horodatage chat, message d'erreur admin Moderation, timeout
   demarrage traductions, et le code client de la categorie "Vehicules"
-  (picker, champs specifiques, filtres) -- **ce dernier reste invisible/
-  inerte en prod tant que la migration SQL ci-dessous n'est pas appliquee**
-  (aucune ligne `categories` avec slug `vehicles*` n'existe encore en base
-  : le picker ne peut rien afficher qui n'existe pas, ce n'est pas un bug).
+  (picker, champs specifiques, filtres).
 
-## Nouvelle categorie "Vehicules" (code livre 2026-11-18, pas encore deploye)
+## Migration categorie "Vehicules" appliquee en prod -- 18 novembre
+
+- Migration `20261118120000_add_vehicle_category_and_fields.sql` appliquee
+  le 18/11 directement sur `supabase-db` (conteneur sur `dzm-app-01`, pas
+  un serveur `dzm-db-01` separe comme documente ailleurs -- verifie via
+  `docker ps` : la stack Supabase self-hosted tourne entierement sur
+  `dzm-app-01`) via `docker exec -i supabase-db psql ... --single-transaction
+  -v ON_ERROR_STOP=1`, apres sauvegarde de `public.categories` (donnees) et
+  du schema de `public.products` dans `/root/backups/` sur le serveur.
+  Verifie : 7 lignes `categories` (`vehicles` + 6 enfants, `parent_id`
+  correct) et 6 colonnes `vehicle_*` sur `products` (`vehicle_model`,
+  `vehicle_year`, `vehicle_mileage_km`, `vehicle_fuel`,
+  `vehicle_transmission`, `vehicle_body_type`). La categorie "Vehicules"
+  est donc maintenant active en prod -- plus "inerte" comme note plus haut.
+- Accord explicite du fondateur pour cette migration (choix via question
+  structuree, 2026-11-18) avant toute execution, conformement a la regle du
+  projet sur les migrations de production.
+
+## Nouvelle categorie "Vehicules" (code livre 2026-11-18, migration appliquee le meme jour -- voir section ci-dessus)
 
 - **Perimetre** : categorie racine `vehicles` + 6 sous-categories
   (Voitures, Motos & Scooters, Utilitaires, Camions, Engins, Bateaux --
