@@ -20,6 +20,9 @@
   <meta name="twitter:description" content="DZMarket permet de voir les annonces, publier un produit, discuter et suivre la livraison en Algérie.">
   <meta name="twitter:image" content="https://www.dzmarket.pro/icons/Icon-512.png">
   <link id="canonical-link" rel="canonical" href="https://www.dzmarket.pro/">
+  <link rel="alternate" hreflang="fr" href="https://www.dzmarket.pro/">
+  <link rel="alternate" hreflang="ar" href="https://www.dzmarket.pro/?lang=ar">
+  <link rel="alternate" hreflang="x-default" href="https://www.dzmarket.pro/">
   <script id="org-jsonld" type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -28,7 +31,7 @@
           "@type": ["Organization", "OnlineStore"],
           "@id": "https://www.dzmarket.pro/#organization",
           "name": "DZMarket",
-          "alternateName": "DZMarket Algérie",
+          "alternateName": ["DZMarket Algérie", "DZ Market", "DZ Market Algérie"],
           "url": "https://www.dzmarket.pro/",
           "logo": {
             "@type": "ImageObject",
@@ -191,7 +194,9 @@
       background: rgba(255, 255, 255, 0.7);
     }
 
-    .dz-lang-switch button {
+    .dz-lang-switch a {
+      display: inline-flex;
+      align-items: center;
       min-height: 34px;
       padding: 0 12px;
       border: 0;
@@ -202,10 +207,11 @@
       font: inherit;
       font-size: 14px;
       font-weight: 850;
+      text-decoration: none;
     }
 
-    body[data-landing-lang="fr"] .dz-lang-switch button[data-lang-button="fr"],
-    body[data-landing-lang="ar"] .dz-lang-switch button[data-lang-button="ar"] {
+    body[data-landing-lang="fr"] .dz-lang-switch a[data-lang-button="fr"],
+    body[data-landing-lang="ar"] .dz-lang-switch a[data-lang-button="ar"] {
       color: #ffffff;
       background: var(--dz-green);
       box-shadow: 0 8px 18px rgba(45, 155, 91, 0.2);
@@ -531,8 +537,9 @@
         width: 100%;
       }
 
-      .dz-lang-switch button {
+      .dz-lang-switch a {
         flex: 1;
+        justify-content: center;
       }
 
       .dz-btn {
@@ -591,7 +598,22 @@
         tag.setAttribute('content', value);
       }
 
+      var landingLangParams = new URLSearchParams(window.location.search || '');
+      var landingLangRequested = landingLangParams.get('lang');
+      var landingLangSaved = null;
+      try {
+        landingLangSaved = window.localStorage.getItem('dzmarket_landing_lang');
+      } catch (_) {}
+      var landingLangBrowser = (navigator.language || '').toLowerCase().startsWith('ar') ? 'ar' : 'fr';
+      var landingLang = landingLangRequested === 'ar' || landingLangRequested === 'fr'
+        ? landingLangRequested
+        : (landingLangSaved || landingLangBrowser);
+      var isMarketingRootAr = isMarketingHost && path === '/' && landingLang === 'ar';
+
       function routeTitle() {
+        if (isMarketingRootAr) {
+          return 'DZMarket | الموقع الرسمي للسوق الجزائري';
+        }
         if (isMarketingHost && path === '/') {
           return 'DZMarket | Site officiel de la marketplace algérienne';
         }
@@ -602,6 +624,9 @@
       }
 
       function routeDescription() {
+        if (isMarketingRootAr) {
+          return 'ديزي ماركت DZMarket، سوق جزائري للبيع والشراء والدردشة وتتبع التوصيل. تصفح الإعلانات، أنشر إعلانك وافتح تطبيق الويب.';
+        }
         if (isMarketingHost && path === '/') {
           return 'DZMarket, marketplace algérienne pour acheter, vendre, discuter et suivre la livraison. Voir les annonces, publier une annonce et ouvrir l\'application web.';
         }
@@ -727,11 +752,11 @@
         <span>DZMarket</span>
       </a>
       <div class="dz-lang-switch" role="group" aria-label="Langue de la page">
-        <button type="button" data-lang-button="fr" onclick="window.dzSetLandingLang && window.dzSetLandingLang('fr')" aria-pressed="true">Français</button>
-        <button type="button" data-lang-button="ar" onclick="window.dzSetLandingLang && window.dzSetLandingLang('ar')" aria-pressed="false">
+        <a href="/" data-lang-button="fr" role="button" onclick="window.dzSetLandingLang && window.dzSetLandingLang('fr'); return false;" aria-pressed="true">Français</a>
+        <a href="/?lang=ar" data-lang-button="ar" role="button" onclick="window.dzSetLandingLang && window.dzSetLandingLang('ar'); return false;" aria-pressed="false">
           <span class="dz-lang-fr">Arabe</span>
           <span class="dz-lang-ar">العربية</span>
-        </button>
+        </a>
       </div>
       <nav class="dz-actions" aria-label="Navigation principale">
         <a class="dz-btn" href="https://app.dzmarket.pro/sign-up">

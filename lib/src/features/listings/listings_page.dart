@@ -18,6 +18,7 @@ import 'package:dzmarket/src/services/rate_limiter.dart';
 import 'package:dzmarket/src/services/saved_search_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
+import 'package:dzmarket/src/utils/vehicle_specs.dart';
 import 'package:dzmarket/src/widgets/refresh_controller.dart';
 import 'package:dzmarket/src/widgets/support_social_fab.dart';
 import 'package:flutter/foundation.dart';
@@ -48,6 +49,11 @@ class _ListingsPageState extends State<ListingsPage> {
   final _brand = TextEditingController();
   final _size = TextEditingController();
   final _color = TextEditingController();
+  final _vehicleYearMin = TextEditingController();
+  final _vehicleYearMax = TextEditingController();
+  final _vehicleMileageMax = TextEditingController();
+  String? _vehicleFuel;
+  String? _vehicleTransmission;
   final _scrollController = ScrollController();
   Timer? _searchDebounce;
   String _condition = 'any';
@@ -201,6 +207,9 @@ class _ListingsPageState extends State<ListingsPage> {
     _brand.dispose();
     _size.dispose();
     _color.dispose();
+    _vehicleYearMin.dispose();
+    _vehicleYearMax.dispose();
+    _vehicleMileageMax.dispose();
     _scrollController.dispose();
     _searchDebounce?.cancel();
     widget.browseResetSignal?.removeListener(_onBrowseResetSignal);
@@ -508,6 +517,18 @@ class _ListingsPageState extends State<ListingsPage> {
   String _safeColor() =>
       InputSanitizer.sanitizeText(_color.text, maxLength: 40);
 
+  int? _safeVehicleYearMin() => int.tryParse(
+    InputSanitizer.sanitizeText(_vehicleYearMin.text, maxLength: 4),
+  );
+
+  int? _safeVehicleYearMax() => int.tryParse(
+    InputSanitizer.sanitizeText(_vehicleYearMax.text, maxLength: 4),
+  );
+
+  int? _safeVehicleMileageMax() => int.tryParse(
+    InputSanitizer.sanitizeText(_vehicleMileageMax.text, maxLength: 8),
+  );
+
   double? _safeMinPrice() => double.tryParse(
     InputSanitizer.sanitizeText(_priceMin.text, maxLength: 16),
   );
@@ -536,6 +557,11 @@ class _ListingsPageState extends State<ListingsPage> {
       _safeBrand(),
       _safeSize(),
       _safeColor(),
+      _safeVehicleYearMin()?.toString() ?? '',
+      _safeVehicleYearMax()?.toString() ?? '',
+      _safeVehicleMileageMax()?.toString() ?? '',
+      _vehicleFuel ?? '',
+      _vehicleTransmission ?? '',
       _nearbyOnly ? (_buyerWilaya ?? '') : '',
       _sort,
       _quickDeliveryOnly ? 'delivery_only' : '',
@@ -576,6 +602,11 @@ class _ListingsPageState extends State<ListingsPage> {
             size: _safeSize(),
             color: _safeColor(),
             nearbyWilaya: _nearbyOnly ? _buyerWilaya : null,
+            vehicleYearMin: _safeVehicleYearMin(),
+            vehicleYearMax: _safeVehicleYearMax(),
+            vehicleMileageMax: _safeVehicleMileageMax(),
+            vehicleFuel: _vehicleFuel,
+            vehicleTransmission: _vehicleTransmission,
             sort: _sort,
             limit: _pageSize,
             offset: 0,
@@ -657,6 +688,11 @@ class _ListingsPageState extends State<ListingsPage> {
             size: _safeSize(),
             color: _safeColor(),
             nearbyWilaya: _nearbyOnly ? _buyerWilaya : null,
+            vehicleYearMin: _safeVehicleYearMin(),
+            vehicleYearMax: _safeVehicleYearMax(),
+            vehicleMileageMax: _safeVehicleMileageMax(),
+            vehicleFuel: _vehicleFuel,
+            vehicleTransmission: _vehicleTransmission,
             sort: _sort,
             limit: _pageSize,
             offset: _page * _pageSize,
@@ -831,6 +867,12 @@ class _ListingsPageState extends State<ListingsPage> {
     }
   }
 
+  bool _isVehicleCategorySelected() {
+    final match = _categories.where((c) => c['id'] == _category).toList();
+    if (match.isEmpty) return false;
+    return VehicleSpecs.isVehicleCategory(match.first['slug']);
+  }
+
   String _categoryLabel(BuildContext context, Map<String, String> category) {
     if (category.isEmpty) return '-';
     final slug = category['slug'] ?? '';
@@ -999,6 +1041,11 @@ class _ListingsPageState extends State<ListingsPage> {
                 _brand.clear();
                 _size.clear();
                 _color.clear();
+                _vehicleYearMin.clear();
+                _vehicleYearMax.clear();
+                _vehicleMileageMax.clear();
+                _vehicleFuel = null;
+                _vehicleTransmission = null;
                 _sort = 'newest';
                 _showFavoritesOnly = false;
                 _nearbyOnly = false;
@@ -1084,6 +1131,101 @@ class _ListingsPageState extends State<ListingsPage> {
                           )
                           .toList(),
                     ),
+                    if (_isVehicleCategorySelected()) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        L10n.tr(context, 'listing.filters.vehicle_section'),
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _vehicleYearMin,
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(
+                                labelText: L10n.tr(
+                                  context,
+                                  'listing.filters.year_min',
+                                ),
+                              ),
+                              onChanged: (_) => setModalState(() {}),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: _vehicleYearMax,
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(
+                                labelText: L10n.tr(
+                                  context,
+                                  'listing.filters.year_max',
+                                ),
+                              ),
+                              onChanged: (_) => setModalState(() {}),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _vehicleMileageMax,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: L10n.tr(
+                            context,
+                            'listing.filters.mileage_max',
+                          ),
+                        ),
+                        onChanged: (_) => setModalState(() {}),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: VehicleSpecs.fuels
+                            .map(
+                              (value) => ChoiceChip(
+                                label: Text(
+                                  VehicleSpecs.fuelLabel(context, value),
+                                ),
+                                selected: _vehicleFuel == value,
+                                onSelected: (_) => updateFilters(
+                                  () => _vehicleFuel = _vehicleFuel == value
+                                      ? null
+                                      : value,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: VehicleSpecs.transmissions
+                            .map(
+                              (value) => ChoiceChip(
+                                label: Text(
+                                  VehicleSpecs.transmissionLabel(
+                                    context,
+                                    value,
+                                  ),
+                                ),
+                                selected: _vehicleTransmission == value,
+                                onSelected: (_) => updateFilters(
+                                  () => _vehicleTransmission =
+                                      _vehicleTransmission == value
+                                      ? null
+                                      : value,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     Text(
                       L10n.tr(context, 'listing.filters.price_quick'),

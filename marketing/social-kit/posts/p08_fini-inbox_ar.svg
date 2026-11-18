@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080" font-family="'Segoe UI', Tahoma, Arial, sans-serif" direction="rtl">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0E9F6E"/><stop offset="1" stop-color="#0A7D57"/>
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1080" fill="#F1FDF3"/>
+  <path d="M300 560l150 150 380 -380" fill="none" stroke="#0E9F6E" stroke-opacity="0.07" stroke-width="140" stroke-linecap="round" stroke-linejoin="round"/>
+  <g transform="translate(84,84)" direction="ltr">
+    <circle cx="46" cy="46" r="46" fill="url(#g)"/>
+    <path d="M26 48l14 14 30 -30" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="116" y="60" font-size="44" font-weight="700" fill="#0A7D57">DZMarket</text>
+  </g>
+  <text x="996" y="380" font-size="100" font-weight="800" fill="#0A7D57" text-anchor="start">&#1576;&#1585;&#1603;&#1575; &#1605;&#1606;</text>
+  <text x="996" y="500" font-size="100" font-weight="800" fill="#0A7D57" text-anchor="start">&#171;&#1575;&#1604;&#1579;&#1605;&#1606; &#1571;&#1606;&#1576;&#1608;&#1603;&#1587;&#187;</text>
+  <text x="996" y="590" font-size="38" fill="#1B4332" text-anchor="start">&#1575;&#1604;&#1586;&#1576;&#1608;&#1606; &#1610;&#1582;&#1578;&#1575;&#1585; &#1608;&#1610;&#1593;&#1605;&#1585; &#1576;&#1610;&#1583;&#1608;&#160;:</text>
+  <g transform="translate(84,624)" direction="rtl">
+    <rect x="0" y="0" width="912" height="70" rx="16" fill="#fff" stroke="#B7E4C7" stroke-width="3"/>
+    <text x="884" y="46" font-size="34" fill="#40916C" text-anchor="start">&#1575;&#1604;&#1575;&#1587;&#1605; &#1608;&#1575;&#1604;&#1604;&#1602;&#1576;</text>
+    <rect x="0" y="90" width="912" height="70" rx="16" fill="#fff" stroke="#B7E4C7" stroke-width="3"/>
+    <text x="884" y="136" font-size="34" fill="#40916C" text-anchor="start">&#1585;&#1602;&#1605; &#1575;&#1604;&#1607;&#1575;&#1578;&#1601;</text>
+    <rect x="472" y="180" width="440" height="70" rx="16" fill="#fff" stroke="#B7E4C7" stroke-width="3"/>
+    <text x="884" y="226" font-size="34" fill="#40916C" text-anchor="start">&#1575;&#1604;&#1608;&#1604;&#1575;&#1610;&#1577;</text>
+    <rect x="0" y="180" width="440" height="70" rx="16" fill="#fff" stroke="#B7E4C7" stroke-width="3"/>
+    <text x="412" y="226" font-size="34" fill="#40916C" text-anchor="start">&#1575;&#1604;&#1593;&#1606;&#1608;&#1575;&#1606;</text>
+  </g>
+  <text x="996" y="936" font-size="34" fill="#1B4332" text-anchor="start">&#1575;&#1604;&#1591;&#1604;&#1576;&#1610;&#1577; &#1578;&#1580;&#1610;&#1603; &#1608;&#1575;&#1580;&#1583;&#1577; &#1604;&#1604;&#1573;&#1585;&#1587;&#1575;&#1604;.</text>
+  <rect x="516" y="968" width="480" height="96" rx="48" fill="url(#g)"/>
+  <text x="756" y="1030" font-size="40" font-weight="700" fill="#fff" text-anchor="middle">&#1580;&#1585;&#1617;&#1576; DZMARKET</text>
+</svg>

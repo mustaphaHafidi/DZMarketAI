@@ -1949,18 +1949,6 @@ class _ProfilePageState extends State<ProfilePage> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      L10n.tr(
-                        context,
-                        'profile.geo',
-                        params: {
-                          'lat': _lat?.toStringAsFixed(4) ?? '--',
-                          'lng': _lng?.toStringAsFixed(4) ?? '--',
-                        },
-                      ),
-                      style: Theme.of(context).textTheme.labelSmall,
-                    ),
                   ],
                 ),
               ),

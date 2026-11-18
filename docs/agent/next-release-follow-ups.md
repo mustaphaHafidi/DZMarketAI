@@ -6,6 +6,35 @@ les tests de release.
 
 ## A corriger - Android
 
+### Erreur technique brute affichee dans l'admin Moderation (corrige 2026-11-18)
+
+- **Preuve** : capture du 18/11, onglet "Utilisateurs" de l'admin
+  Moderation remplace tout l'ecran par le texte brut de l'exception
+  (`ClientException`/`SocketException`, URL interne visible) des qu'un
+  appel reseau echoue (ex. coupure transitoire sur `admin-moderation`).
+- **Cause confirmee** : `moderation_admin_page.dart`, `_load()` stockait
+  `e.toString()` tel quel dans `_error`, affiche directement par
+  `_buildBody()`.
+- **Correctif** : message generique "Connexion instable. Réessayez."
+  (nouvelle cle `admin.moderation.load_error_friendly`, FR/AR) + bouton
+  Réessayer qui relance `_load()`. Le detail technique complet reste
+  disponible pour l'admin dans l'ecran dedie "Erreurs de l'app"
+  (`app_errors_page.dart`, inchange, c'est deja le bon endroit pour ca).
+
+### Blocage ecran de demarrage si le reseau ne repond pas (corrige 2026-11-18)
+
+- **Preuve** : fondateur bloque ~10h sur l'ecran de demarrage un matin.
+- **Cause confirmee** : `main.dart` attendait `TranslationService.load()`
+  avant `runApp()`, et la requete Supabase dans `translation_service.dart`
+  n'avait aucun timeout -- une requete qui restait en suspens (DNS qui
+  stall, portail captif) bloquait l'app indefiniment.
+- **Correctif** : `.timeout(const Duration(seconds: 3))` ajoute autour de
+  la requete Supabase dans `TranslationService.load()`. En cas de lenteur
+  reseau, l'app demarre avec les textes embarques (`assets/i18n/*.json`,
+  deja charges en premier) au lieu d'attendre.
+- **Etat** : corrige, `flutter analyze` + `flutter test` verts (154 passes,
+  2 skip, 0 echec).
+
 ### Selection d'images declenchee deux fois
 
 - **Preuve** : 2026-11-04 18:24 UTC, un seul utilisateur Android. Erreur
@@ -19,6 +48,20 @@ les tests de release.
   l'artefact Android `1.0.10+48`, prepare pour publication.
 - **Limite volontaire** : ne pas etendre a l'avatar ou a la modification
   d'annonce sans occurrence confirmee dans ces ecrans.
+
+## A realiser - prochaines versions (chat a ameliorer)
+
+### Horodatage des messages sans date (chat) -- corrige 2026-11-18
+
+- **Constat (2026-11-13)** : `chat_room_page.dart` formatait l'heure d'un
+  message avec `DateFormat.Hm()` (ligne ~1133), qui n'affichait jamais la
+  date. Un vieux message ressemblait visuellement a un message du jour meme.
+- **Correctif** : nouvelle methode `_formatMessageTimestamp()` qui affiche
+  `dd/MM HH:mm` pour tout message qui ne date pas du jour courant, et
+  l'heure seule sinon (comportement inchange pour le jour meme). Un seul
+  widget de formatage touche, aucun changement de modele de donnees.
+- **Decision du fondateur (2026-11-18)** : inclus dans cette passe malgre
+  le report initial du 13/11, a sa demande explicite.
 
 ## A surveiller - pas de correctif ni de release urgente
 
@@ -129,6 +172,60 @@ sources une a une, avec tests RLS, pagination et retenue limitee des journaux.
   rebuild complet + bascule atomique, verifie 200 publiquement. Voir
   `JOURNAL-IA.md` (entree du 5 novembre) pour le detail.
 
+## Nouvelle categorie "Vehicules" (code livre 2026-11-18, pas encore deploye)
+
+- **Perimetre** : categorie racine `vehicles` + 4 sous-categories
+  (Voitures, Motos & Scooters, Camions & Utilitaires, Pieces & Accessoires
+  auto). Champs specifiques a la creation d'annonce (modele, annee,
+  kilometrage, carburant, boite, carrosserie) -- marque/annee/kilometrage
+  recommandes, rien de bloquant pour le vendeur presse. Pas de
+  plaque/VIN/papiers (volontairement exclu). Livraison forcee en retrait en
+  main propre pour ces annonces (pas de COD/transporteur).
+- **Fichiers touches** : migration
+  `supabase/migrations/20261118120000_add_vehicle_category_and_fields.sql`
+  (colonnes nullables sur `products` + lignes `categories`),
+  `lib/src/utils/vehicle_specs.dart` (nouveau, codes/labels partages),
+  `add_listing_page.dart` (creation), `listings_page.dart` (filtres),
+  `product_detail_page.dart` (fiche produit), `product.dart` +
+  `product_service.dart` (modele/requetes). Traductions FR/AR ajoutees
+  dans `assets/i18n/{fr,ar}.json`.
+- **Hors perimetre de cette passe (volontaire)** : aucune mise en avant
+  payante (demarre gratuit comme le reste du catalogue), pas de champ sur
+  l'ecran de modification d'annonce existant (`updateProduct` reste
+  inchange -- edition des specs vehicule a prevoir dans une passe
+  ulterieure si demande), pas d'ajout aux recherches sauvegardees.
+- **A verifier avant d'appliquer la migration en prod** : confirmer qu'une
+  contrainte unique existe bien sur `categories.slug` (la migration utilise
+  `on conflict (slug)`) -- non verifie ici faute d'acces SSH/DB dans cette
+  session. `flutter analyze` + `flutter test` verts (154 passes, 2 skip)
+  valident uniquement le code Flutter, pas la migration SQL elle-meme.
+- **Etat** : code pret localement, migration et build non deployes. Test
+  reel sur le Samsung branche + application de la migration a prevoir
+  avant toute mise en production.
+- **Validation ajoutee (2026-11-18, suite 2e avis)** : marque/modele +
+  annee + kilometrage sont maintenant reellement requis a l'etape
+  "Details" quand la categorie est un vehicule (`_validateStep`), pas
+  seulement "recommandes" sans controle comme dans la 1ere passe.
+- **Verifie, pas un bug** : la suppression rapide d'une image
+  (`_removeImage`) est synchrone (pas d'`await` entre l'appui et la mise a
+  jour de la liste) et deja protegee par `canRemovePickedFile` -- pas de
+  risque de double-suppression comme pour l'ancien bug du selecteur de
+  fichiers. Rien a corriger ici sans cas reproductible.
+- **Decision a confirmer avec le fondateur** : liste des sous-categories
+  vehicules. Version livree ici (validee par le fondateur le 18/11) :
+  Voitures / Motos & Scooters / Camions & Utilitaires / Pieces &
+  Accessoires auto (4). Un second avis propose plutot Voitures / Motos &
+  scooters / Utilitaires / Camions / Engins / Bateaux (6, sans "Pieces &
+  Accessoires"). Pas tranche unilateralement ici car ca contredit un choix
+  deja fait explicitement -- a confirmer avant d'ajuster la migration.
+- **Sequencement de release (suite 2e avis, accepte)** : ce correctif ne
+  doit pas partir dans le meme build que les correctifs de fiabilite
+  (demarrage Android, erreur admin). Deux versions separees : "Release A"
+  fiabilite (deja prete, testee, zero risque) livree en premier ; "Release
+  B" vehicules testee et livree separement, avec son propre bump de
+  version. Le code des deux vit deja dans ce repo, seul le decoupage en
+  builds/versions distincts reste a faire au moment du build.
+
 ## Decision de release
 
 - Hotfix web deja deploye le 5 novembre (templates auth-email + permissions
@@ -137,3 +234,7 @@ sources une a une, avec tests RLS, pagination et retenue limitee des journaux.
   TikTok du menu d'aide. Sa publication multi-plateforme est en attente de la
   fin de la beta review Apple existante et d'un canal d'execution autorisant la
   bascule Web. Ne pas publier Android seul afin de garder les menus coherents.
+- La categorie "Vehicules" ci-dessus est un changement supplementaire,
+  distinct de la release `1.0.10+48` -- a bumper separement (nouveau build)
+  une fois teste reellement, pas a fusionner silencieusement dans
+  `1.0.10+48` deja valide pour autre chose.

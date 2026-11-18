@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080" font-family="'Segoe UI', Tahoma, Arial, sans-serif">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0E9F6E"/><stop offset="1" stop-color="#0A7D57"/>
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1080" fill="#F1FDF3"/>
+  <path d="M300 560l150 150 380 -380" fill="none" stroke="#0E9F6E" stroke-opacity="0.07" stroke-width="140" stroke-linecap="round" stroke-linejoin="round"/>
+  <g transform="translate(84,84)">
+    <circle cx="46" cy="46" r="46" fill="url(#g)"/>
+    <path d="M26 48l14 14 30 -30" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="116" y="60" font-size="44" font-weight="700" fill="#0A7D57">DZMarket</text>
+  </g>
+  <text x="84" y="380" font-size="96" font-weight="800" fill="#0A7D57">Fini les</text>
+  <text x="84" y="486" font-size="96" font-weight="800" fill="#0A7D57">&#171;&#160;prix inbox&#160;&#187;</text>
+  <text x="84" y="576" font-size="38" fill="#1B4332">L'acheteur choisit et remplit lui-m&#234;me&#160;:</text>
+  <g transform="translate(84,624)">
+    <rect x="0" y="0" width="912" height="70" rx="16" fill="#fff" stroke="#B7E4C7" stroke-width="3"/>
+    <text x="28" y="46" font-size="34" fill="#40916C">Nom et pr&#233;nom</text>
+    <rect x="0" y="90" width="912" height="70" rx="16" fill="#fff" stroke="#B7E4C7" stroke-width="3"/>
+    <text x="28" y="136" font-size="34" fill="#40916C">T&#233;l&#233;phone</text>
+    <rect x="0" y="180" width="440" height="70" rx="16" fill="#fff" stroke="#B7E4C7" stroke-width="3"/>
+    <text x="28" y="226" font-size="34" fill="#40916C">Wilaya</text>
+    <rect x="472" y="180" width="440" height="70" rx="16" fill="#fff" stroke="#B7E4C7" stroke-width="3"/>
+    <text x="500" y="226" font-size="34" fill="#40916C">Adresse</text>
+  </g>
+  <text x="84" y="936" font-size="34" fill="#1B4332">La commande arrive pr&#234;te &#224; exp&#233;dier.</text>
+  <rect x="84" y="968" width="480" height="96" rx="48" fill="url(#g)"/>
+  <text x="324" y="1030" font-size="38" font-weight="700" fill="#fff" text-anchor="middle">ESSAIE DZMARKET</text>
+</svg>

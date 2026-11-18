@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080" font-family="'Segoe UI', Tahoma, Arial, sans-serif">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0E9F6E"/><stop offset="1" stop-color="#0A7D57"/>
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1080" fill="#F1FDF3"/>
+  <g transform="translate(84,84)">
+    <circle cx="46" cy="46" r="46" fill="url(#g)"/>
+    <path d="M26 48l14 14 30 -30" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="116" y="60" font-size="44" font-weight="700" fill="#0A7D57">DZMarket</text>
+  </g>
+  <text x="540" y="270" font-size="58" font-weight="800" fill="#0A7D57" text-anchor="middle">Page classique vs DZMarket</text>
+  <rect x="556" y="316" width="452" height="590" rx="28" fill="#DFF5E7"/>
+  <text x="90" y="392" font-size="34" font-weight="700" fill="#40916C">Page Facebook</text>
+  <text x="588" y="392" font-size="34" font-weight="700" fill="#0A7D57">DZMarket</text>
+  <g font-size="30">
+    <text x="90" y="486" fill="#1B4332">Prix / infos en DM</text>
+    <text x="588" y="486" font-weight="700" fill="#0A7D57">Rempli par le client</text>
+    <text x="90" y="586" fill="#1B4332">Commandes au cahier</text>
+    <text x="588" y="586" font-weight="700" fill="#0A7D57">Liste claire dans l'app</text>
+    <text x="90" y="686" fill="#1B4332">Livraison&#160;: appels + photos</text>
+    <text x="588" y="686" font-weight="700" fill="#0A7D57">Bon + suivi int&#233;gr&#233;s</text>
+    <text x="90" y="786" fill="#1B4332">Relances &#224; la main</text>
+    <text x="588" y="786" font-weight="700" fill="#0A7D57">Notifs automatiques</text>
+    <text x="90" y="886" fill="#1B4332">Paiement&#160;: &#224; n&#233;gocier</text>
+    <text x="588" y="886" font-weight="700" fill="#0A7D57">&#192; la livraison, cadr&#233;</text>
+  </g>
+  <rect x="84" y="952" width="640" height="104" rx="52" fill="url(#g)"/>
+  <text x="404" y="1018" font-size="40" font-weight="700" fill="#fff" text-anchor="middle">PASSE SUR DZMARKET</text>
+</svg>

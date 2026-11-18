@@ -15,6 +15,8 @@ class ProductService {
   static const String _listingSelect =
       'id,title,price,owner_id,image_url,image_urls,category_id,'
       'categories(name_fr, name_ar, slug),condition,brand,size,color,'
+      'vehicle_model,vehicle_year,vehicle_mileage_km,vehicle_fuel,'
+      'vehicle_transmission,vehicle_body_type,'
       'location_wilaya,location_daira,delivery_options,is_negotiable,'
       'shipping_free,stock_quantity,sold_count,is_archived,created_at';
 
@@ -74,6 +76,11 @@ class ProductService {
     String? size,
     String? color,
     String? nearbyWilaya,
+    int? vehicleYearMin,
+    int? vehicleYearMax,
+    int? vehicleMileageMax,
+    String? vehicleFuel,
+    String? vehicleTransmission,
     String sort = 'newest',
     int limit = 30,
     int offset = 0,
@@ -96,6 +103,14 @@ class ProductService {
       nearbyWilaya,
       maxLength: 60,
     );
+    final safeVehicleFuel = InputSanitizer.sanitizeOptionalText(
+      vehicleFuel,
+      maxLength: 20,
+    );
+    final safeVehicleTransmission = InputSanitizer.sanitizeOptionalText(
+      vehicleTransmission,
+      maxLength: 20,
+    );
     final key = [
       'q=$q',
       'cat=${safeCategoryId ?? ''}',
@@ -106,6 +121,11 @@ class ProductService {
       'size=${safeSize ?? ''}',
       'color=${safeColor ?? ''}',
       'near=${safeNearbyWilaya ?? ''}',
+      'yearMin=${vehicleYearMin ?? ''}',
+      'yearMax=${vehicleYearMax ?? ''}',
+      'mileageMax=${vehicleMileageMax ?? ''}',
+      'fuel=${safeVehicleFuel ?? ''}',
+      'transmission=${safeVehicleTransmission ?? ''}',
       'sort=$sort',
       'limit=$limit',
       'offset=$offset',
@@ -161,6 +181,25 @@ class ProductService {
     if (safeNearbyWilaya != null && safeNearbyWilaya.trim().isNotEmpty) {
       filtered = filtered.eq('location_wilaya', safeNearbyWilaya.trim());
     }
+    if (vehicleYearMin != null) {
+      filtered = filtered.gte('vehicle_year', vehicleYearMin);
+    }
+    if (vehicleYearMax != null) {
+      filtered = filtered.lte('vehicle_year', vehicleYearMax);
+    }
+    if (vehicleMileageMax != null) {
+      filtered = filtered.lte('vehicle_mileage_km', vehicleMileageMax);
+    }
+    if (safeVehicleFuel != null && safeVehicleFuel.trim().isNotEmpty) {
+      filtered = filtered.eq('vehicle_fuel', safeVehicleFuel.trim());
+    }
+    if (safeVehicleTransmission != null &&
+        safeVehicleTransmission.trim().isNotEmpty) {
+      filtered = filtered.eq(
+        'vehicle_transmission',
+        safeVehicleTransmission.trim(),
+      );
+    }
 
     final ordered = switch (sort) {
       'price_low' => filtered.order('price', ascending: true),
@@ -189,6 +228,11 @@ class ProductService {
           size: size,
           color: color,
           nearbyWilaya: nearbyWilaya,
+          vehicleYearMin: vehicleYearMin,
+          vehicleYearMax: vehicleYearMax,
+          vehicleMileageMax: vehicleMileageMax,
+          vehicleFuel: vehicleFuel,
+          vehicleTransmission: vehicleTransmission,
           sort: sort,
           limit: limit,
           offset: offset,
@@ -217,6 +261,12 @@ class ProductService {
     String? brand,
     String? size,
     String? color,
+    String? vehicleModel,
+    int? vehicleYear,
+    int? vehicleMileageKm,
+    String? vehicleFuel,
+    String? vehicleTransmission,
+    String? vehicleBodyType,
     String? locationWilaya,
     String? locationDaira,
     List<String> deliveryOptions = const [],
@@ -275,6 +325,30 @@ class ProductService {
     final safeBrand = InputSanitizer.sanitizeOptionalText(brand, maxLength: 40);
     final safeSize = InputSanitizer.sanitizeOptionalText(size, maxLength: 40);
     final safeColor = InputSanitizer.sanitizeOptionalText(color, maxLength: 40);
+    final safeVehicleModel = InputSanitizer.sanitizeOptionalText(
+      vehicleModel,
+      maxLength: 60,
+    );
+    final safeVehicleFuel = InputSanitizer.sanitizeOptionalText(
+      vehicleFuel,
+      maxLength: 20,
+    );
+    final safeVehicleTransmission = InputSanitizer.sanitizeOptionalText(
+      vehicleTransmission,
+      maxLength: 20,
+    );
+    final safeVehicleBodyType = InputSanitizer.sanitizeOptionalText(
+      vehicleBodyType,
+      maxLength: 20,
+    );
+    final safeVehicleYear =
+        (vehicleYear != null && vehicleYear > 1900 && vehicleYear < 2100)
+        ? vehicleYear
+        : null;
+    final safeVehicleMileageKm =
+        (vehicleMileageKm != null && vehicleMileageKm >= 0)
+        ? vehicleMileageKm
+        : null;
     final safeWilaya = InputSanitizer.sanitizeOptionalText(
       locationWilaya,
       maxLength: 60,
@@ -378,6 +452,12 @@ class ProductService {
       'brand': safeBrand,
       'size': safeSize,
       'color': safeColor,
+      'vehicle_model': safeVehicleModel,
+      'vehicle_year': safeVehicleYear,
+      'vehicle_mileage_km': safeVehicleMileageKm,
+      'vehicle_fuel': safeVehicleFuel,
+      'vehicle_transmission': safeVehicleTransmission,
+      'vehicle_body_type': safeVehicleBodyType,
       'location_wilaya': safeWilaya,
       'location_daira': safeDaira,
       'delivery_options': safeDelivery,

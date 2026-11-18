@@ -1165,7 +1165,25 @@ class _ModerationAdminPageState extends State<ModerationAdminPage>
       return const Center(child: CircularProgressIndicator());
     }
     if (_error != null) {
-      return Center(child: Text(_error!));
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                L10n.tr(context, 'admin.moderation.load_error_friendly'),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton(
+                onPressed: _load,
+                child: Text(L10n.tr(context, 'common.retry')),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     return Column(

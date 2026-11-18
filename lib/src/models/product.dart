@@ -19,6 +19,12 @@ class Product {
     this.brand,
     this.size,
     this.color,
+    this.vehicleModel,
+    this.vehicleYear,
+    this.vehicleMileageKm,
+    this.vehicleFuel,
+    this.vehicleTransmission,
+    this.vehicleBodyType,
     this.searchTags = const [],
     this.searchKeywords,
     this.locationWilaya,
@@ -58,6 +64,12 @@ class Product {
   final String? brand;
   final String? size;
   final String? color;
+  final String? vehicleModel;
+  final int? vehicleYear;
+  final int? vehicleMileageKm;
+  final String? vehicleFuel;
+  final String? vehicleTransmission;
+  final String? vehicleBodyType;
   final List<String> searchTags;
   final String? searchKeywords;
   final String? locationWilaya;
@@ -148,6 +160,12 @@ class Product {
     brand: json['brand'] as String?,
     size: json['size'] as String?,
     color: json['color'] as String?,
+    vehicleModel: json['vehicle_model'] as String?,
+    vehicleYear: (json['vehicle_year'] as num?)?.toInt(),
+    vehicleMileageKm: (json['vehicle_mileage_km'] as num?)?.toInt(),
+    vehicleFuel: json['vehicle_fuel'] as String?,
+    vehicleTransmission: json['vehicle_transmission'] as String?,
+    vehicleBodyType: json['vehicle_body_type'] as String?,
     searchTags: ((json['search_tags'] as List?) ?? const [])
         .map((e) => e?.toString() ?? '')
         .where((e) => e.isNotEmpty)

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920" font-family="'Segoe UI', Tahoma, Arial, sans-serif">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0E9F6E"/><stop offset="1" stop-color="#0A7D57"/>
+    </linearGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F1FDF3"/><stop offset="1" stop-color="#E1F4E6"/>
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1920" fill="url(#bg)"/>
+  <path d="M250 980l170 170 430 -430" fill="none" stroke="#0E9F6E" stroke-opacity="0.06" stroke-width="170" stroke-linecap="round" stroke-linejoin="round"/>
+  <g transform="translate(400,300)">
+    <circle cx="70" cy="70" r="70" fill="url(#g)"/>
+    <path d="M40 74l22 22 46 -46" fill="none" stroke="#fff" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="540" y="560" font-size="52" font-weight="700" fill="#0A7D57" text-anchor="middle">DZMarket</text>
+  <rect x="150" y="700" width="780" height="86" rx="43" fill="#0A7D57"/>
+  <text x="540" y="758" font-size="38" font-weight="700" fill="#fff" text-anchor="middle">OFFRE DE LANCEMENT</text>
+  <text x="540" y="940" font-size="118" font-weight="800" fill="#0A7D57" text-anchor="middle">100 premiers</text>
+  <text x="540" y="1070" font-size="118" font-weight="800" fill="#0A7D57" text-anchor="middle">vendeurs</text>
+  <text x="540" y="1200" font-size="118" font-weight="800" fill="#0A7D57" text-anchor="middle">= gratuit</text>
+  <text x="540" y="1310" font-size="42" fill="#1B4332" text-anchor="middle">Vends, recois les commandes, imprime</text>
+  <text x="540" y="1364" font-size="42" fill="#1B4332" text-anchor="middle">le bon, suis la livraison. Une seule app.</text>
+  <rect x="190" y="1470" width="700" height="128" rx="64" fill="url(#g)"/>
+  <text x="540" y="1552" font-size="48" font-weight="700" fill="#fff" text-anchor="middle">JE PRENDS MA PLACE</text>
+  <text x="540" y="1690" font-size="44" font-weight="700" fill="#0A7D57" text-anchor="middle">www.dzmarket.pro</text>
+  <text x="540" y="1746" font-size="30" fill="#40916C" text-anchor="middle">Android &#183; iPhone &#183; Web &#8212; &#127465;&#127487;</text>
+</svg>

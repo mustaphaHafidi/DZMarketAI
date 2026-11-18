@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1128" height="191" viewBox="0 0 1128 191" font-family="'Segoe UI', Tahoma, Arial, sans-serif">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0A7D57"/><stop offset="1" stop-color="#0E9F6E"/>
+    </linearGradient>
+  </defs>
+  <rect width="1128" height="191" fill="url(#g)"/>
+  <path d="M760 120l40 40 120 -120" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="150" stroke-linecap="round" stroke-linejoin="round"/>
+  <g transform="translate(60,52)">
+    <circle cx="43" cy="43" r="43" fill="#ffffff"/>
+    <path d="M25 45l13 13 27 -27" fill="none" stroke="#0A7D57" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="180" y="88" font-size="46" font-weight="800" fill="#ffffff">DZMarket</text>
+  <text x="182" y="132" font-size="26" fill="#DFF5E7">Marketplace algerienne &#8212; vendre, acheter et livrer dans une seule app.</text>
+  <text x="182" y="168" font-size="22" font-weight="700" fill="#ffffff">www.dzmarket.pro</text>
+</svg>

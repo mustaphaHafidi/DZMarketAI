@@ -14,6 +14,7 @@ import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:dzmarket/src/utils/large_volume_listing_utils.dart';
 import 'package:dzmarket/src/utils/declared_value_sync.dart';
+import 'package:dzmarket/src/utils/vehicle_specs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -38,6 +39,14 @@ class _AddListingPageState extends State<AddListingPage> {
   final _costCtrl = TextEditingController();
   final _brandCtrl = TextEditingController();
   final _sizeCtrl = TextEditingController();
+  final _vehicleModelCtrl = TextEditingController();
+  final _vehicleYearCtrl = TextEditingController();
+  final _vehicleMileageCtrl = TextEditingController();
+  String? _vehicleFuel;
+  String? _vehicleTransmission;
+  String? _vehicleBodyType;
+
+  bool get _isVehicleListing => VehicleSpecs.isVehicleCategory(_categorySlug);
   final _declaredValueCtrl = TextEditingController();
   final _weightCtrl = TextEditingController(text: '1');
   final _heightCtrl = TextEditingController(text: '0');
@@ -131,6 +140,9 @@ class _AddListingPageState extends State<AddListingPage> {
     _costCtrl.dispose();
     _brandCtrl.dispose();
     _sizeCtrl.dispose();
+    _vehicleModelCtrl.dispose();
+    _vehicleYearCtrl.dispose();
+    _vehicleMileageCtrl.dispose();
     _declaredValueCtrl.dispose();
     _weightCtrl.dispose();
     _heightCtrl.dispose();
@@ -848,6 +860,23 @@ class _AddListingPageState extends State<AddListingPage> {
           _setError(L10n.tr(context, 'listing.add.error_add_description'));
           return false;
         }
+        if (_isVehicleListing) {
+          final hasBrandOrModel =
+              _brandCtrl.text.trim().isNotEmpty ||
+              _vehicleModelCtrl.text.trim().isNotEmpty;
+          final hasYear = _parseDigitsNullable(
+            _vehicleYearCtrl.text.trim(),
+          ) != null;
+          final hasMileage = _parseDigitsNullable(
+            _vehicleMileageCtrl.text.trim(),
+          ) != null;
+          if (!hasBrandOrModel || !hasYear || !hasMileage) {
+            _setError(
+              L10n.tr(context, 'listing.add.error_vehicle_required'),
+            );
+            return false;
+          }
+        }
         return true;
       case 3:
         try {
@@ -1243,7 +1272,9 @@ class _AddListingPageState extends State<AddListingPage> {
   }
 
   bool _isForcedArrangedDelivery() {
-    return _isLargeVolumeListing() || !_sellerHasEnabledCouriers;
+    return _isLargeVolumeListing() ||
+        !_sellerHasEnabledCouriers ||
+        VehicleSpecs.isVehicleCategory(_categorySlug);
   }
 
   bool _usesCourierDelivery() {
@@ -1374,6 +1405,22 @@ class _AddListingPageState extends State<AddListingPage> {
       final declaredValue = _declaredValueCtrl.text.trim().isEmpty
           ? null
           : InputSanitizer.parseAmount(_declaredValueCtrl.text, min: 0);
+      final isVehicle = _isVehicleListing;
+      final vehicleModel = isVehicle
+          ? InputSanitizer.sanitizeOptionalText(
+              _vehicleModelCtrl.text,
+              maxLength: 60,
+            )
+          : null;
+      final vehicleYear = isVehicle
+          ? _parseDigitsNullable(_vehicleYearCtrl.text.trim())
+          : null;
+      final vehicleMileageKm = isVehicle
+          ? _parseDigitsNullable(_vehicleMileageCtrl.text.trim())
+          : null;
+      final vehicleFuel = isVehicle ? _vehicleFuel : null;
+      final vehicleTransmission = isVehicle ? _vehicleTransmission : null;
+      final vehicleBodyType = isVehicle ? _vehicleBodyType : null;
 
       try {
         await ProductService().createProduct(
@@ -1387,6 +1434,12 @@ class _AddListingPageState extends State<AddListingPage> {
           condition: _condition,
           brand: brand,
           size: size,
+          vehicleModel: vehicleModel,
+          vehicleYear: vehicleYear,
+          vehicleMileageKm: vehicleMileageKm,
+          vehicleFuel: vehicleFuel,
+          vehicleTransmission: vehicleTransmission,
+          vehicleBodyType: vehicleBodyType,
           locationWilaya: wilaya,
           locationDaira: daira,
           deliveryOptions: deliveryOptions,
@@ -2071,6 +2124,138 @@ class _AddListingPageState extends State<AddListingPage> {
                     labelText: L10n.tr(context, 'listing.add.size_label'),
                   ),
                 ),
+                if (_isVehicleListing) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    L10n.tr(context, 'listing.add.vehicle_section_title'),
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _vehicleModelCtrl,
+                    decoration: InputDecoration(
+                      labelText: L10n.tr(context, 'listing.add.model_label'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _vehicleYearCtrl,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          decoration: InputDecoration(
+                            labelText: L10n.tr(
+                              context,
+                              'listing.add.year_label',
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: _vehicleMileageCtrl,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          decoration: InputDecoration(
+                            labelText: L10n.tr(
+                              context,
+                              'listing.add.mileage_label',
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    L10n.tr(context, 'listing.add.fuel_label'),
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: VehicleSpecs.fuels
+                        .map(
+                          (value) => ChoiceChip(
+                            label: Text(
+                              VehicleSpecs.fuelLabel(context, value),
+                            ),
+                            selected: _vehicleFuel == value,
+                            onSelected: (_) => setState(
+                              () => _vehicleFuel =
+                                  _vehicleFuel == value ? null : value,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    L10n.tr(context, 'listing.add.transmission_label'),
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: VehicleSpecs.transmissions
+                        .map(
+                          (value) => ChoiceChip(
+                            label: Text(
+                              VehicleSpecs.transmissionLabel(context, value),
+                            ),
+                            selected: _vehicleTransmission == value,
+                            onSelected: (_) => setState(
+                              () => _vehicleTransmission =
+                                  _vehicleTransmission == value
+                                  ? null
+                                  : value,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    L10n.tr(context, 'listing.add.body_type_label'),
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: VehicleSpecs.bodyTypes
+                        .map(
+                          (value) => ChoiceChip(
+                            label: Text(
+                              VehicleSpecs.bodyTypeLabel(context, value),
+                            ),
+                            selected: _vehicleBodyType == value,
+                            onSelected: (_) => setState(
+                              () => _vehicleBodyType =
+                                  _vehicleBodyType == value ? null : value,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    L10n.tr(
+                      context,
+                      'listing.add.delivery_auto_arranged',
+                    ),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
               ],
             ),
           ),

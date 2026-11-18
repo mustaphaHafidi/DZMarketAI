@@ -23,6 +23,7 @@ import 'package:dzmarket/src/services/location_data_service.dart';
 import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/utils/vehicle_specs.dart';
 import 'package:dzmarket/src/utils/bool_utils.dart';
 import 'package:dzmarket/src/utils/detail_layout_utils.dart';
 import 'package:dzmarket/src/utils/product_share_url.dart';
@@ -423,6 +424,38 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           params: {'value': product.color ?? ''},
         ),
       );
+    }
+    if (product.vehicleModel?.isNotEmpty ?? false) {
+      tags.add(product.vehicleModel!);
+    }
+    if (product.vehicleYear != null) {
+      tags.add(
+        L10n.tr(
+          context,
+          'listing.vehicle_year',
+          params: {'value': product.vehicleYear.toString()},
+        ),
+      );
+    }
+    if (product.vehicleMileageKm != null) {
+      tags.add(
+        L10n.tr(
+          context,
+          'listing.vehicle_mileage',
+          params: {'value': product.vehicleMileageKm.toString()},
+        ),
+      );
+    }
+    if (product.vehicleFuel?.isNotEmpty ?? false) {
+      tags.add(VehicleSpecs.fuelLabel(context, product.vehicleFuel!));
+    }
+    if (product.vehicleTransmission?.isNotEmpty ?? false) {
+      tags.add(
+        VehicleSpecs.transmissionLabel(context, product.vehicleTransmission!),
+      );
+    }
+    if (product.vehicleBodyType?.isNotEmpty ?? false) {
+      tags.add(VehicleSpecs.bodyTypeLabel(context, product.vehicleBodyType!));
     }
     if ((product.categoryNameFr?.isNotEmpty ?? false) ||
         (product.category?.isNotEmpty ?? false)) {

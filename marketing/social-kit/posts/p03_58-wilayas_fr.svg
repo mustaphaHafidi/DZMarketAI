@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080" font-family="'Segoe UI', Tahoma, Arial, sans-serif">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0E9F6E"/><stop offset="1" stop-color="#0A7D57"/>
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1080" fill="#F1FDF3"/>
+  <path d="M300 560l150 150 380 -380" fill="none" stroke="#0E9F6E" stroke-opacity="0.07" stroke-width="140" stroke-linecap="round" stroke-linejoin="round"/>
+  <g transform="translate(84,84)">
+    <circle cx="46" cy="46" r="46" fill="url(#g)"/>
+    <path d="M26 48l14 14 30 -30" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="116" y="60" font-size="44" font-weight="700" fill="#0A7D57">DZMarket</text>
+  </g>
+  <rect x="84" y="288" width="470" height="80" rx="40" fill="#0A7D57"/>
+  <text x="319" y="341" font-size="34" font-weight="700" fill="#fff" text-anchor="middle">LIVRAISON 58 WILAYAS</text>
+  <text x="84" y="500" font-size="98" font-weight="800" fill="#0A7D57">On livre partout</text>
+  <text x="84" y="610" font-size="98" font-weight="800" fill="#0A7D57">en Alg&#233;rie</text>
+  <text x="84" y="712" font-size="36" font-weight="700" fill="#0E9F6E">Yalidine &#183; Ecotrack &#183; ZR Express &#183; Guepex</text>
+  <text x="84" y="766" font-size="38" fill="#1B4332">Transporteurs int&#233;gr&#233;s. Bon de livraison</text>
+  <text x="84" y="812" font-size="38" fill="#1B4332">et suivi du colis directement dans l'app.</text>
+  <rect x="84" y="872" width="600" height="112" rx="56" fill="url(#g)"/>
+  <text x="384" y="944" font-size="42" font-weight="700" fill="#fff" text-anchor="middle">T&#201;L&#201;CHARGE DZMARKET</text>
+  <text x="84" y="1040" font-size="34" font-weight="700" fill="#0A7D57">www.dzmarket.pro</text>
+</svg>

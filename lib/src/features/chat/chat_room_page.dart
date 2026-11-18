@@ -1128,9 +1128,20 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     );
   }
 
+  String _formatMessageTimestamp(DateTime createdAt) {
+    final local = createdAt.toLocal();
+    final now = DateTime.now();
+    final time = DateFormat.Hm().format(local);
+    final isToday =
+        local.year == now.year &&
+        local.month == now.month &&
+        local.day == now.day;
+    if (isToday) return time;
+    return '${DateFormat('dd/MM').format(local)} $time';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final formatter = DateFormat.Hm();
     final currentUser = supabase.auth.currentUser?.id;
     final isSeller = currentUser != null && _sellerId == currentUser;
     final isBuyer = currentUser != null && _buyerId == currentUser;
@@ -1477,8 +1488,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
                                   const SizedBox(height: 4),
                                   Text(
                                     msg.createdAt != null
-                                        ? formatter.format(
-                                            msg.createdAt!.toLocal(),
+                                        ? _formatMessageTimestamp(
+                                            msg.createdAt!,
                                           )
                                         : '',
                                     style: Theme.of(context)

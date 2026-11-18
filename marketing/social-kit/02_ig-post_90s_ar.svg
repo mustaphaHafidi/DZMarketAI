@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080" font-family="'Segoe UI', Tahoma, 'Arial', sans-serif">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0E9F6E"/><stop offset="1" stop-color="#0A7D57"/>
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1080" fill="#F1FDF3"/>
+  <path d="M300 560l150 150 380 -380" fill="none" stroke="#0E9F6E" stroke-opacity="0.07" stroke-width="140" stroke-linecap="round" stroke-linejoin="round"/>
+  <g transform="translate(842,92)">
+    <circle cx="46" cy="46" r="46" fill="url(#g)"/>
+    <path d="M26 48l14 14 30 -30" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="-24" y="60" font-size="46" font-weight="700" fill="#0A7D57" text-anchor="end">DZMarket</text>
+  </g>
+  <text x="996" y="440" font-size="104" font-weight="800" fill="#0A7D57" text-anchor="end" direction="rtl">انشر إعلانك</text>
+  <text x="996" y="570" font-size="104" font-weight="800" fill="#0A7D57" text-anchor="end" direction="rtl">في أقل من</text>
+  <text x="996" y="700" font-size="104" font-weight="800" fill="#0A7D57" text-anchor="end" direction="rtl">90 ثانية</text>
+  <text x="996" y="792" font-size="42" fill="#1B4332" text-anchor="end" direction="rtl">البيع &#8226; الطلبات &#8226; الشات &#8226; التوصيل</text>
+  <text x="996" y="846" font-size="42" fill="#1B4332" text-anchor="end" direction="rtl">في تطبيق واحد.</text>
+  <rect x="436" y="906" width="560" height="112" rx="56" fill="url(#g)"/>
+  <text x="716" y="978" font-size="44" font-weight="700" fill="#fff" text-anchor="middle" direction="rtl">حمّل DZMARKET</text>
+  <text x="996" y="1052" font-size="40" font-weight="700" fill="#0A7D57" text-anchor="end">www.dzmarket.pro</text>
+</svg>

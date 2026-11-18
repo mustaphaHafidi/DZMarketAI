@@ -117,6 +117,18 @@ log) → dans ce cas, passer par la voie 1.
 
 ## Journal des changements (plus récent en haut)
 
+### 2026-11-15 - Codex - audit lecture seule des erreurs recentes
+
+- Controle production sans ecriture: stack Supabase saine; `www.dzmarket.pro`
+  et `app.dzmarket.pro` repondent HTTP 200; l'endpoint REST repond HTTP 401
+  sans jeton, comportement attendu.
+- `app_errors` contient 2 erreurs sur 48 h, 12 sur 7 jours et 20 sur 30 jours.
+  Les deux recentes sont un echec DNS Android isole et un `504 Gateway Timeout`
+  isole. Les logs Caddy/Kong ne montrent pas de pic 5xx ou de panne correlative.
+- Le `RangeError` de suppression d'image date du 12 novembre, hors fenetre
+  active; aucun nouvel exemplaire n'est observe. Aucun code, donnees,
+  configuration ou deploiement n'est modifie dans cet audit.
+
 ### 2026-11-12 - Codex - Search Console verifiee, sans code
 
 - La propriete de domaine `dzmarket.pro` est maintenant verifiee dans Google
@@ -738,3 +750,29 @@ sans risque ni régression.
 - iOS: le build `47` precedent est bien charge et traite par App Store Connect,
   mais la soumission TestFlight a recu `422 Another build is in review`. Ne pas
   declencher le build `48` tant que cette beta review Apple n'est pas terminee.
+
+### 2026-11-15 - Codex - nettoyage prudent des serveurs DZMarket
+
+- Inventaire puis nettoyage limite aux journaux systeme archives, bornes a
+  200 Mo. Aucun volume Supabase, bucket, base, upload, secret, conteneur ni
+  image active n'est modifie.
+- Espace recupere: 127 Mo sur `dzm-app-01`, 139 Mo sur `dzm-db-01` et 1,1 Go
+  sur `dzm-storage-01`. `www.dzmarket.pro` et `app.dzmarket.pro` repondent
+  HTTP 200; PostgreSQL et MinIO restent sains.
+- `dzm-app-01` reste a 88 % (9,2 Go libres): l'espace est surtout occupe par
+  les volumes Supabase actifs et les journaux Docker actifs. Ils sont laisses
+  intacts pour ne pas perdre de donnees ni de traces d'exploitation.
+
+### 2026-11-17 - Codex - audit lecture seule de la gestion d'erreurs
+
+- Depuis le 15 novembre: 2 erreurs Android actives, toutes deux isolees et
+  liees au reseau client (`AuthRetryableFetchException` DNS et
+  `ClientException`/socket). Il n'y a aucune nouvelle entree apres le
+  15 novembre a 22:03 UTC.
+- Tendance sur 7 jours: 6 erreurs DNS Android, 2 `504` isoles, 1 `RangeError`
+  et 1 erreur socket. Aucun 5xx Kong sur 48 h; stack Supabase saine; web et
+  app repondent HTTP 200. Le HTTP 401 de l'API sans jeton est attendu.
+- Les logs Caddy montrent seulement des deconnexions de clients (reset, pipe
+  casse ou stream HTTP/2 ferme), sans preuve de blocage. Aucune correction,
+  donnee, configuration ou release n'est justifiee a ce stade; surveiller une
+  recurrence de `504` ou une hausse des erreurs DNS.

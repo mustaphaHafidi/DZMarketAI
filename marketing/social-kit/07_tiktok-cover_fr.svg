@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920" font-family="'Segoe UI', Tahoma, Arial, sans-serif">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0E9F6E"/><stop offset="1" stop-color="#0A7D57"/>
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1920" fill="#0A7D57"/>
+  <rect x="0" y="0" width="1080" height="1920" fill="url(#g)"/>
+  <path d="M240 1040l180 180 460 -460" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="200" stroke-linecap="round" stroke-linejoin="round"/>
+  <g transform="translate(470,470)">
+    <circle cx="70" cy="70" r="70" fill="#ffffff"/>
+    <path d="M40 74l22 22 46 -46" fill="none" stroke="#0A7D57" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="540" y="720" font-size="44" font-weight="700" fill="#DFF5E7" text-anchor="middle">DZMarket</text>
+  <text x="540" y="900" font-size="96" font-weight="800" fill="#ffffff" text-anchor="middle">Arrete de courir</text>
+  <text x="540" y="1010" font-size="96" font-weight="800" fill="#ffffff" text-anchor="middle">apres les infos</text>
+  <text x="540" y="1120" font-size="96" font-weight="800" fill="#ffffff" text-anchor="middle">client dans les DM</text>
+  <text x="540" y="1240" font-size="42" fill="#DFF5E7" text-anchor="middle">L'acheteur remplit nom, tel, wilaya,</text>
+  <text x="540" y="1294" font-size="42" fill="#DFF5E7" text-anchor="middle">adresse et livraison. Toi tu expedies.</text>
+  <rect x="240" y="1380" width="600" height="120" rx="60" fill="#ffffff"/>
+  <text x="540" y="1458" font-size="46" font-weight="800" fill="#0A7D57" text-anchor="middle">DZMARKET.PRO</text>
+</svg>

@@ -46,10 +46,12 @@ class TranslationService {
     await _loadAssetLocale('fr');
     await _loadAssetLocale('ar');
     try {
-      final rows = await RateLimiter.instance.run(
-        'translations.select',
-        () => supabase.from('translations').select(),
-      );
+      final rows = await RateLimiter.instance
+          .run(
+            'translations.select',
+            () => supabase.from('translations').select(),
+          )
+          .timeout(const Duration(seconds: 3));
       for (final row in rows) {
         final key = row['key'] as String? ?? '';
         final locale = _normalizeLocaleCode(row['locale'] as String? ?? '');

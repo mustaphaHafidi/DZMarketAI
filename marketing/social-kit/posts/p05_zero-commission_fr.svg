@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080" font-family="'Segoe UI', Tahoma, Arial, sans-serif">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0E9F6E"/><stop offset="1" stop-color="#0A7D57"/>
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1080" fill="#F1FDF3"/>
+  <path d="M300 560l150 150 380 -380" fill="none" stroke="#0E9F6E" stroke-opacity="0.07" stroke-width="140" stroke-linecap="round" stroke-linejoin="round"/>
+  <g transform="translate(84,84)">
+    <circle cx="46" cy="46" r="46" fill="url(#g)"/>
+    <path d="M26 48l14 14 30 -30" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="116" y="60" font-size="44" font-weight="700" fill="#0A7D57">DZMarket</text>
+  </g>
+  <text x="70" y="660" font-size="360" font-weight="800" fill="url(#g)">0</text>
+  <text x="470" y="470" font-size="96" font-weight="800" fill="#0A7D57">commission</text>
+  <text x="470" y="575" font-size="96" font-weight="800" fill="#0A7D57">sur tes</text>
+  <text x="470" y="680" font-size="96" font-weight="800" fill="#0A7D57">ventes</text>
+  <text x="84" y="800" font-size="38" fill="#1B4332">Tu vends, tu encaisses. DZMarket ne prend</text>
+  <text x="84" y="848" font-size="38" fill="#1B4332">rien sur tes commandes.</text>
+  <text x="84" y="912" font-size="32" font-weight="700" fill="#40916C">Offre de lancement &#8212; 100 premiers vendeurs.</text>
+  <rect x="84" y="944" width="560" height="104" rx="52" fill="url(#g)"/>
+  <text x="364" y="1010" font-size="40" font-weight="700" fill="#fff" text-anchor="middle">JE PRENDS MA PLACE</text>
+</svg>
