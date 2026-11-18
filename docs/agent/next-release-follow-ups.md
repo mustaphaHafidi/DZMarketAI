@@ -219,6 +219,81 @@ sources une a une, avec tests RLS, pagination et retenue limitee des journaux.
   demarrage traductions, et le code client de la categorie "Vehicules"
   (picker, champs specifiques, filtres).
 
+## Description annonce sans saut de ligne -- 2 causes trouvees et corrigees, 1 bug restant -- 18 novembre
+
+- **Cause n°1 (corrigee)** : `InputSanitizer.sanitizeText()` supprimait tous
+  les caracteres de controle, y compris `\n`/`\r`, AVANT de consulter le
+  parametre `allowNewlines` -- ce parametre n'avait donc jamais eu d'effet
+  depuis l'origine du projet. Corrige (voir commit `ecf71bd`), 5 tests
+  ajoutes.
+- **Cause n°2 (corrigee)** : les `TextField` Description (creation ET
+  modification d'annonce) n'avaient pas `keyboardType:
+  TextInputType.multiline`. Sans ca, la touche Entree n'insere RIEN du
+  tout (ni saut de ligne, ni espace) malgre `maxLines > 1`. Corrige (voir
+  commit `4d2b58f`) -- verifie directement au niveau DOM/Flutter : taper
+  "A[Entree]B" produit maintenant bien `"A\nB"` dans le modele Flutter.
+- **Bug restant, NON corrige, a investiguer separement** : en re-testant
+  via l'ecran "Modifier l'annonce" (`edit_product_page.dart`) sur
+  l'annonce Fiat Doblo deja publiee, le champ texte affiche bien le
+  contenu corrige avec de vrais `\n` juste avant l'enregistrement (verifie
+  par lecture directe de la valeur DOM), **mais la requete PATCH reseau
+  envoyee au clic sur "Enregistrer" contient encore l'ancien texte sans
+  saut de ligne** (verifie par interception directe de la requete HTTP).
+  Autrement dit : le modele Flutter est correct, mais quelque chose dans
+  le flux de sauvegarde de `_save()` envoie une valeur perimee pour
+  `description` au lieu de relire `_descCtrl.text` au moment de l'envoi.
+  Cause exacte non trouvee malgre plusieurs heures de tests reproductibles
+  (plusieurs sessions navigateur fraiches, verification DOM/reseau a
+  chaque etape). A deboguer en re-abordant `edit_product_page.dart`
+  `_save()` avec des outils de debug Dart reels (breakpoints / print) plutot
+  que par test navigateur externe. **Impact** : une NOUVELLE annonce creee
+  depuis zero (via `add_listing_page.dart`) devrait beneficier des deux
+  correctifs ci-dessus des la creation ; seule la MODIFICATION d'une
+  annonce existante via l'ecran "Modifier" semble toucher ce bug restant
+  -- a confirmer. La description de l'annonce Fiat Doblo (id 257) reste
+  donc cassee en prod tant que ce point n'est pas resolu ou re-sauvegardee
+  manuellement par le fondateur lui-meme (session humaine normale, pas de
+  test automatise) une fois ce bug corrige.
+- **Meme pattern `keyboardType` manquant repere ailleurs** (hors
+  perimetre de cette passe) : bio profil (`profile_page.dart` `_bioCtrl`),
+  details signalement (`product_detail_page.dart`), motif litige
+  (`profile_page.dart` `reasonCtrl`), details avis public
+  (`public_profile_page.dart`), commentaire avis commande
+  (`orders_page.dart`), note moderation admin
+  (`moderation_admin_page.dart`), message chat (`chat_room_page.dart`,
+  `_controller` -- la aussi Entree n'insere rien, meme si le comportement
+  voulu pour le chat -- Entree = envoyer vs Entree = nouvelle ligne -- est
+  a trancher avec le fondateur avant de toucher ce fichier precis).
+
+## Livraison "a convenir" obligatoire pour les vehicules -- confirmation (pas un bug)
+
+- Verifie dans le code : `_isForcedArrangedDelivery()`
+  (`add_listing_page.dart`) retourne vrai pour toute annonce vehicule
+  (`VehicleSpecs.isVehicleCategory(_categorySlug)`), ce qui force
+  `_effectiveDeliveryOptions()` a ne renvoyer que `['pickup']` -- aucune
+  option de livraison par transporteur pour les vehicules. C'est le
+  comportement voulu, deja decide dans le plan Vehicules (section 2.2 :
+  "forcer la livraison en retrait en main propre pour les annonces
+  vehicule"), pas un oubli. Confirme aussi cote base : la fonction trigger
+  `enforce_pickup_for_large_products()` applique une regle similaire
+  (volume/mots-cles) independamment de la categorie, donc une annonce
+  peut aussi se retrouver en pickup-only pour cette seconde raison, sans
+  rapport avec la categorie vehicule.
+
+## Champs specifiques vehicule absents a l'etape Details -- toujours non resolu
+
+- Deja note plus haut (migration Vehicules du 18/11) : les champs
+  Modele/Annee/Kilometrage/Carburant/Boite/Carrosserie ne s'affichent pas
+  a l'etape "Details" du formulaire de creation, malgre
+  `_isVehicleListing` qui devrait correctement valoir `true`
+  (`VehicleSpecs.isVehicleCategory(_categorySlug)`, verifie correct par
+  lecture de code). Le forcage de livraison (voir section ci-dessus)
+  fonctionne correctement pour la meme categorie au meme moment du
+  formulaire, ce qui ecarte une simple erreur de `_categorySlug` jamais
+  renseigne. Cause exacte non trouvee par lecture de code seule -- a
+  reprendre avec des outils de debug Dart reels plutot qu'une nouvelle
+  tentative de lecture statique.
+
 ## Bug trouve en testant la migration Vehicules en prod -- 18 novembre
 
 - **Constat** : premiere annonce reelle creee en prod (Fiat Doblo, compte
