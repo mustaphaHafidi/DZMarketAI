@@ -527,6 +527,8 @@ class _EditProductPageState extends State<EditProductPage> {
                 labelText: L10n.tr(context, 'listing.add.description_label'),
               ),
               maxLines: 3,
+              keyboardType: TextInputType.multiline,
+              textInputAction: TextInputAction.newline,
             ),
             const SizedBox(height: 12),
             TextField(

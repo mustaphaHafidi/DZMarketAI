@@ -2086,6 +2086,8 @@ class _AddListingPageState extends State<AddListingPage> {
                 TextField(
                   controller: _descCtrl,
                   maxLines: 4,
+                  keyboardType: TextInputType.multiline,
+                  textInputAction: TextInputAction.newline,
                   decoration: InputDecoration(
                     labelText: L10n.tr(
                       context,
