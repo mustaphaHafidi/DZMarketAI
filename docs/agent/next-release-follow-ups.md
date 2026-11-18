@@ -265,6 +265,48 @@ sources une a une, avec tests RLS, pagination et retenue limitee des journaux.
   voulu pour le chat -- Entree = envoyer vs Entree = nouvelle ligne -- est
   a trancher avec le fondateur avant de toucher ce fichier precis).
 
+### Deploiement web du commit 6612486 -- confirme en prod -- 18 novembre (soir)
+
+- Build (`flutter build web --release --no-tree-shake-icons
+  --dart-define-from-file=test/test_env.json`) + `verify_web_artifact.ps1`
+  + bascule atomique via `claude-deploy`, un seul rollback conserve
+  (`dzmarket-web-rollback-20261118-170834`). Hash `main.dart.js` servi en
+  prod identique au build local (`2b9099bafbed08ff934e20113a6d8dc9`) --
+  confirme que le code livre est exactement celui des 2 correctifs
+  ci-dessus, pas une version intermediaire.
+- **Piege d'extraction rencontre et corrige** : `unzip` d'une archive
+  `Compress-Archive` (Windows) laisse certains repertoires imbriques
+  (ceux qui contiennent eux-memes des sous-repertoires, ex.
+  `assets/packages/cupertino_icons`, `assets/marketing/web-tutorial`)
+  sans bit d'execution (`drw-rw-r--`). `find <dir> -type d -exec chmod 755
+  {} +` (execution groupee avec `+`) ne corrige PAS ce cas : find doit
+  d'abord entrer dans le repertoire pour continuer sa recherche, ce qui
+  echoue avant que le chmod groupe ne s'applique. Correctif qui marche :
+  `find <dir> -type d -exec chmod 755 {} \;` (execution immediate par
+  fichier, PAS groupee) -- chaque repertoire est corrige en pre-ordre,
+  avant que find tente d'y entrer. A reutiliser pour tout futur deploiement
+  web tant que `Compress-Archive` est l'outil de zip cote Windows.
+- **Test fonctionnel reel en prod (Playwright)** : formulaire "Nouvelle
+  annonce" > categorie Voitures > etape Details > champ Description,
+  saisie `LigneA[Entree]LigneB` -> valeur lue dans le DOM =
+  `"LigneA\nLigneB"` (vrai saut de ligne). **Confirme : une NOUVELLE
+  annonce preserve maintenant les sauts de ligne de bout en bout.** Catalogue
+  Vehicules (6 sous-categories) confirme visible et selectionnable dans ce
+  meme test. 30 erreurs console `net::ERR_NAME_NOT_RESOLVED`/WebSocket
+  observees pendant le test -- meme famille de blip reseau local/WARP deja
+  identifiee plus haut dans cette session (confirme transitoire : `curl`
+  vers les memes domaines repond 200 en parallele), pas une regression.
+  Formulaire abandonne sans publier, aucune annonce creee par ce test.
+- **Confirme en passant, inchange** : les champs specifiques vehicule
+  (modele/annee/km/carburant/boite/carrosserie) restent absents a l'etape
+  Details meme apres ce deploiement -- bug toujours ouvert, voir section
+  dediee plus haut.
+- **Reste a faire** : le bug #1 ci-dessus (ecran "Modifier l'annonce" qui
+  envoie une description perimee) n'est pas corrige par ce deploiement --
+  seul le flux de CREATION a ete verifie. L'annonce Fiat Doblo (id 257)
+  reste cassee en prod jusqu'a correction de ce bug ou re-saisie manuelle
+  par le fondateur.
+
 ## Livraison "a convenir" obligatoire pour les vehicules -- confirmation (pas un bug)
 
 - Verifie dans le code : `_isForcedArrangedDelivery()`
