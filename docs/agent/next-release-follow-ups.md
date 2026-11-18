@@ -218,6 +218,24 @@ sources une a une, avec tests RLS, pagination et retenue limitee des journaux.
   change. Blocage reel, pas une supposition : a lever par le fondateur
   (nouvelle cle, ou reautoriser l'actuelle) avant toute application de
   migration ou tout build/deploiement serveur.
+- **Test d'integration vehicule ecrit, pret a s'activer tout seul** :
+  `integration_test/vehicle_listing_flow_test.dart` (nouveau) cree un
+  compte vendeur jetable (meme pattern que `auth_flow_test.dart`), cherche
+  la categorie `vehicles-cars` en base, et si elle existe, publie une
+  annonce voiture complete (marque/modele/annee/kilometrage/carburant/
+  boite/carrosserie), verifie que les 6 champs ressortent identiques en
+  base, puis supprime l'annonce de test. Si la categorie n'existe pas
+  encore (cas actuel, migration non appliquee), le test s'arrete
+  proprement sans echec -- il s'activera reellement tout seul des que la
+  migration sera appliquee en prod, sans repasser par une session de code.
+  Execute 2 fois sur le Samsung branche pour verifier : 1er essai, une
+  vraie coupure reseau transitoire sur l'appel `profiles` (meme famille que
+  les erreurs reseau Android deja repertoriees plus haut, pas un bug du
+  code) ; 2e essai, vert et rapide (2s), confirme le skip propre attendu.
+- **Verifie via navigateur (Playwright) contre la prod** : `app.dzmarket.pro`
+  charge normalement (annonces reelles visibles, aucune regression), le
+  panneau "Catégorie" liste les categories existantes sans "Vehicules" --
+  coherent avec la migration non appliquee, pas une anomalie.
 - **Validation ajoutee (2026-11-18, suite 2e avis)** : marque/modele +
   annee + kilometrage sont maintenant reellement requis a l'etape
   "Details" quand la categorie est un vehicule (`_validateStep`), pas
