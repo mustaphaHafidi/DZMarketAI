@@ -5,9 +5,14 @@ class InputSanitizer {
     bool allowNewlines = false,
   }) {
     var value = input.trim();
-    value = value.replaceAll(RegExp(r'[\u0000-\u001F\u007F]'), '');
-    if (!allowNewlines) {
-      value = value.replaceAll(RegExp(r'[\r\n]+'), ' ');
+    if (allowNewlines) {
+      // Strip control chars but keep \n (0x0A) and \r (0x0D) intact.
+      value = value.replaceAll(
+        RegExp(r'[\u0000-\u0009\u000B\u000C\u000E-\u001F\u007F]'),
+        '',
+      );
+    } else {
+      value = value.replaceAll(RegExp(r'[\u0000-\u001F\u007F]'), '');
     }
     if (value.length > maxLength) {
       value = value.substring(0, maxLength);
