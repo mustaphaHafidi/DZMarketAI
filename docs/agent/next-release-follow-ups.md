@@ -49,6 +49,33 @@ les tests de release.
 - **Limite volontaire** : ne pas etendre a l'avatar ou a la modification
   d'annonce sans occurrence confirmee dans ces ecrans.
 
+### Direction du texte melangee FR/AR dans les descriptions d'annonce -- corrige 2026-11-18
+
+- **Demande du fondateur** : conserver le texte tel que tape par le vendeur
+  (aucun reformatage automatique, les sauts de ligne qu'il tape sont deja
+  preserves depuis le debut du projet via `allowNewlines: true`), mais
+  respecter le sens d'ecriture quand une description melange arabe et
+  francais -- ne pas melanger visuellement les deux.
+- **Cause** : les `Text()` affichant la description sur la fiche produit
+  (`product_detail_page.dart`, 3 emplacements actifs) n'avaient pas de
+  `textDirection` explicite -- ils heritaient de la direction ambiante de
+  l'app (basee sur la langue de l'interface), pas du contenu reel de la
+  description. Une description surtout en francais s'affichait en RTL si
+  l'app etait en arabe (et inversement), faussant l'alignement et l'ordre
+  de la ponctuation/chiffres.
+- **Correctif** : nouvelle fonction pure `detectTextDirection()`
+  (`lib/src/utils/bidi_text_direction.dart`), regle standard "premier
+  caractere fort" (meme heuristique que `dir="auto"` en HTML -- chiffres/
+  espaces/ponctuation ignores). Appliquee aux 3 `Text()` actifs de la
+  description sur la fiche produit. Aucun changement de logique de saisie,
+  aucun reformatage, aucun changement d'IHM visible hors direction du
+  texte. Filtres "Parcourir" deja adaptes a la categorie Vehicules
+  (verifie : `listings_page.dart` + `product_service.dart` appliquent deja
+  annee min/max, kilometrage max, carburant, boite).
+- **Tests** : 7 tests unitaires purs ajoutes
+  (`test/bidi_text_direction_test.dart`). `flutter analyze` + `flutter
+  test` verts (168 passes, 2 skip, 0 echec).
+
 ## A realiser - prochaines versions (chat a ameliorer)
 
 ### Horodatage des messages sans date (chat) -- corrige 2026-11-18

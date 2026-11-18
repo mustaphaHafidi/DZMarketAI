@@ -24,6 +24,7 @@ import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/utils/vehicle_specs.dart';
+import 'package:dzmarket/src/utils/bidi_text_direction.dart';
 import 'package:dzmarket/src/utils/bool_utils.dart';
 import 'package:dzmarket/src/utils/detail_layout_utils.dart';
 import 'package:dzmarket/src/utils/product_share_url.dart';
@@ -2049,6 +2050,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           const SizedBox(height: 12),
           Text(
             _product!.description ?? L10n.tr(context, 'listing.no_description'),
+            textDirection: detectTextDirection(_product!.description),
           ),
           const SizedBox(height: 100),
         ],
@@ -2113,6 +2115,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           Text(
             _product!.description ?? L10n.tr(context, 'listing.no_description'),
             style: Theme.of(context).textTheme.bodyLarge,
+            textDirection: detectTextDirection(_product!.description),
           ),
           const SizedBox(height: 18),
           _SellerRowFixed(
@@ -2432,6 +2435,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         Text(
                           _product!.description ??
                               L10n.tr(context, 'listing.no_description'),
+                          textDirection: detectTextDirection(
+                            _product!.description,
+                          ),
                         ),
                         const SizedBox(height: 100),
                       ],
