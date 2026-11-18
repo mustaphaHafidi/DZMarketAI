@@ -830,3 +830,19 @@ sans risque ni régression.
 - USB: APK `1.0.10+48` installee sans effacer les donnees; demarrage et
   feuille de filtres valides. L'appareil n'a ni DNS ni route Internet, donc
   le scenario connecte Vehicules reste NO-GO jusqu'au retablissement du reseau.
+
+### 2026-11-18 - Codex - deploiement web vehicules
+
+- Commit `ef657dd` pousse sur `main`. L'artefact Web a ete construit puis
+  valide avec `verify_web_artifact.ps1` avant la bascule atomique sur
+  `dzm-app-01`; `config.json` a ete conserve et le rollback immediat est
+  `dzmarket-web-rollback-20261118-224549`.
+- Verification post-deploiement: `www`, `app`, `robots.txt`, `sitemap.xml`
+  et l'API retournent HTTP 200. Le navigateur charge le nouveau select
+  produits avec tous les champs vehicule en HTTP 200, les traductions et les
+  images repondent, sans erreur console.
+- Android et iOS ne sont pas publies: le Samsung USB est hors ligne et ne
+  permet pas le scenario connecte; la revue beta iOS precedente doit aussi
+  etre terminee avant une nouvelle soumission. Le nettoyage de l'ancien
+  rollback n'a pas ete execute par la politique d'execution; il est sans
+  impact et le rollback valide est conserve.
