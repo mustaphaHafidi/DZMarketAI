@@ -200,9 +200,24 @@ sources une a une, avec tests RLS, pagination et retenue limitee des journaux.
   `on conflict (slug)`) -- non verifie ici faute d'acces SSH/DB dans cette
   session. `flutter analyze` + `flutter test` verts (154 passes, 2 skip)
   valident uniquement le code Flutter, pas la migration SQL elle-meme.
-- **Etat** : code pret localement, migration et build non deployes. Test
-  reel sur le Samsung branche + application de la migration a prevoir
-  avant toute mise en production.
+- **Etat (mis a jour 2026-11-18)** : code pret localement. Test reel sur le
+  Samsung branche (R5CNC13Y7WN) fait : phase smoke
+  (`auth_flow_test`, `security_state_test`,
+  `shipping_validation_zrexpress_test`), 3/3 verts via
+  `run_quality_gate.ps1 -RunIntegration -DeviceId R5CNC13Y7WN
+  -IntegrationPhase smoke`. Harnais de charge k6 (`load/*.js` +
+  `scripts/run_k6_phase.ps1`) verifie fonctionnel par un run volontairement
+  petit (5 VUs/30s, scenario `listings`, lecture seule) contre
+  `api.dzmarket.pro` : p95=178ms, 0% erreur, seuils respectes -- k6 installe
+  localement (`winget install GrafanaLabs.k6`), absent avant cette session.
+  Build et migration SQL restent non deployes : l'acces SSH prod
+  (`root@91.107.239.5`, cle `dzmarket_hetzner`) est **rejete par le
+  serveur** (`Permission denied (publickey,password)`, verifie en direct,
+  pas un probleme de passphrase cote agent) -- la cle locale n'est
+  actuellement plus autorisee sur `dzm-app-01`/`dzm-db-01`, ou l'acces a
+  change. Blocage reel, pas une supposition : a lever par le fondateur
+  (nouvelle cle, ou reautoriser l'actuelle) avant toute application de
+  migration ou tout build/deploiement serveur.
 - **Validation ajoutee (2026-11-18, suite 2e avis)** : marque/modele +
   annee + kilometrage sont maintenant reellement requis a l'etape
   "Details" quand la categorie est un vehicule (`_validateStep`), pas
