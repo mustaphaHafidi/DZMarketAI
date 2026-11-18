@@ -199,6 +199,29 @@ sources une a une, avec tests RLS, pagination et retenue limitee des journaux.
   rebuild complet + bascule atomique, verifie 200 publiquement. Voir
   `JOURNAL-IA.md` (entree du 5 novembre) pour le detail.
 
+## Deploiement web du 18 novembre (deja en prod)
+
+- Acces SSH prod debloque le 18/11 : utilisateur dedie `claude-deploy` sur
+  `dzm-app-01` uniquement (pas de sudo, pas de mot de passe, cree via la
+  cle root le temps de corriger la cause -- le compte n'avait en realite
+  jamais ete cree par le script precedent malgre la confirmation "execute
+  sans erreur"). ACL `setfacl` + sticky bit ajoutes sur `/var/www` pour que
+  ce compte puisse gerer ses propres repertoires de deploiement sans
+  toucher aux autres entrees root de `/var/www` (ex. `dzmarket-web.old`).
+- Build web (`flutter build web --release --no-tree-shake-icons
+  --dart-define-from-file=test/test_env.json`) depuis le commit `8790adc`,
+  verifie par `verify_web_artifact.ps1`, bascule atomique avec un seul
+  rollback conserve (`dzmarket-web-rollback-20261118-145943`),
+  `config.json` prod preserve. Les 5 controles d'URL + `api.dzmarket.pro`
+  + console navigateur (0 erreur/avertissement) sont verts.
+- **Contenu livre** : correctif direction de texte FR/AR sur la fiche
+  produit, horodatage chat, message d'erreur admin Moderation, timeout
+  demarrage traductions, et le code client de la categorie "Vehicules"
+  (picker, champs specifiques, filtres) -- **ce dernier reste invisible/
+  inerte en prod tant que la migration SQL ci-dessous n'est pas appliquee**
+  (aucune ligne `categories` avec slug `vehicles*` n'existe encore en base
+  : le picker ne peut rien afficher qui n'existe pas, ce n'est pas un bug).
+
 ## Nouvelle categorie "Vehicules" (code livre 2026-11-18, pas encore deploye)
 
 - **Perimetre** : categorie racine `vehicles` + 6 sous-categories
