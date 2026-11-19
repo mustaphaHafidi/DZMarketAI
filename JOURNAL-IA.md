@@ -969,3 +969,8 @@ sans risque ni régression.
   et valide par `verify_web_artifact.ps1`. La suite Flutter complete a ete
   lancee mais son code final n'a pas ete capture par le terminal local; ne pas
   l'utiliser comme preuve independante dans une publication mobile.
+- Deploiement web: commit `cdc88db` synchronise apres copie de retour arriere
+  `dzmarket-web-rollback-20261119-170448`; `config.json` conserve. Le SHA-256
+  de `main.dart.js` servi correspond a l'artefact local. `www`, `app`,
+  `robots.txt`, `sitemap.xml`, les deux pages auth-email et l'API repondent
+  tous HTTP 200.
