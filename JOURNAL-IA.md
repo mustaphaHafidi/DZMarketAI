@@ -974,3 +974,44 @@ sans risque ni régression.
   de `main.dart.js` servi correspond a l'artefact local. `www`, `app`,
   `robots.txt`, `sitemap.xml`, les deux pages auth-email et l'API repondent
   tous HTTP 200.
+
+### 2026-11-19 - Claude - correctif chargement infini web + acces direct aux annonces
+
+- **Signale par le fondateur** (capture d'ecran Chrome Android, reseau
+  Ooredoo Mobilis): la page d'accueil `www.dzmarket.pro` lui semblait inutile
+  avant d'arriver aux annonces, et le clic vers `app.dzmarket.pro` restait
+  bloque en chargement infini.
+- **Cause identifiee (lecture seule, rien casse a cette etape)**:
+  `_loadWebRuntimeConfig()` dans `lib/src/config/app_config.dart` faisait
+  `await http.get('/config.json')` sans aucun timeout. Sur un reseau mobile
+  instable, cette requete pouvait rester bloquee indefiniment et empechait
+  `runApp()` de s'executer -> page blanche permanente. Meme classe de bug que
+  celui deja corrige dans `TranslationService.load()`.
+- **Correctif n°1**: ajoute `.timeout(const Duration(seconds: 3))` sur ce
+  meme appel, avec le meme repli silencieux deja en place (`try/catch`
+  existant). Valide par Playwright en simulant `config.json` qui ne repond
+  jamais: l'app rend son contenu reel en ~1,8s au lieu de rester bloquee.
+- **Correctif n°2** (decision validee par le fondateur via question posee):
+  un visiteur humain sur `www.dzmarket.pro`/`dzmarket.pro` (racine) est
+  desormais redirige automatiquement vers `app.dzmarket.pro` (liste des
+  annonces), au lieu de devoir cliquer sur un lien qui forcait un rechargement
+  complet cross-origin. La page marketing HTML reste intacte dans le code
+  (meta/Open Graph/JSON-LD/hreflang) pour les crawlers connus (SEO, apercus
+  Facebook/Twitter/WhatsApp) et via le parametre d'echappement `?stay=1`.
+- **Preuve avant deploiement**: `flutter analyze --no-pub` (2 avertissements
+  historiques inchanges, aucun nouveau), `flutter test` (`180 OK, 2 ignores`),
+  build web + `verify_web_artifact.ps1` OK, puis verification Playwright en
+  local ET en production: visiteur humain -> redirige vers les annonces
+  reelles (0 erreur console); Googlebot (UA simule) -> reste sur la page
+  marketing; `?stay=1` -> reste sur la page marketing.
+- **Deploiement**: commit `a686a18`, synchronise via le compte `claude-deploy`
+  apres copie de retour arriere `dzmarket-web-rollback-20261119-2052`;
+  `config.json` prod conserve. SHA-256 de `main.dart.js` servi identique a
+  l'artefact local. `www`, `app`, `robots.txt`, `sitemap.xml`, les deux URLs
+  de polices d'icones, les deux pages auth-email et l'API repondent tous HTTP
+  200; console navigateur a 0 erreur sur `/`, `/sign-in` et apres redirection.
+  Menage: les 4 anciens dossiers `dzmarket-web-rollback-*` perimes (depuis le
+  18-19/11) supprimes apres confirmation du fondateur, un seul rollback
+  conserve (celui de ce deploiement).
+- **Hors scope, non touche**: Android, iOS, base de donnees/migrations,
+  secrets, autres serveurs.

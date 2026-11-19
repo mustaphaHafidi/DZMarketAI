@@ -4,6 +4,24 @@ Mis a jour : 2026-11-19. Cette fiche ne contient que les constats utiles
 depuis les dernieres releases. Elle ne remplace ni les logs de production ni
 les tests de release.
 
+## Deploiement web - correctif chargement infini + acces direct - 2026-11-19
+
+Web uniquement (commit `a686a18`), mobile non touche.
+
+- `_loadWebRuntimeConfig()` (`lib/src/config/app_config.dart`) manquait de
+  timeout sur `http.get('/config.json')` au demarrage web -> page blanche
+  permanente possible sur reseau mobile instable (signale par le fondateur
+  sur Ooredoo Mobilis). Corrige avec `.timeout(const Duration(seconds: 3))`,
+  meme pattern que `TranslationService.load()`.
+- `www.dzmarket.pro`/`dzmarket.pro` (racine) redirige desormais
+  automatiquement un visiteur humain vers `app.dzmarket.pro`, au lieu d'un
+  lien a cliquer qui forcait un rechargement cross-origin complet. Page
+  marketing HTML inchangee pour les crawlers connus et via `?stay=1`
+  (decision validee par le fondateur).
+- Deploye et verifie (hash `main.dart.js`, 9 URLs 200, console 0 erreur en
+  local et en prod, redirection/bot/`?stay=1` confirmes par Playwright).
+  Voir `JOURNAL-IA.md` (entree du 19 novembre) pour le detail complet.
+
 ## Release mobile 1.0.10+49 - 2026-11-19
 
 Tentative de publication mobile uniquement (Android + iOS), web non touche.
