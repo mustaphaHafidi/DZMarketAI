@@ -846,3 +846,96 @@ sans risque ni régression.
   etre terminee avant une nouvelle soumission. Le nettoyage de l'ancien
   rollback n'a pas ete execute par la politique d'execution; il est sans
   impact et le rollback valide est conserve.
+
+### 2026-11-19 - Codex - correctifs images vehicule, profil et localisation
+
+- Prepare localement: images vehicule en mode `contain` sur cartes et fiche,
+  validation telephone mobile algerien (05/06/07) avec conservation des
+  anciens profils, et repli explicite vers le choix manuel quand la
+  geolocalisation ne reconnait pas la wilaya. Les changements exclus par le
+  fondateur (barre laterale et hauteur/ordre de la fiche profil) ne sont pas
+  touches.
+- Protection plaques preparee mais NON activee: originaux prives dans
+  `listing-staging`, fonction `redact-vehicle-images`, migration additive et
+  copies publiques uniquement apres redaction. Le controle serveur a montre
+  que les variables `SIGHTENGINE_*` ne sont pas presentes dans l'executant
+  Edge; aucun deploiement ni publication de cette partie ne doit avoir lieu
+  avant configuration des secrets et preuve de transformation.
+- Verification locale: JSON i18n OK, tests cibles OK, suite Flutter complete
+  `174 OK, 2 ignores`, et build web release valide par
+  `verify_web_artifact.ps1`. Analyse: seulement 2 warnings historiques dans
+  `auth_service.dart`.
+- USB: APK `DZMarketAI Dev` construite et installee sur le Samsung Android
+  15, lancement sans crash fatal. Le telephone n'avait pas de connexion
+  effective pendant le test, donc aucun scenario connecte, image reelle ou
+  publication n'est valide. Web, Android et iOS: NO-GO tant que la redaction
+  et le test connecte ne sont pas completes.
+
+### 2026-11-19 - Codex - cartes Parcourir Android compactes
+
+- Correctif local: les badges livraison/accord ne sont plus rendus dans les
+  cartes a deux colonnes sur petit telephone. Ils provoquaient le
+  `BOTTOM OVERFLOW` visible sur la capture; le titre et la wilaya conservent
+  leur espace. Les cartes plus larges gardent les badges si la hauteur suffit.
+- Preuve locale: nouveau test pur du seuil compact, puis suite Flutter complete
+  `176 OK, 2 ignores`, sans echec. `flutter analyze --no-pub`: seulement les
+  deux warnings historiques de `auth_service.dart`.
+- USB revalide apres le correctif: le Samsung est connecte a un reseau Wi-Fi
+  valide, l'APK dev a ete reinstalle sans effacer les donnees, et la grille
+  invitee charge des annonces reelles au format 1080 x 2400 sans overflow ni
+  crash fatal dans le journal. Aucun mot de passe n'est lu depuis la base ou
+  reutilise depuis un journal de conversation; le scenario connecte reste a
+  faire avec un compte de test explicitement fourni au moment du test.
+- Aucun deploiement ni publication mobile n'a ete fait par cette entree.
+
+### 2026-11-19 - Codex - decision photos vehicule
+
+- Le fondateur a refuse le masquage automatique des plaques pour privilegier
+  la rapidite et la simplicite. La fonction Edge, le bucket prive, la
+  migration associee et le chemin applicatif local sont retires avant toute
+  publication. Les photos vehicule reviennent au flux produits existant.
+- Diagnostic edition: une annonce standard est modifiable. Une annonce
+  vehicule peut seulement modifier ses champs generiques dans l'ecran actuel;
+  ses caracteristiques techniques et ses regles sans livraison ne sont pas
+  encore prises en charge par cet ecran. Publication vehicules: NO-GO jusqu'a
+  correction et test de cette edition specifique.
+
+### 2026-11-19 - Codex - edition vehicule et connexion Google Dev
+
+- Corrige localement: l'edition d'une annonce vehicule affiche et enregistre
+  marque/modele, annee, kilometrage, carburant, transmission, carrosserie,
+  moteur et puissance. Les champs incompatibles (livraison, colis, stock,
+  assurance et echange) restent caches et sont neutralises a la sauvegarde.
+  Les annonces standard conservent leur flux existant.
+- Texte d'authentification rendu coherent avec le bouton Google, avec message
+  specifique si la connexion Google est indisponible. Le projet Android Dev
+  ne contient aucun client OAuth Android dans son `google-services.json`;
+  Google/Firebase doit enregistrer `com.dzmarket.app.dev` et son certificat
+  Dev avant de pouvoir tester ce parcours sur le Samsung. La production n'est
+  pas modifiee.
+- Preuve locale: tests cibles `16 OK`, suite Flutter `178 OK, 2 ignores`,
+  analyse sans nouvelle erreur (2 warnings historiques seulement). Aucun
+  deploiement, commit ou publication: NO-GO jusqu'au test connecte USB apres
+  correction OAuth et au feu vert iOS existant.
+- Web: build release et `verify_web_artifact.ps1` reussis. Android Dev: APK
+  non construite le 2026-11-19, car Flutter 3.47.2 refuse AGP 8.9.1 (minimum
+  8.11.1). Ne pas contourner la verification ni modifier Gradle dans une
+  release fonctionnelle: traiter cette mise a niveau comme un chantier
+  Android separe avec build et test USB avant toute publication.
+
+### 2026-11-19 - Codex - preuve release Android production 1.0.10 (49)
+
+- Outil Android mis a niveau pour Flutter 3.47.2: AGP 8.11.2, Kotlin 2.2.20,
+  Gradle 8.14 et heap Gradle 4 GiB. Le script de production ne contourne plus
+  la validation de dependances Flutter.
+- APK `prod` 1.0.10 (49) construite avec le script protege, installee depuis
+  zero sur le Samsung USB de test. Demarrage, permission notification, grille
+  compacte, ecran de connexion et retour Google complet vers DZMarket verifies.
+  Aucun compte, mot de passe, annonce ou donnee de production n'est cree.
+- Texte de connexion corrige: lorsque Google est disponible, il annonce email
+  ou Google. La suite Flutter est a `178 OK, 2 ignores`; analyse: deux warnings
+  historiques seulement. Le web a ete reconstruit et
+  `verify_web_artifact.ps1` est OK.
+- Aucun bundle Play, build TestFlight, push ou deploiement web n'est encore
+  lance. Le bundle Android, le commit exact et les publications restent a faire
+  apres revue finale de l'etat Git.

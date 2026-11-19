@@ -92,7 +92,6 @@ try {
   $buildCommand = if ($Artifact -eq "apk") { "apk" } else { "appbundle" }
   & flutter build $buildCommand `
     --no-pub `
-    --android-skip-build-dependency-validation `
     --release `
     --flavor prod `
     -t lib/main.dart `

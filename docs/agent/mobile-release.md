@@ -38,6 +38,22 @@ Use variable names only; never expose values.
 - For Play release, build an AAB, not only APK.
 - Do not claim Play publication while Play Console shows review/pending status.
 
+## Android Build Toolchain
+
+- Flutter 3.47 requires Android Gradle Plugin (AGP) 8.11 or newer and Gradle
+  8.14 or newer for this project. Keep `android/settings.gradle.kts` on AGP
+  `8.11.2`, Kotlin `2.2.20`, and the wrapper on Gradle `8.14`; AGP 8.11
+  supports this wrapper.
+- The Android transform step needs a 4 GiB Gradle heap on this Windows build
+  host. Keep the existing `android.enableJetifier=true`; do not disable it as
+  a release-build workaround.
+- Do not use `--android-skip-build-dependency-validation` for a release. A
+  build must pass dependency validation before it can be installed or uploaded.
+- `dev` is a separate package (`com.dzmarket.app.dev`). Before USB Google
+  sign-in testing, register its Android OAuth client and the Dev signing
+  certificate fingerprints in Firebase/Google Cloud; do not alter production
+  OAuth settings for that task.
+
 ## Release Rules
 
 - Increment build number before store redeploy.

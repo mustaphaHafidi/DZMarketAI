@@ -7,6 +7,20 @@ void main() {
     expect(PhoneFormatter.normalizeDzE164('0612345678'), '+213612345678');
   });
 
+  test('normalizeDzMobileE164 accepts only Algerian mobile formats', () {
+    expect(
+      PhoneFormatter.normalizeDzMobileE164('0555 010 203'),
+      '+213555010203',
+    );
+    expect(
+      PhoneFormatter.normalizeDzMobileE164('+213 667 854 321'),
+      '+213667854321',
+    );
+    expect(PhoneFormatter.normalizeDzMobileE164('0211234567'), isEmpty);
+    expect(PhoneFormatter.normalizeDzMobileE164('061234567'), isEmpty);
+    expect(PhoneFormatter.normalizeDzMobileE164('+33612345678'), isEmpty);
+  });
+
   test('normalizeDzE164 cleans +2130 prefix', () {
     expect(PhoneFormatter.normalizeDzE164('+2130555010203'), '+213555010203');
   });

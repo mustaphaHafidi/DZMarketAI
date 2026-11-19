@@ -206,6 +206,10 @@ class AuthService {
     if (isNetworkIssue) {
       return L10n.trLocale(locale, 'auth.error_server_unreachable');
     }
+    if (message.contains('api exception: 10') ||
+        message.contains('developer_error')) {
+      return L10n.trLocale(locale, 'auth.google_unavailable');
+    }
     return L10n.trLocale(locale, fallbackKey);
   }
 

@@ -14,6 +14,16 @@ Read this when investigating regressions or recent release bugs.
 - Supabase self-host Google provider may need provider-specific nonce handling depending on auth server version/config.
 - Do not compare Android success as proof that iOS redirect/client config is correct.
 
+## Google Sign-In Android Dev
+
+- `com.dzmarket.app.dev` is a distinct Android package from production. Its
+  OAuth client and the SHA-1/SHA-256 certificate used to sign the Dev APK must
+  be registered in the same Firebase/Google Cloud project as the web client.
+- A missing Dev client lets the Google account picker open then returns an
+  error. This is an external Firebase/Google Cloud configuration task, not a
+  Supabase account or password issue. Never change production OAuth settings
+  while adding the Dev package and certificate.
+
 ## Chat And Orders
 
 - Contact seller should create/open a conversation without creating empty unread message noise.

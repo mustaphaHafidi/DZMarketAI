@@ -24,6 +24,7 @@ import 'package:dzmarket/src/services/network_preferences_service.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/utils/vehicle_specs.dart';
+import 'package:dzmarket/src/utils/listing_image_fit.dart';
 import 'package:dzmarket/src/utils/bidi_text_direction.dart';
 import 'package:dzmarket/src/utils/bool_utils.dart';
 import 'package:dzmarket/src/utils/detail_layout_utils.dart';
@@ -1805,20 +1806,29 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       heroImages,
                       initialIndex: selectedHeroIndex,
                     ),
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 220),
-                      child: CachedNetworkImage(
-                        key: ValueKey(heroImages[selectedHeroIndex]),
-                        imageUrl: heroImages[selectedHeroIndex],
-                        fit: BoxFit.cover,
-                        memCacheWidth: imagePrefs.detailImageMemCacheWidth,
-                        fadeInDuration: imagePrefs.imageFadeInDuration,
-                        fadeOutDuration: imagePrefs.imageFadeOutDuration,
-                        imageRenderMethodForWeb:
-                            ImageRenderMethodForWeb.HttpGet,
-                        errorWidget: (_, __, ___) => const ColoredBox(
-                          color: Colors.black12,
-                          child: Center(child: Icon(Icons.image_not_supported)),
+                    child: ColoredBox(
+                      color: isVehicle
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerHighest
+                          : Colors.transparent,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 220),
+                        child: CachedNetworkImage(
+                          key: ValueKey(heroImages[selectedHeroIndex]),
+                          imageUrl: heroImages[selectedHeroIndex],
+                          fit: listingImageFit(_product!.categorySlug),
+                          memCacheWidth: imagePrefs.detailImageMemCacheWidth,
+                          fadeInDuration: imagePrefs.imageFadeInDuration,
+                          fadeOutDuration: imagePrefs.imageFadeOutDuration,
+                          imageRenderMethodForWeb:
+                              ImageRenderMethodForWeb.HttpGet,
+                          errorWidget: (_, __, ___) => const ColoredBox(
+                            color: Colors.black12,
+                            child: Center(
+                              child: Icon(Icons.image_not_supported),
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -1927,7 +1937,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   ),
               ],
             )
-          : _ImageCarousel(controller: _pageController, images: heroImages);
+          : _ImageCarousel(
+              controller: _pageController,
+              images: heroImages,
+              isVehicle: isVehicle,
+            );
       return SizedBox(
         height: heroExpandedHeight,
         child: Stack(
@@ -2326,6 +2340,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     background: _ImageCarousel(
                       controller: _pageController,
                       images: heroImages,
+                      isVehicle: isVehicle,
                     ),
                   ),
                 ),
@@ -3970,10 +3985,15 @@ class _CheckoutAddressSheetState extends State<_CheckoutAddressSheet> {
 }
 
 class _ImageCarousel extends StatefulWidget {
-  const _ImageCarousel({required this.controller, required this.images});
+  const _ImageCarousel({
+    required this.controller,
+    required this.images,
+    this.isVehicle = false,
+  });
 
   final PageController controller;
   final List<String> images;
+  final bool isVehicle;
 
   @override
   State<_ImageCarousel> createState() => _ImageCarouselState();
@@ -4013,16 +4033,21 @@ class _ImageCarouselState extends State<_ImageCarousel> {
           itemCount: widget.images.length,
           itemBuilder: (context, i) => GestureDetector(
             onTap: () => _openFullscreen(i),
-            child: CachedNetworkImage(
-              imageUrl: widget.images[i],
-              fit: BoxFit.cover,
-              memCacheWidth: imagePrefs.detailImageMemCacheWidth,
-              fadeInDuration: imagePrefs.imageFadeInDuration,
-              fadeOutDuration: imagePrefs.imageFadeOutDuration,
-              imageRenderMethodForWeb: ImageRenderMethodForWeb.HttpGet,
-              errorWidget: (_, __, ___) => const ColoredBox(
-                color: Colors.black12,
-                child: Center(child: Icon(Icons.image_not_supported)),
+            child: ColoredBox(
+              color: widget.isVehicle
+                  ? Theme.of(context).colorScheme.surfaceContainerHighest
+                  : Colors.transparent,
+              child: CachedNetworkImage(
+                imageUrl: widget.images[i],
+                fit: widget.isVehicle ? BoxFit.contain : BoxFit.cover,
+                memCacheWidth: imagePrefs.detailImageMemCacheWidth,
+                fadeInDuration: imagePrefs.imageFadeInDuration,
+                fadeOutDuration: imagePrefs.imageFadeOutDuration,
+                imageRenderMethodForWeb: ImageRenderMethodForWeb.HttpGet,
+                errorWidget: (_, __, ___) => const ColoredBox(
+                  color: Colors.black12,
+                  child: Center(child: Icon(Icons.image_not_supported)),
+                ),
               ),
             ),
           ),

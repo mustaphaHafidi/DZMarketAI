@@ -1,4 +1,25 @@
 class PhoneFormatter {
+  /// Returns the canonical E.164 form for an Algerian mobile number.
+  ///
+  /// The public seller-contact flow supports the three mobile prefixes 05,
+  /// 06 and 07 only. Empty or non-Algerian values are intentionally rejected.
+  static String normalizeDzMobileE164(String value) {
+    var digits = value.trim().replaceAll(RegExp(r'[^0-9+]'), '');
+    if (digits.startsWith('00')) {
+      digits = '+${digits.substring(2)}';
+    }
+    if (RegExp(r'^0[567]\d{8}$').hasMatch(digits)) {
+      return '+213${digits.substring(1)}';
+    }
+    if (RegExp(r'^\+213[567]\d{8}$').hasMatch(digits)) {
+      return digits;
+    }
+    if (RegExp(r'^\+2130[567]\d{8}$').hasMatch(digits)) {
+      return '+213${digits.substring(5)}';
+    }
+    return '';
+  }
+
   static String normalizeDzE164(String value) {
     final raw = value.trim();
     if (raw.isEmpty) return '';

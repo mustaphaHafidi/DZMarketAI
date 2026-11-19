@@ -1,7 +1,6 @@
-import 'dart:typed_data';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:dzmarket/src/models/product.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/i18n.dart';
@@ -9,6 +8,7 @@ import 'package:dzmarket/src/services/product_service.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/storage_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/utils/vehicle_specs.dart';
 
 class EditProductPage extends StatefulWidget {
   const EditProductPage({super.key, required this.product});
@@ -28,6 +28,11 @@ class _EditProductPageState extends State<EditProductPage> {
   late final TextEditingController _categoryCtrl;
   late final TextEditingController _brandCtrl;
   late final TextEditingController _sizeCtrl;
+  late final TextEditingController _vehicleModelCtrl;
+  late final TextEditingController _vehicleYearCtrl;
+  late final TextEditingController _vehicleMileageCtrl;
+  late final TextEditingController _vehicleEngineCtrl;
+  late final TextEditingController _vehiclePowerHpCtrl;
   late final TextEditingController _wilayaCtrl;
   late final TextEditingController _dairaCtrl;
   late final TextEditingController _declaredValueCtrl;
@@ -43,12 +48,18 @@ class _EditProductPageState extends State<EditProductPage> {
   bool _exchangeAfterDelivery = false;
   bool _insuranceActive = false;
   bool _allowStopdesk = true;
+  String? _vehicleFuel;
+  String? _vehicleTransmission;
+  String? _vehicleBodyType;
   final List<String> _existingImages = [];
   final List<PlatformFile> _newImages = [];
   bool _saving = false;
   static const int _minWeightKg = 1;
   static const int _maxWeightKg = 60;
   static const _conditions = ['new', 'like new', 'good', 'fair'];
+
+  bool get _isVehicleListing =>
+      VehicleSpecs.isVehicleCategory(widget.product.categorySlug);
 
   String _conditionLabel(BuildContext context, String value) {
     switch (value) {
@@ -82,6 +93,24 @@ class _EditProductPageState extends State<EditProductPage> {
     _categoryCtrl = TextEditingController(text: widget.product.category ?? '');
     _brandCtrl = TextEditingController(text: widget.product.brand ?? '');
     _sizeCtrl = TextEditingController(text: widget.product.size ?? '');
+    _vehicleModelCtrl = TextEditingController(
+      text: widget.product.vehicleModel ?? '',
+    );
+    _vehicleYearCtrl = TextEditingController(
+      text: widget.product.vehicleYear?.toString() ?? '',
+    );
+    _vehicleMileageCtrl = TextEditingController(
+      text: widget.product.vehicleMileageKm?.toString() ?? '',
+    );
+    _vehicleEngineCtrl = TextEditingController(
+      text: widget.product.vehicleEngine ?? '',
+    );
+    _vehiclePowerHpCtrl = TextEditingController(
+      text: widget.product.vehiclePowerHp?.toString() ?? '',
+    );
+    _vehicleFuel = widget.product.vehicleFuel;
+    _vehicleTransmission = widget.product.vehicleTransmission;
+    _vehicleBodyType = widget.product.vehicleBodyType;
     _wilayaCtrl = TextEditingController(
       text: widget.product.locationWilaya ?? '',
     );
@@ -125,6 +154,11 @@ class _EditProductPageState extends State<EditProductPage> {
     _categoryCtrl.dispose();
     _brandCtrl.dispose();
     _sizeCtrl.dispose();
+    _vehicleModelCtrl.dispose();
+    _vehicleYearCtrl.dispose();
+    _vehicleMileageCtrl.dispose();
+    _vehicleEngineCtrl.dispose();
+    _vehiclePowerHpCtrl.dispose();
     _wilayaCtrl.dispose();
     _dairaCtrl.dispose();
     _declaredValueCtrl.dispose();
@@ -153,17 +187,25 @@ class _EditProductPageState extends State<EditProductPage> {
     setState(() => _newImages.removeAt(index));
   }
 
+  int? _parseOptionalDigits(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : int.tryParse(trimmed);
+  }
+
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
+      final isVehicle = _isVehicleListing;
       final price = InputSanitizer.parseAmount(_priceCtrl.text, min: 0);
-      final stock = int.tryParse(_stockCtrl.text.trim()) ?? 0;
-      if (stock < 0) {
+      final stock = isVehicle
+          ? null
+          : int.tryParse(_stockCtrl.text.trim()) ?? 0;
+      if (stock != null && stock < 0) {
         throw FormatException(
           L10n.tr(context, 'listing.edit.error_invalid_stock'),
         );
       }
-      final costPrice = _costCtrl.text.trim().isEmpty
+      final costPrice = isVehicle || _costCtrl.text.trim().isEmpty
           ? null
           : InputSanitizer.parseAmount(_costCtrl.text, min: 0);
       final title = InputSanitizer.sanitizeText(_titleCtrl.text, maxLength: 80);
@@ -181,10 +223,9 @@ class _EditProductPageState extends State<EditProductPage> {
         _brandCtrl.text,
         maxLength: 40,
       );
-      final size = InputSanitizer.sanitizeOptionalText(
-        _sizeCtrl.text,
-        maxLength: 40,
-      );
+      final size = isVehicle
+          ? null
+          : InputSanitizer.sanitizeOptionalText(_sizeCtrl.text, maxLength: 40);
       final wilaya = InputSanitizer.sanitizeOptionalText(
         _wilayaCtrl.text,
         maxLength: 60,
@@ -193,15 +234,47 @@ class _EditProductPageState extends State<EditProductPage> {
         _dairaCtrl.text,
         maxLength: 60,
       );
-      final categoryName = InputSanitizer.sanitizeOptionalText(
-        _categoryCtrl.text,
-        maxLength: 80,
+      final categoryName = isVehicle
+          ? null
+          : InputSanitizer.sanitizeOptionalText(
+              _categoryCtrl.text,
+              maxLength: 80,
+            );
+      final vehicleModel = InputSanitizer.sanitizeOptionalText(
+        _vehicleModelCtrl.text,
+        maxLength: 60,
       );
-      final weight = int.tryParse(_weightCtrl.text.trim()) ?? 0;
-      final height = int.tryParse(_heightCtrl.text.trim()) ?? 0;
-      final width = int.tryParse(_widthCtrl.text.trim()) ?? 0;
-      final length = int.tryParse(_lengthCtrl.text.trim()) ?? 0;
-      if (weight < _minWeightKg || weight > _maxWeightKg) {
+      if (isVehicle && (brand == null || vehicleModel == null)) {
+        throw FormatException(
+          L10n.tr(context, 'listing.add.error_vehicle_required'),
+        );
+      }
+      final vehicleYear = _parseOptionalDigits(_vehicleYearCtrl.text);
+      final vehicleMileageKm = _parseOptionalDigits(_vehicleMileageCtrl.text);
+      final vehicleEngine =
+          VehicleSpecs.supportsRoadSpecs(widget.product.categorySlug)
+          ? InputSanitizer.sanitizeOptionalText(
+              _vehicleEngineCtrl.text,
+              maxLength: 60,
+            )
+          : null;
+      final vehiclePowerHp =
+          VehicleSpecs.supportsRoadSpecs(widget.product.categorySlug)
+          ? _parseOptionalDigits(_vehiclePowerHpCtrl.text)
+          : null;
+      final weight = isVehicle
+          ? null
+          : int.tryParse(_weightCtrl.text.trim()) ?? 0;
+      final height = isVehicle
+          ? null
+          : int.tryParse(_heightCtrl.text.trim()) ?? 0;
+      final width = isVehicle
+          ? null
+          : int.tryParse(_widthCtrl.text.trim()) ?? 0;
+      final length = isVehicle
+          ? null
+          : int.tryParse(_lengthCtrl.text.trim()) ?? 0;
+      if (!isVehicle && (weight! < _minWeightKg || weight > _maxWeightKg)) {
         throw FormatException(
           L10n.tr(
             context,
@@ -213,29 +286,29 @@ class _EditProductPageState extends State<EditProductPage> {
           ),
         );
       }
-      if (height < 0 || height > 200) {
+      if (!isVehicle && (height! < 0 || height > 200)) {
         throw FormatException(
           L10n.tr(context, 'checkout.error_height_invalid'),
         );
       }
-      if (width < 0 || width > 200) {
+      if (!isVehicle && (width! < 0 || width > 200)) {
         throw FormatException(L10n.tr(context, 'checkout.error_width_invalid'));
       }
-      if (length < 0 || length > 200) {
+      if (!isVehicle && (length! < 0 || length > 200)) {
         throw FormatException(
           L10n.tr(context, 'checkout.error_length_invalid'),
         );
       }
-      final declaredValue = _declaredValueCtrl.text.trim().isEmpty
+      final declaredValue = isVehicle || _declaredValueCtrl.text.trim().isEmpty
           ? null
           : InputSanitizer.parseAmount(_declaredValueCtrl.text, min: 0);
-      if (_insuranceActive && declaredValue == null) {
+      if (!isVehicle && _insuranceActive && declaredValue == null) {
         throw FormatException(
           L10n.tr(context, 'checkout.error_price_required'),
         );
       }
       final sellerId = supabase.auth.currentUser?.id;
-      if (sellerId != null) {
+      if (!isVehicle && sellerId != null) {
         final enabledCouriers = await ShippingService()
             .fetchEnabledCouriersForSeller(sellerId);
         final parcelRules = enabledCouriers.isNotEmpty
@@ -244,10 +317,10 @@ class _EditProductPageState extends State<EditProductPage> {
         if (!mounted) return;
         final validation = ShippingService.validateParcel(
           rules: parcelRules,
-          weightKg: weight,
-          heightCm: height,
-          widthCm: width,
-          lengthCm: length,
+          weightKg: weight!,
+          heightCm: height!,
+          widthCm: width!,
+          lengthCm: length!,
           declaredValue: declaredValue,
           codAmount: price.toDouble(),
           insuranceActive: _insuranceActive,
@@ -319,10 +392,9 @@ class _EditProductPageState extends State<EditProductPage> {
           }
         }
       }
-      final deliveryOptions = <String>[
-        if (_deliveryCod) 'cod',
-        if (_deliveryPickup) 'pickup',
-      ];
+      final deliveryOptions = isVehicle
+          ? const <String>[]
+          : <String>[if (_deliveryCod) 'cod', if (_deliveryPickup) 'pickup'];
 
       final bytes = _newImages
           .map((f) => f.bytes)
@@ -351,14 +423,24 @@ class _EditProductPageState extends State<EditProductPage> {
         condition: _condition,
         brand: brand,
         size: size,
+        vehicleModel: isVehicle ? vehicleModel : null,
+        vehicleYear: isVehicle ? vehicleYear : null,
+        vehicleMileageKm: isVehicle ? vehicleMileageKm : null,
+        vehicleFuel: isVehicle ? _vehicleFuel : null,
+        vehicleTransmission: isVehicle ? _vehicleTransmission : null,
+        vehicleBodyType: isVehicle ? _vehicleBodyType : null,
+        vehicleEngine: isVehicle ? vehicleEngine : null,
+        vehiclePowerHp: isVehicle ? vehiclePowerHp : null,
+        updateVehicleDetails: isVehicle,
+        isVehicleListing: isVehicle,
         locationWilaya: wilaya,
         locationDaira: daira,
         deliveryOptions: deliveryOptions,
         isNegotiable: _isNegotiable,
-        shippingFree: _freeShipping,
-        exchangeAfterDelivery: _exchangeAfterDelivery,
-        insuranceActive: _insuranceActive,
-        allowStopdesk: _allowStopdesk,
+        shippingFree: isVehicle ? false : _freeShipping,
+        exchangeAfterDelivery: isVehicle ? false : _exchangeAfterDelivery,
+        insuranceActive: isVehicle ? false : _insuranceActive,
+        allowStopdesk: isVehicle ? false : _allowStopdesk,
         declaredValue: declaredValue,
         weightKg: weight,
         heightCm: height,
@@ -382,6 +464,7 @@ class _EditProductPageState extends State<EditProductPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isVehicle = _isVehicleListing;
     return Scaffold(
       appBar: AppBar(
         title: Text(L10n.tr(context, 'listing.edit.title')),
@@ -505,22 +588,24 @@ class _EditProductPageState extends State<EditProductPage> {
               ),
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: _stockCtrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: L10n.tr(context, 'listing.add.stock_label'),
+            if (!isVehicle) ...[
+              TextField(
+                controller: _stockCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'listing.add.stock_label'),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _costCtrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: L10n.tr(context, 'listing.add.cost_label'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _costCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'listing.add.cost_label'),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
+              const SizedBox(height: 12),
+            ],
             TextField(
               controller: _descCtrl,
               decoration: InputDecoration(
@@ -531,26 +616,30 @@ class _EditProductPageState extends State<EditProductPage> {
               textInputAction: TextInputAction.newline,
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: _categoryCtrl,
-              decoration: InputDecoration(
-                labelText: L10n.tr(context, 'listing.add.category_label'),
+            if (!isVehicle) ...[
+              TextField(
+                controller: _categoryCtrl,
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'listing.add.category_label'),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
+              const SizedBox(height: 12),
+            ],
             TextField(
               controller: _brandCtrl,
               decoration: InputDecoration(
                 labelText: L10n.tr(context, 'listing.add.brand_label'),
               ),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _sizeCtrl,
-              decoration: InputDecoration(
-                labelText: L10n.tr(context, 'listing.add.size_label'),
+            if (!isVehicle) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _sizeCtrl,
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'listing.add.size_label'),
+                ),
               ),
-            ),
+            ],
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               initialValue: _condition,
@@ -567,6 +656,161 @@ class _EditProductPageState extends State<EditProductPage> {
                 labelText: L10n.tr(context, 'listing.add.condition_label'),
               ),
             ),
+            if (isVehicle) ...[
+              const SizedBox(height: 16),
+              Text(
+                L10n.tr(context, 'listing.add.vehicle_section_title'),
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _vehicleModelCtrl,
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'listing.add.model_label'),
+                ),
+              ),
+              if (VehicleSpecs.supportsRoadSpecs(
+                widget.product.categorySlug,
+              )) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _vehicleEngineCtrl,
+                        decoration: InputDecoration(
+                          labelText: L10n.tr(
+                            context,
+                            'listing.add.engine_label',
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _vehiclePowerHpCtrl,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        decoration: InputDecoration(
+                          labelText: L10n.tr(
+                            context,
+                            'listing.add.power_hp_label',
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _vehicleYearCtrl,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: InputDecoration(
+                        labelText: L10n.tr(context, 'listing.add.year_label'),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _vehicleMileageCtrl,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: InputDecoration(
+                        labelText: L10n.tr(
+                          context,
+                          'listing.add.mileage_label',
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                L10n.tr(context, 'listing.add.fuel_label'),
+                style: Theme.of(context).textTheme.labelMedium,
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: VehicleSpecs.fuels
+                    .map(
+                      (value) => ChoiceChip(
+                        label: Text(VehicleSpecs.fuelLabel(context, value)),
+                        selected: _vehicleFuel == value,
+                        onSelected: (_) => setState(
+                          () => _vehicleFuel = _vehicleFuel == value
+                              ? null
+                              : value,
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                L10n.tr(context, 'listing.add.transmission_label'),
+                style: Theme.of(context).textTheme.labelMedium,
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: VehicleSpecs.transmissions
+                    .map(
+                      (value) => ChoiceChip(
+                        label: Text(
+                          VehicleSpecs.transmissionLabel(context, value),
+                        ),
+                        selected: _vehicleTransmission == value,
+                        onSelected: (_) => setState(
+                          () => _vehicleTransmission =
+                              _vehicleTransmission == value ? null : value,
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+              if (VehicleSpecs.supportsBodyType(
+                widget.product.categorySlug,
+              )) ...[
+                const SizedBox(height: 12),
+                Text(
+                  L10n.tr(context, 'listing.add.body_type_label'),
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: VehicleSpecs.bodyTypes
+                      .map(
+                        (value) => ChoiceChip(
+                          label: Text(
+                            VehicleSpecs.bodyTypeLabel(context, value),
+                          ),
+                          selected: _vehicleBodyType == value,
+                          onSelected: (_) => setState(
+                            () => _vehicleBodyType = _vehicleBodyType == value
+                                ? null
+                                : value,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
+            ],
             const SizedBox(height: 12),
             TextField(
               controller: _wilayaCtrl,
@@ -582,108 +826,112 @@ class _EditProductPageState extends State<EditProductPage> {
               ),
             ),
             const SizedBox(height: 12),
-            SwitchListTile(
-              value: _deliveryCod,
-              onChanged: (value) => setState(() => _deliveryCod = value),
-              title: Text(L10n.tr(context, 'listing.add.delivery_cod')),
-            ),
-            SwitchListTile(
-              value: _deliveryPickup,
-              onChanged: (value) => setState(() => _deliveryPickup = value),
-              title: Text(L10n.tr(context, 'listing.add.delivery_pickup')),
-            ),
-            SwitchListTile(
-              value: _isNegotiable,
-              onChanged: (value) => setState(() => _isNegotiable = value),
-              title: Text(
-                L10n.tr(
-                  context,
-                  'listing.add.negotiable_label',
-                  fallback: 'Prix négociable',
+            if (!isVehicle) ...[
+              SwitchListTile(
+                value: _deliveryCod,
+                onChanged: (value) => setState(() => _deliveryCod = value),
+                title: Text(L10n.tr(context, 'listing.add.delivery_cod')),
+              ),
+              SwitchListTile(
+                value: _deliveryPickup,
+                onChanged: (value) => setState(() => _deliveryPickup = value),
+                title: Text(L10n.tr(context, 'listing.add.delivery_pickup')),
+              ),
+              SwitchListTile(
+                value: _isNegotiable,
+                onChanged: (value) => setState(() => _isNegotiable = value),
+                title: Text(
+                  L10n.tr(
+                    context,
+                    'listing.add.negotiable_label',
+                    fallback: 'Prix négociable',
+                  ),
+                ),
+                subtitle: Text(
+                  L10n.tr(
+                    context,
+                    'listing.add.negotiable_hint',
+                    fallback: 'Autoriser les acheteurs à envoyer des offres.',
+                  ),
                 ),
               ),
-              subtitle: Text(
-                L10n.tr(
-                  context,
-                  'listing.add.negotiable_hint',
-                  fallback: 'Autoriser les acheteurs à envoyer des offres.',
+              const SizedBox(height: 16),
+              Text(
+                L10n.tr(context, 'checkout.package_details'),
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              CheckboxListTile(
+                value: _freeShipping,
+                onChanged: (v) => setState(() => _freeShipping = v ?? false),
+                title: Text(L10n.tr(context, 'checkout.free_shipping')),
+              ),
+              CheckboxListTile(
+                value: _exchangeAfterDelivery,
+                onChanged: (v) =>
+                    setState(() => _exchangeAfterDelivery = v ?? false),
+                title: Text(
+                  L10n.tr(context, 'checkout.exchange_after_delivery'),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              L10n.tr(context, 'checkout.package_details'),
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            CheckboxListTile(
-              value: _freeShipping,
-              onChanged: (v) => setState(() => _freeShipping = v ?? false),
-              title: Text(L10n.tr(context, 'checkout.free_shipping')),
-            ),
-            CheckboxListTile(
-              value: _exchangeAfterDelivery,
-              onChanged: (v) =>
-                  setState(() => _exchangeAfterDelivery = v ?? false),
-              title: Text(L10n.tr(context, 'checkout.exchange_after_delivery')),
-            ),
-            CheckboxListTile(
-              value: _allowStopdesk,
-              onChanged: (v) => setState(() => _allowStopdesk = v ?? true),
-              title: Text(L10n.tr(context, 'listing.add.allow_stopdesk')),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              L10n.tr(context, 'checkout.insurance'),
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            SwitchListTile(
-              value: _insuranceActive,
-              onChanged: (v) => setState(() => _insuranceActive = v),
-              title: Text(L10n.tr(context, 'checkout.insurance_active')),
-            ),
-            TextField(
-              controller: _declaredValueCtrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: L10n.tr(context, 'checkout.declared_value'),
+              CheckboxListTile(
+                value: _allowStopdesk,
+                onChanged: (v) => setState(() => _allowStopdesk = v ?? true),
+                title: Text(L10n.tr(context, 'listing.add.allow_stopdesk')),
               ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              L10n.tr(context, 'checkout.dimensions_weight'),
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            TextField(
-              controller: _weightCtrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: L10n.tr(context, 'checkout.weight_kg'),
+              const SizedBox(height: 8),
+              Text(
+                L10n.tr(context, 'checkout.insurance'),
+                style: Theme.of(context).textTheme.titleSmall,
               ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _heightCtrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: L10n.tr(context, 'checkout.height_cm'),
+              SwitchListTile(
+                value: _insuranceActive,
+                onChanged: (v) => setState(() => _insuranceActive = v),
+                title: Text(L10n.tr(context, 'checkout.insurance_active')),
               ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _widthCtrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: L10n.tr(context, 'checkout.width_cm'),
+              TextField(
+                controller: _declaredValueCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'checkout.declared_value'),
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _lengthCtrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: L10n.tr(context, 'checkout.length_cm'),
+              const SizedBox(height: 12),
+              Text(
+                L10n.tr(context, 'checkout.dimensions_weight'),
+                style: Theme.of(context).textTheme.titleSmall,
               ),
-            ),
+              TextField(
+                controller: _weightCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'checkout.weight_kg'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _heightCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'checkout.height_cm'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _widthCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'checkout.width_cm'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _lengthCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: L10n.tr(context, 'checkout.length_cm'),
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: _saving ? null : _save,

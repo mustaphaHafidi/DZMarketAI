@@ -8,7 +8,7 @@ PC2 must treat mobile deployment as a production operation:
 
 - Do not deploy from a dirty worktree. Run `git status --short --branch` first.
 - Do not deploy from a local-only commit. Push the exact commit before store upload.
-- Do not upgrade Flutter, Xcode, Gradle, Android Gradle Plugin, or Kotlin during a hotfix.
+- Do not upgrade Flutter, Xcode, Gradle, Android Gradle Plugin, or Kotlin during a hotfix unless a verified compatibility blocker requires it.
 - Do not change app ids, bundle ids, signing files, Firebase projects, or Supabase URLs.
 - Do not build production Android with plain `flutter build appbundle`.
 - Do not pass `test/test_env.json` directly to Flutter production builds.
@@ -72,11 +72,11 @@ update. Use a clean test device/profile for USB smoke tests, or upload the AAB
 to the Play internal-testing track and test the Play-signed build. Never
 uninstall a production user app merely to bypass this safeguard.
 
-Current PC2 tooling note: Flutter 3.47.2 requires Gradle wrapper 8.14+ before
-Android build. The guarded script also passes
-`--android-skip-build-dependency-validation` because the project still uses
-AGP 8.9.1 during this hotfix; do not upgrade AGP/Kotlin casually in a store
-hotfix. Revisit this as a separate tooling task.
+Current PC2 tooling note: Flutter 3.47.2 is verified with Gradle 8.14, AGP
+8.11.2 and Kotlin 2.2.20. The guarded script must pass Flutter dependency
+validation; never add `--android-skip-build-dependency-validation` to a
+release command. The Windows host needs a 4 GiB Gradle heap for the Android
+transform step.
 
 8. Upload the generated AAB with the Play service account JSON stored outside
    the repo:

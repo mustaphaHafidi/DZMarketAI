@@ -577,6 +577,16 @@ class ProductService {
     String? brand,
     String? size,
     String? color,
+    String? vehicleModel,
+    int? vehicleYear,
+    int? vehicleMileageKm,
+    String? vehicleFuel,
+    String? vehicleTransmission,
+    String? vehicleBodyType,
+    String? vehicleEngine,
+    int? vehiclePowerHp,
+    bool updateVehicleDetails = false,
+    bool isVehicleListing = false,
     String? locationWilaya,
     String? locationDaira,
     List<String>? deliveryOptions,
@@ -624,6 +634,38 @@ class ProductService {
     final safeBrand = InputSanitizer.sanitizeOptionalText(brand, maxLength: 40);
     final safeSize = InputSanitizer.sanitizeOptionalText(size, maxLength: 40);
     final safeColor = InputSanitizer.sanitizeOptionalText(color, maxLength: 40);
+    final safeVehiclePowerHp =
+        vehiclePowerHp != null && vehiclePowerHp > 0 && vehiclePowerHp <= 3000
+        ? vehiclePowerHp
+        : null;
+    final safeVehicleYear =
+        vehicleYear != null && vehicleYear > 1900 && vehicleYear < 2100
+        ? vehicleYear
+        : null;
+    final safeVehicleMileageKm =
+        vehicleMileageKm != null && vehicleMileageKm >= 0
+        ? vehicleMileageKm
+        : null;
+    final safeVehicleModel = InputSanitizer.sanitizeOptionalText(
+      vehicleModel,
+      maxLength: 60,
+    );
+    final safeVehicleFuel = InputSanitizer.sanitizeOptionalText(
+      vehicleFuel,
+      maxLength: 20,
+    );
+    final safeVehicleTransmission = InputSanitizer.sanitizeOptionalText(
+      vehicleTransmission,
+      maxLength: 20,
+    );
+    final safeVehicleBodyType = InputSanitizer.sanitizeOptionalText(
+      vehicleBodyType,
+      maxLength: 20,
+    );
+    final safeVehicleEngine = InputSanitizer.sanitizeOptionalText(
+      vehicleEngine,
+      maxLength: 60,
+    );
     final safeWilaya = InputSanitizer.sanitizeOptionalText(
       locationWilaya,
       maxLength: 60,
@@ -640,6 +682,11 @@ class ProductService {
     if (costPrice != null && costPrice < 0) {
       throw FormatException(
         L10n.trLocale(locale, 'listing.add.error_invalid_cost'),
+      );
+    }
+    if (updateVehicleDetails && safeVehicleModel == null) {
+      throw FormatException(
+        L10n.trLocale(locale, 'listing.add.error_vehicle_required'),
       );
     }
     if (safeTitle != null) payload['title'] = safeTitle;
@@ -659,6 +706,16 @@ class ProductService {
     if (safeBrand != null) payload['brand'] = safeBrand;
     if (safeSize != null) payload['size'] = safeSize;
     if (safeColor != null) payload['color'] = safeColor;
+    if (updateVehicleDetails) {
+      payload['vehicle_model'] = safeVehicleModel;
+      payload['vehicle_year'] = safeVehicleYear;
+      payload['vehicle_mileage_km'] = safeVehicleMileageKm;
+      payload['vehicle_fuel'] = safeVehicleFuel;
+      payload['vehicle_transmission'] = safeVehicleTransmission;
+      payload['vehicle_body_type'] = safeVehicleBodyType;
+      payload['vehicle_engine'] = safeVehicleEngine;
+      payload['vehicle_power_hp'] = safeVehiclePowerHp;
+    }
     if (safeWilaya != null) payload['location_wilaya'] = safeWilaya;
     if (safeDaira != null) payload['location_daira'] = safeDaira;
     if (deliveryOptions != null) {
@@ -684,6 +741,20 @@ class ProductService {
     if (stockQuantity != null) payload['stock_quantity'] = stockQuantity;
     if (costPrice != null) payload['cost_price'] = costPrice;
     if (isArchived != null) payload['is_archived'] = isArchived;
+    if (isVehicleListing) {
+      payload.addAll({
+        'delivery_options': const <String>[],
+        'shipping_free': false,
+        'exchange_after_delivery': false,
+        'insurance_active': false,
+        'allow_stopdesk': false,
+        'declared_value': null,
+        'weight_kg': null,
+        'height_cm': null,
+        'width_cm': null,
+        'length_cm': null,
+      });
+    }
     if (payload.isEmpty) return;
     await RateLimiter.instance.run(
       'products.update',

@@ -260,6 +260,7 @@ class _SignInPageState extends State<SignInPage> {
       builder: (context, locale, _) {
         final lang = locale?.languageCode ?? 'fr';
         final isRtl = lang == 'ar';
+        final canUseGoogle = AuthService.instance.supportsGoogleSignIn;
         return Directionality(
           textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
           child: Scaffold(
@@ -338,9 +339,12 @@ class _SignInPageState extends State<SignInPage> {
                         const SizedBox(height: 6),
                         Text(
                           _t(
-                            'auth.email_only_note',
-                            fallback:
-                                'Connexion par email uniquement (SMS bientot)',
+                            canUseGoogle
+                                ? 'auth.email_google_note'
+                                : 'auth.email_only_note',
+                            fallback: canUseGoogle
+                                ? 'Connexion par email ou Google'
+                                : 'Connexion par email uniquement (SMS bientot)',
                           ),
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.bodySmall,
@@ -472,9 +476,7 @@ class _SignInPageState extends State<SignInPage> {
                                           ),
                                         ),
                                 ),
-                                if (AuthService
-                                    .instance
-                                    .supportsGoogleSignIn) ...[
+                                if (canUseGoogle) ...[
                                   const SizedBox(height: 12),
                                   OutlinedButton.icon(
                                     onPressed: _loading

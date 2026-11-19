@@ -35,6 +35,13 @@ flutter test test\app_error_service_test.dart --no-test-assets
 - Vehicle release: select `Vehicules`, confirm the subtype picker is shown,
   check generic parcel/delivery and size filters are absent, then apply and
   reset price plus vehicle filters in both French and Arabic.
+- Vehicle edit: open one owned vehicle listing, change model or mileage, save
+  and reopen it. Confirm its technical values persist and that parcel,
+  delivery, stock and insurance controls are absent. Repeat a small standard
+  listing edit to confirm its parcel controls remain unchanged.
+- Browse grid: on a narrow Android phone, confirm two-column cards show title
+  and location without a Flutter `BOTTOM OVERFLOW`; delivery badges must not
+  render in that compact card variant.
 - Admin moderation: confirm the exact global profile count is shown, first
   page loads promptly, search/status resets the list, and another page loads
   only after scrolling. Never load every profile before first render.

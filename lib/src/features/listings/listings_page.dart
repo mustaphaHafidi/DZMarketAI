@@ -19,6 +19,8 @@ import 'package:dzmarket/src/services/saved_search_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/utils/vehicle_specs.dart';
+import 'package:dzmarket/src/utils/listing_image_fit.dart';
+import 'package:dzmarket/src/utils/listing_card_layout.dart';
 import 'package:dzmarket/src/widgets/refresh_controller.dart';
 import 'package:dzmarket/src/widgets/support_social_fab.dart';
 import 'package:flutter/foundation.dart';
@@ -2577,7 +2579,7 @@ class _ProductCardState extends State<_ProductCard> {
     final isDesktopCard = MediaQuery.of(context).size.width >= 900;
     final imageFlex = isDesktopCard ? 12 : (isCompactCard ? 13 : 12);
     final contentFlex = isDesktopCard ? 9 : (isCompactCard ? 8 : 8);
-    final imageFit = BoxFit.cover;
+    final imageFit = listingImageFit(widget.product.categorySlug);
     final displayIsFavorite = _favoriteOverride ?? widget.isFavorite;
 
     return MouseRegion(
@@ -2628,10 +2630,18 @@ class _ProductCardState extends State<_ProductCard> {
                       child: Stack(
                         children: [
                           Positioned.fill(
-                            child: _ListingCardImage(
-                              imageUrls: displayableImages,
-                              imagePrefs: imagePrefs,
-                              fit: imageFit,
+                            child: ColoredBox(
+                              color:
+                                  VehicleSpecs.isVehicleCategory(
+                                    widget.product.categorySlug,
+                                  )
+                                  ? theme.colorScheme.surfaceContainerHighest
+                                  : Colors.transparent,
+                              child: _ListingCardImage(
+                                imageUrls: displayableImages,
+                                imagePrefs: imagePrefs,
+                                fit: imageFit,
+                              ),
                             ),
                           ),
                           Positioned(
@@ -2731,15 +2741,17 @@ class _ProductCardState extends State<_ProductCard> {
                     child: LayoutBuilder(
                       builder: (context, constraints) {
                         final compactContent = constraints.maxHeight < 98;
-                        final showBadges =
-                            visibleBadges.isNotEmpty &&
-                            constraints.maxHeight >= (isCompactCard ? 72 : 82);
+                        final showBadges = shouldShowListingCardBadges(
+                          isCompactCard: isCompactCard,
+                          hasBadges: visibleBadges.isNotEmpty,
+                          contentHeight: constraints.maxHeight,
+                        );
                         return Padding(
                           padding: EdgeInsets.fromLTRB(
                             isCompactCard ? 12 : 16,
-                            compactContent ? 8 : 14,
+                            isCompactCard ? 10 : (compactContent ? 8 : 14),
                             isCompactCard ? 12 : 16,
-                            compactContent ? 8 : 14,
+                            isCompactCard ? 10 : (compactContent ? 8 : 14),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,

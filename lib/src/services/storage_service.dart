@@ -206,7 +206,8 @@ class StorageService {
     Object? lastError;
     for (var attempt = 1; attempt <= attempts; attempt++) {
       final effectiveTimeout = Duration(
-        seconds: timeout.inSeconds +
+        seconds:
+            timeout.inSeconds +
             (timeoutIncrement.inSeconds * math.max(0, attempt - 1)),
       );
       try {

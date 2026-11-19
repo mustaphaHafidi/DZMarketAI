@@ -84,6 +84,7 @@ class L10n {
         'Adresse email confirmée avec succès. Vous pouvez vous connecter.',
     'auth.callback.success': 'Adresse email validée.',
     'auth.email': 'Email',
+    'auth.email_google_note': 'Connexion par email ou Google',
     'auth.email_only_note': 'Connexion par email uniquement (SMS bientôt)',
     'auth.error_email_not_confirmed':
         'Email non confirmé. Vérifiez votre boîte mail.',
@@ -91,6 +92,8 @@ class L10n {
     'auth.error_invalid_credentials': 'Email ou mot de passe incorrect.',
     'auth.error_invalid_email': 'Email invalide.',
     'auth.error_login_failed': 'Connexion impossible. Réessayez.',
+    'auth.google_unavailable':
+        'Connexion Google indisponible pour le moment. Utilisez votre email.',
     'auth.error_password_required': 'Veuillez saisir votre mot de passe.',
     'auth.error_password_too_short':
         'Mot de passe trop court (minimum 8 caractères).',
@@ -882,6 +885,8 @@ class L10n {
     'profile.my_listings': 'Mes annonces',
     'profile.not_found': 'Profil introuvable',
     'profile.phone': 'Téléphone',
+    'profile.phone_hint': 'Mobile algérien : 05, 06 ou 07 suivi de 8 chiffres.',
+    'profile.phone_invalid': 'Saisissez un numéro mobile algérien valide.',
     'profile.photo_upload': 'Importer une photo',
     'profile.public': 'Profil public',
     'profile.public_hint': 'Visible par les acheteurs',
@@ -1162,6 +1167,7 @@ class L10n {
         'تم تأكيد البريد الإلكتروني بنجاح. يمكنك تسجيل الدخول الآن.',
     'auth.callback.success': 'تم تأكيد البريد الإلكتروني بنجاح.',
     'auth.email': 'البريد الإلكتروني',
+    'auth.email_google_note': 'تسجيل الدخول بالبريد الإلكتروني أو Google',
     'auth.email_only_note': 'تسجيل الدخول بالبريد الإلكتروني فقط (SMS قريبًا)',
     'auth.error_email_not_confirmed':
         'البريد الإلكتروني غير مؤكد. تحقق من صندوق البريد.',
@@ -1170,6 +1176,8 @@ class L10n {
         'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
     'auth.error_invalid_email': 'البريد الإلكتروني غير صالح.',
     'auth.error_login_failed': 'تعذر تسجيل الدخول. حاول مرة أخرى.',
+    'auth.google_unavailable':
+        'تسجيل الدخول عبر Google غير متاح مؤقتًا. استخدم بريدك الإلكتروني.',
     'auth.error_password_required': 'يرجى إدخال كلمة المرور.',
     'auth.error_password_too_short':
         'كلمة المرور قصيرة جدًا (8 أحرف على الأقل).',
@@ -1908,6 +1916,8 @@ class L10n {
     'profile.my_listings': 'إعلاناتي',
     'profile.not_found': 'الملف غير موجود',
     'profile.phone': 'الهاتف',
+    'profile.phone_hint': 'هاتف جزائري: 05 أو 06 أو 07 متبوع بثمانية أرقام.',
+    'profile.phone_invalid': 'أدخل رقم هاتف جزائريًا صالحًا.',
     'profile.photo_upload': 'رفع صورة',
     'profile.public': 'ملف عام',
     'profile.public_hint': 'مرئي للجميع',

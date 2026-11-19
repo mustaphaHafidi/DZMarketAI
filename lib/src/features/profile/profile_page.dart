@@ -11,12 +11,14 @@ import 'package:dzmarket/src/services/locale_service.dart';
 import 'package:dzmarket/src/services/location_data_service.dart';
 import 'package:dzmarket/src/services/location_service.dart';
 import 'package:dzmarket/src/services/notification_inbox_service.dart';
+import 'package:dzmarket/src/services/phone_formatter.dart';
 import 'package:dzmarket/src/services/storage_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:dzmarket/src/services/user_safety_service.dart';
 import 'package:dzmarket/src/widgets/user_avatar.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -57,6 +59,7 @@ class _ProfilePageState extends State<ProfilePage> {
   String? _selectedWilayaCode;
   String? _selectedCommuneId;
   String? _lastLoggedError;
+  String? _locationConfirmationMessage;
 
   @override
   void initState() {
@@ -152,7 +155,17 @@ class _ProfilePageState extends State<ProfilePage> {
         maxLength: 80,
       );
       final avatarUrl = InputSanitizer.safeUrl(_avatarUrl);
-      final phone = InputSanitizer.sanitizePhone(_phoneCtrl.text);
+      final rawPhone = _phoneCtrl.text.trim();
+      final savedPhone = _profile?.phone?.trim() ?? '';
+      final normalizedPhone = PhoneFormatter.normalizeDzMobileE164(rawPhone);
+      final phone = rawPhone.isEmpty
+          ? null
+          : normalizedPhone.isNotEmpty
+          ? normalizedPhone
+          // Do not lock a legacy profile out of unrelated profile edits.
+          : rawPhone == savedPhone
+          ? savedPhone
+          : throw const FormatException('invalid_dz_mobile');
       final wilaya = InputSanitizer.sanitizeOptionalText(
         _wilayaCtrl.text,
         maxLength: 60,
@@ -278,6 +291,9 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   String _friendlyProfileError(String localeCode, Object error) {
+    if (error is FormatException && error.message == 'invalid_dz_mobile') {
+      return L10n.trLocale(localeCode, 'profile.phone_invalid');
+    }
     if (_looksOfflineError(error)) {
       return L10n.trLocale(localeCode, 'common.offline_action');
     }
@@ -622,14 +638,11 @@ class _ProfilePageState extends State<ProfilePage> {
     if (matchedWilaya == null) {
       setState(() {
         _saving = false;
-        _lat = data.latitude;
-        _lng = data.longitude;
+        _locationConfirmationMessage = L10n.tr(
+          context,
+          'profile.location_not_detected',
+        );
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(L10n.tr(context, 'profile.location_not_detected')),
-        ),
-      );
       return;
     }
 
@@ -643,6 +656,7 @@ class _ProfilePageState extends State<ProfilePage> {
       _selectedCommuneId = null;
       _dairaCtrl.text = '';
       _communes = const [];
+      _locationConfirmationMessage = null;
     });
     if (wilayaCode.isNotEmpty) {
       await _loadCommunes(wilayaCode);
@@ -812,10 +826,8 @@ class _ProfilePageState extends State<ProfilePage> {
               _trWithLocaleFallback(
                 dialogContext,
                 'profile.delete_account_confirm_body',
-                fr:
-                    'Cette action envoie une demande de suppression de votre compte DZMarket. Le traitement est effectue manuellement sous 30 jours maximum. Certaines donnees peuvent etre conservees temporairement pour des obligations legales, comptables, antifraude et de securite.',
-                ar:
-                    'يرسل هذا الاجراء طلبا لحذف حسابك في DZMarket. تتم المعالجة يدويا خلال 30 يوما كحد اقصى. قد نحتفظ ببعض البيانات مؤقتا لالتزامات قانونية ومحاسبية ولمكافحة الاحتيال ولاغراض الامن.',
+                fr: 'Cette action envoie une demande de suppression de votre compte DZMarket. Le traitement est effectue manuellement sous 30 jours maximum. Certaines donnees peuvent etre conservees temporairement pour des obligations legales, comptables, antifraude et de securite.',
+                ar: 'يرسل هذا الاجراء طلبا لحذف حسابك في DZMarket. تتم المعالجة يدويا خلال 30 يوما كحد اقصى. قد نحتفظ ببعض البيانات مؤقتا لالتزامات قانونية ومحاسبية ولمكافحة الاحتيال ولاغراض الامن.',
               ),
             ),
             const SizedBox(height: 12),
@@ -876,10 +888,8 @@ class _ProfilePageState extends State<ProfilePage> {
             _trWithLocaleFallback(
               context,
               'profile.delete_account_success',
-              fr:
-                  'Demande de suppression envoyee. Votre compte sera traite sous 30 jours maximum.',
-              ar:
-                  'تم ارسال طلب حذف الحساب. ستتم معالجة حسابك خلال 30 يوما كحد اقصى.',
+              fr: 'Demande de suppression envoyee. Votre compte sera traite sous 30 jours maximum.',
+              ar: 'تم ارسال طلب حذف الحساب. ستتم معالجة حسابك خلال 30 يوما كحد اقصى.',
             ),
           ),
         ),
@@ -895,8 +905,7 @@ class _ProfilePageState extends State<ProfilePage> {
             _trWithLocaleFallback(
               context,
               'profile.delete_account_failed',
-              fr:
-                  'Impossible d envoyer la demande de suppression pour le moment.',
+              fr: 'Impossible d envoyer la demande de suppression pour le moment.',
               ar: 'تعذر ارسال طلب حذف الحساب حاليا.',
             ),
           ),
@@ -1234,18 +1243,14 @@ class _ProfilePageState extends State<ProfilePage> {
                   ? _trWithLocaleFallback(
                       context,
                       'profile.account_deletion_open_hint',
-                      fr:
-                          'Votre demande est deja ouverte. Aucun doublon ne sera cree tant qu elle est en attente ou en traitement.',
-                      ar:
-                          'طلبك مفتوح بالفعل. لن يتم انشاء طلب جديد ما دام في انتظار المعالجة او قيد المعالجة.',
+                      fr: 'Votre demande est deja ouverte. Aucun doublon ne sera cree tant qu elle est en attente ou en traitement.',
+                      ar: 'طلبك مفتوح بالفعل. لن يتم انشاء طلب جديد ما دام في انتظار المعالجة او قيد المعالجة.',
                     )
                   : _trWithLocaleFallback(
                       context,
                       'profile.account_deletion_hint',
-                      fr:
-                          'Demande initiee dans l app, traitement sous 30 jours maximum.',
-                      ar:
-                          'يتم تقديم الطلب من داخل التطبيق، وتتم معالجته خلال 30 يوما كحد اقصى.',
+                      fr: 'Demande initiee dans l app, traitement sous 30 jours maximum.',
+                      ar: 'يتم تقديم الطلب من داخل التطبيق، وتتم معالجته خلال 30 يوما كحد اقصى.',
                     ),
             ),
           ],
@@ -1253,7 +1258,9 @@ class _ProfilePageState extends State<ProfilePage> {
         trailing: hasOpenRequest
             ? const Icon(Icons.info_outline)
             : const Icon(Icons.chevron_right),
-        onTap: hasOpenRequest ? null : (_saving ? null : _requestAccountDeletion),
+        onTap: hasOpenRequest
+            ? null
+            : (_saving ? null : _requestAccountDeletion),
       );
     }
 
@@ -1272,8 +1279,7 @@ class _ProfilePageState extends State<ProfilePage> {
           context,
           'profile.account_deletion_hint',
           fr: 'Demande initiee dans l app, traitement sous 30 jours maximum.',
-          ar:
-              'يتم تقديم الطلب من داخل التطبيق، وتتم معالجته خلال 30 يوما كحد اقصى.',
+          ar: 'يتم تقديم الطلب من داخل التطبيق، وتتم معالجته خلال 30 يوما كحد اقصى.',
         ),
       ),
       trailing: const Icon(Icons.chevron_right),
@@ -1555,15 +1561,44 @@ class _ProfilePageState extends State<ProfilePage> {
                             TextField(
                               controller: _phoneCtrl,
                               keyboardType: TextInputType.phone,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(
+                                  RegExp(r'[0-9+() .-]'),
+                                ),
+                              ],
                               style: Theme.of(context).textTheme.bodyLarge,
                               decoration: InputDecoration(
                                 labelText: L10n.tr(context, 'profile.phone'),
+                                hintText: L10n.tr(context, 'profile.phone_hint'),
                                 prefixIcon: const Icon(Icons.phone_outlined),
                               ),
                             ),
                             const SizedBox(height: 12),
                             Column(
                               children: [
+                                if (_locationConfirmationMessage != null)
+                                  Container(
+                                    width: double.infinity,
+                                    margin: const EdgeInsets.only(bottom: 12),
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: colors.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Icon(Icons.info_outline),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            _locationConfirmationMessage!,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 _buildPickerField(
                                   context: context,
                                   label: L10n.tr(context, 'profile.wilaya'),
@@ -1601,6 +1636,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                             _selectedCommuneId = null;
                                             _dairaCtrl.text = '';
                                             _communes = const [];
+                                            _locationConfirmationMessage = null;
                                           });
                                           if (code.isNotEmpty) {
                                             await _loadCommunes(code);
