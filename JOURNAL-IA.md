@@ -953,3 +953,19 @@ sans risque ni régression.
   l'artefact local, et `www`, `app`, `robots.txt`, `sitemap.xml`, les deux
   pages auth-email et l'API repondent tous HTTP 200. Android et iOS restent
   explicitement hors de ce deploiement et a la charge de Claude.
+
+### 2026-11-19 - Codex - tri recent explicite et erreurs reseau admin
+
+- Corrige: une selection explicite de "Plus recentes" desactive maintenant le
+  classement par interets, meme si la valeur de tri reste `newest`. Ainsi, le
+  premier resultat est bien l'annonce approuvee la plus recente. Les filtres,
+  recherches et tris de prix restent prioritaires.
+- Corrige: DNS, timeout et socket interrompu sont enregistres et affiches comme
+  incidents reseau temporaires, jamais comme FATAL. Les vraies erreurs globales
+  et les erreurs RLS restent critiques. Aucune base, migration ou configuration
+  serveur n'est modifiee.
+- Validation: tests cibles i18n, tri et erreurs `19 OK`; analyse avec les deux
+  warnings historiques `auth_service.dart` seulement; artefact web reconstruit
+  et valide par `verify_web_artifact.ps1`. La suite Flutter complete a ete
+  lancee mais son code final n'a pas ete capture par le terminal local; ne pas
+  l'utiliser comme preuve independante dans une publication mobile.

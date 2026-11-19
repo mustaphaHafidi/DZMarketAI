@@ -5,7 +5,8 @@ import 'package:dzmarket/src/models/product.dart';
 /// favorites) and no explicit search/filter/sort is active, listings
 /// matching that category are moved ahead of the rest. Every item is kept
 /// and the relative order within each group is preserved; user intent
-/// (search, filters, explicit sort) always takes priority and disables
+/// (search, filters, or an explicit choice of sort, including "newest")
+/// always takes priority and disables
 /// the reorder entirely.
 ///
 /// Listings the user already favorited are never part of the boost: the
@@ -16,11 +17,13 @@ List<Product> applyInterestRanking(
   List<Product> products, {
   required String? interestCategoryId,
   required bool hasActiveUserFilters,
+  bool hasExplicitSort = false,
   Set<String> favoriteIds = const {},
 }) {
   if (interestCategoryId == null ||
       interestCategoryId.isEmpty ||
-      hasActiveUserFilters) {
+      hasActiveUserFilters ||
+      hasExplicitSort) {
     return products;
   }
   final matching = <Product>[];

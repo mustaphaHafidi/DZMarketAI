@@ -63,6 +63,7 @@ class _ListingsPageState extends State<ListingsPage> {
   String _condition = 'any';
   String _category = 'any';
   String _sort = 'newest';
+  bool _sortExplicitlySelected = false;
   bool _showFavoritesOnly = false;
   bool _nearbyOnly = false;
   bool _quickNewOnly = false;
@@ -638,6 +639,7 @@ class _ListingsPageState extends State<ListingsPage> {
       _vehicleBodyType ?? '',
       _nearbyOnly ? (_buyerWilaya ?? '') : '',
       _sort,
+      _sortExplicitlySelected,
       _quickDeliveryOnly ? 'delivery_only' : '',
       _quickPickupOnly ? 'pickup_only' : '',
       userId,
@@ -926,6 +928,7 @@ class _ListingsPageState extends State<ListingsPage> {
       filtered,
       interestCategoryId: _interestCategoryId,
       hasActiveUserFilters: _hasActiveFilters() || _safeSearch().isNotEmpty,
+      hasExplicitSort: _sortExplicitlySelected,
       favoriteIds: favorites,
     );
   }
@@ -1033,6 +1036,8 @@ class _ListingsPageState extends State<ListingsPage> {
       _vehicleTransmission = f['vehicleTransmission'] as String?;
       _vehicleBodyType = f['vehicleBodyType'] as String?;
       _sort = (f['sort'] as String?) ?? 'newest';
+      _sortExplicitlySelected =
+          (f['sortExplicitlySelected'] as bool?) ?? f.containsKey('sort');
       _showFavoritesOnly = (f['favoritesOnly'] as bool?) ?? false;
       _nearbyOnly = (f['nearbyOnly'] as bool?) ?? false;
       _quickNewOnly = (f['quickNewOnly'] as bool?) ?? false;
@@ -1063,6 +1068,7 @@ class _ListingsPageState extends State<ListingsPage> {
       'vehicleTransmission': _vehicleTransmission ?? '',
       'vehicleBodyType': _vehicleBodyType ?? '',
       'sort': _sort,
+      'sortExplicitlySelected': _sortExplicitlySelected,
       'favoritesOnly': _showFavoritesOnly,
       'nearbyOnly': _nearbyOnly,
       'quickNewOnly': _quickNewOnly,
@@ -1144,6 +1150,7 @@ class _ListingsPageState extends State<ListingsPage> {
                 _vehicleTransmission = null;
                 _vehicleBodyType = null;
                 _sort = 'newest';
+                _sortExplicitlySelected = false;
                 _showFavoritesOnly = false;
                 _nearbyOnly = false;
                 _quickNewOnly = false;
@@ -1501,7 +1508,10 @@ class _ListingsPageState extends State<ListingsPage> {
                               ],
                               onChanged: (value) {
                                 if (value != null) {
-                                  updateFilters(() => _sort = value);
+                                  updateFilters(() {
+                                    _sort = value;
+                                    _sortExplicitlySelected = true;
+                                  });
                                 }
                               },
                             ),
@@ -2006,6 +2016,7 @@ class _ListingsPageState extends State<ListingsPage> {
       _vehicleTransmission = null;
       _vehicleBodyType = null;
       _sort = 'newest';
+      _sortExplicitlySelected = false;
       _showFavoritesOnly = false;
       _nearbyOnly = false;
       _quickNewOnly = false;

@@ -16,6 +16,31 @@ class AppErrorService {
     return value.substring(0, max);
   }
 
+  static bool isNetworkFailure(String message) {
+    final lowered = message.toLowerCase();
+    const hints = <String>[
+      'socketexception',
+      'failed host lookup',
+      'network is unreachable',
+      'network unreachable',
+      'no address associated with hostname',
+      'clientexception',
+      'timed out',
+      'timeout',
+      'connection refused',
+      'connection reset',
+      'connection abort',
+      'connection closed',
+    ];
+    return hints.any(lowered.contains);
+  }
+
+  @visibleForTesting
+  static bool shouldMarkFatal({
+    required String message,
+    required bool requestedFatal,
+  }) => requestedFatal && !isNetworkFailure(message);
+
   @visibleForTesting
   static bool isSkippableAppError({
     required String message,
@@ -53,18 +78,7 @@ class AppErrorService {
       return true;
     }
 
-    const offlineHints = <String>[
-      'socketexception',
-      'failed host lookup',
-      'network is unreachable',
-      'network unreachable',
-      'no address associated with hostname',
-      'clientexception',
-      'timed out',
-      'timeout',
-      'connection refused',
-      'connection reset',
-    ];
+    final isNetworkError = isNetworkFailure(message);
     const noisyOfflineContexts = <String>[
       'chat_hub.watch_conversations',
       'order_chat_gate.ensure_order_conversation',
@@ -74,11 +88,10 @@ class AppErrorService {
       'profile.load_communes',
       'resolving an image codec',
     ];
-    if (offlineHints.any(loweredMessage.contains) &&
-        noisyOfflineContexts.any(loweredContext.contains)) {
+    if (isNetworkError && noisyOfflineContexts.any(loweredContext.contains)) {
       return true;
     }
-    if (offlineHints.any(loweredMessage.contains) &&
+    if (isNetworkError &&
         loweredMessage.contains('api.dzmarket.pro/storage/v1/object/public/')) {
       return true;
     }
@@ -128,10 +141,14 @@ class AppErrorService {
       final userId = supabase.auth.currentUser?.id;
       final platform = kIsWeb ? 'web' : defaultTargetPlatform.name;
       final message = _truncate(error.toString(), _maxMessageLength);
+      final effectiveFatal = shouldMarkFatal(
+        message: message,
+        requestedFatal: fatal,
+      );
       if (isSkippableAppError(
         message: message,
         context: context,
-        fatal: fatal,
+        fatal: effectiveFatal,
         hasAuthenticatedUser: userId != null,
       )) {
         return;
@@ -161,7 +178,8 @@ class AppErrorService {
             : _truncate(stack.toString(), _maxStackLength),
         'context': {
           if (context != null) 'context': context,
-          'fatal': fatal,
+          'fatal': effectiveFatal,
+          if (isNetworkFailure(message)) 'kind': 'network',
           'platform': platform,
         },
         'platform': platform,

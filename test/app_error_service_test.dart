@@ -94,5 +94,17 @@ void main() {
 
       expect(skipped, isFalse);
     });
+
+    test('classifies transient API failures as non-fatal', () {
+      const message =
+          'ClientException with SocketException: Connection timed out '
+          '(OS Error: Connection timed out, errno = 110)';
+
+      expect(AppErrorService.isNetworkFailure(message), isTrue);
+      expect(
+        AppErrorService.shouldMarkFatal(message: message, requestedFatal: true),
+        isFalse,
+      );
+    });
   });
 }

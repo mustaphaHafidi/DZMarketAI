@@ -5,6 +5,7 @@
   "admin.errors_current": "Actuelles",
   "admin.errors_empty": "Aucune erreur récente.",
   "admin.errors_fatal": "FATAL",
+  "admin.errors_network": "Connexion réseau temporairement indisponible",
   "admin.errors_platform": "Plateforme",
   "admin.errors_stack": "Stack trace",
   "admin.errors_subtitle": "Journal des erreurs récentes",

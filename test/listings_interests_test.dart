@@ -90,26 +90,23 @@ void main() {
       expect(result, same(products));
     });
 
-    test(
-      'interest detected, no active filters: matching listings move to the '
-      'front, none removed, relative order kept within each group',
-      () {
-        final shoe1 = _product('shoe-1', categoryId: 'shoes');
-        final bag1 = _product('bag-1', categoryId: 'bags');
-        final shoe2 = _product('shoe-2', categoryId: 'shoes');
-        final bag2 = _product('bag-2', categoryId: 'bags');
-        final products = [bag1, shoe1, bag2, shoe2];
+    test('interest detected, no active filters: matching listings move to the '
+        'front, none removed, relative order kept within each group', () {
+      final shoe1 = _product('shoe-1', categoryId: 'shoes');
+      final bag1 = _product('bag-1', categoryId: 'bags');
+      final shoe2 = _product('shoe-2', categoryId: 'shoes');
+      final bag2 = _product('bag-2', categoryId: 'bags');
+      final products = [bag1, shoe1, bag2, shoe2];
 
-        final result = applyInterestRanking(
-          products,
-          interestCategoryId: 'shoes',
-          hasActiveUserFilters: false,
-        );
+      final result = applyInterestRanking(
+        products,
+        interestCategoryId: 'shoes',
+        hasActiveUserFilters: false,
+      );
 
-        expect(result, [shoe1, shoe2, bag1, bag2]);
-        expect(result.toSet(), products.toSet());
-      },
-    );
+      expect(result, [shoe1, shoe2, bag1, bag2]);
+      expect(result.toSet(), products.toSet());
+    });
 
     test(
       'active search/filter/sort takes priority: interest never overrides it',
@@ -127,25 +124,36 @@ void main() {
       },
     );
 
-    test(
-      'already-favorited listing is never boosted, even if its category '
-      'matches: it stays with the rest, in its original relative order',
-      () {
-        final shoe1 = _product('shoe-1', categoryId: 'shoes');
-        final shoeFav = _product('shoe-fav', categoryId: 'shoes');
-        final bag1 = _product('bag-1', categoryId: 'bags');
-        final products = [bag1, shoeFav, shoe1];
+    test('explicit newest sort takes priority over interest ranking', () {
+      final products = [
+        _product('bag-1', categoryId: 'bags'),
+        _product('shoe-1', categoryId: 'shoes'),
+      ];
+      final result = applyInterestRanking(
+        products,
+        interestCategoryId: 'shoes',
+        hasActiveUserFilters: false,
+        hasExplicitSort: true,
+      );
+      expect(result, same(products));
+    });
 
-        final result = applyInterestRanking(
-          products,
-          interestCategoryId: 'shoes',
-          hasActiveUserFilters: false,
-          favoriteIds: {'shoe-fav'},
-        );
+    test('already-favorited listing is never boosted, even if its category '
+        'matches: it stays with the rest, in its original relative order', () {
+      final shoe1 = _product('shoe-1', categoryId: 'shoes');
+      final shoeFav = _product('shoe-fav', categoryId: 'shoes');
+      final bag1 = _product('bag-1', categoryId: 'bags');
+      final products = [bag1, shoeFav, shoe1];
 
-        expect(result, [shoe1, bag1, shoeFav]);
-        expect(result.toSet(), products.toSet());
-      },
-    );
+      final result = applyInterestRanking(
+        products,
+        interestCategoryId: 'shoes',
+        hasActiveUserFilters: false,
+        favoriteIds: {'shoe-fav'},
+      );
+
+      expect(result, [shoe1, bag1, shoeFav]);
+      expect(result.toSet(), products.toSet());
+    });
   });
 }

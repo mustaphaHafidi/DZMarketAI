@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:dzmarket/src/services/app_error_service.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:flutter/material.dart';
@@ -119,8 +120,9 @@ class _AppErrorsPageState extends State<AppErrorsPage> {
     final platform = row['platform']?.toString() ?? '-';
     final userId = row['user_id']?.toString() ?? '-';
     final createdAt = _parseDate(row['created_at']);
-    final prettyContext =
-        const JsonEncoder.withIndent('  ').convert(ctx.isEmpty ? {} : ctx);
+    final prettyContext = const JsonEncoder.withIndent(
+      '  ',
+    ).convert(ctx.isEmpty ? {} : ctx);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -199,16 +201,26 @@ class _AppErrorsPageState extends State<AppErrorsPage> {
         itemBuilder: (context, index) {
           final row = rows[index];
           final ctx = _parseContext(row['context']);
-          final isFatal = ctx['fatal'] == true;
           final message = row['message']?.toString() ?? '-';
+          final isNetwork =
+              AppErrorService.isNetworkFailure(message) ||
+              ctx['kind'] == 'network';
+          final isFatal = ctx['fatal'] == true && !isNetwork;
           final platform = row['platform']?.toString() ?? '-';
-          final uid = row['user_id']?.toString() ??
+          final uid =
+              row['user_id']?.toString() ??
               L10n.tr(context, 'admin.errors_unknown_user');
           final createdAt = _parseDate(row['created_at']);
-          final timeLabel = createdAt == null ? '-' : _dateFmt.format(createdAt);
+          final timeLabel = createdAt == null
+              ? '-'
+              : _dateFmt.format(createdAt);
           return ListTile(
             leading: Icon(
-              isFatal ? Icons.error_outline : Icons.bug_report_outlined,
+              isFatal
+                  ? Icons.error_outline
+                  : isNetwork
+                  ? Icons.wifi_off_outlined
+                  : Icons.bug_report_outlined,
               color: isFatal ? Theme.of(context).colorScheme.error : null,
             ),
             title: Text(message),
@@ -218,10 +230,13 @@ class _AppErrorsPageState extends State<AppErrorsPage> {
                 Text('${L10n.tr(context, 'admin.errors_user')}: $uid'),
                 Text('${L10n.tr(context, 'admin.errors_platform')}: $platform'),
                 Text('${L10n.tr(context, 'admin.errors_time')}: $timeLabel'),
+                if (isNetwork) Text(L10n.tr(context, 'admin.errors_network')),
                 if (isFatal)
                   Text(
                     L10n.tr(context, 'admin.errors_fatal'),
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                   ),
               ],
             ),
@@ -285,7 +300,8 @@ class _AppErrorsPageState extends State<AppErrorsPage> {
                     ),
                   );
                 }
-                final data = snapshot.data ??
+                final data =
+                    snapshot.data ??
                     const _AppErrorsSnapshot(active: [], archive: []);
                 return TabBarView(
                   children: [
@@ -311,10 +327,7 @@ class _AppErrorsPageState extends State<AppErrorsPage> {
 }
 
 class _AppErrorsSnapshot {
-  const _AppErrorsSnapshot({
-    required this.active,
-    required this.archive,
-  });
+  const _AppErrorsSnapshot({required this.active, required this.archive});
 
   final List<Map<String, dynamic>> active;
   final List<Map<String, dynamic>> archive;

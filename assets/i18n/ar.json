@@ -5,6 +5,7 @@
   "admin.errors_current": "الحالية",
   "admin.errors_empty": "لا توجد أخطاء حديثة.",
   "admin.errors_fatal": "خطأ حرج",
+  "admin.errors_network": "انقطاع مؤقت في الاتصال بالشبكة",
   "admin.errors_platform": "المنصة",
   "admin.errors_stack": "أثر التنفيذ",
   "admin.errors_subtitle": "سجل الأخطاء الأخيرة",

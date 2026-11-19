@@ -6,6 +6,17 @@ les tests de release.
 
 ## A corriger - Android
 
+### Tri explicite et erreurs reseau admin (corrige 2026-11-19)
+
+- **Tri** : choisir explicitement "Plus recentes" gardait la valeur interne
+  `newest`, identique au defaut. Le classement discret par interets pouvait
+  donc rester actif et ne pas montrer l'ordre chronologique attendu.
+  L'intention explicite est maintenant conservee et desactive ce classement.
+- **Erreurs reseau** : les echecs DNS, timeout et socket interrompu vers
+  `api.dzmarket.pro` sont des incidents de connectivite transitoire. Ils sont
+  affiches comme tels dans l'admin, sans libelle FATAL; les vraies erreurs
+  non reseau restent critiques. Aucune migration ni modification serveur.
+
 ### Erreur technique brute affichee dans l'admin Moderation (corrige 2026-11-18)
 
 - **Preuve** : capture du 18/11, onglet "Utilisateurs" de l'admin
