@@ -116,22 +116,71 @@ python -m pip install --user google-api-python-client google-auth
 7. Start workflow `DZMarket iOS TestFlight` from `main`.
 8. Wait for Codemagic upload to finish, then verify the build in TestFlight.
 
-If triggering through Codemagic API, store the token in a local environment
-variable and never paste it in logs or docs:
+### Triggering and watching the build through the API (verified 2026-11-19)
+
+The workflow id to pass to the API is the YAML key under `workflows:` in
+`codemagic.yaml` (currently `ios-testflight`), not the human-readable
+`name:` field. The app id does not change between releases — look it up
+once with `GET /apps` if forgotten, never guess it.
 
 ```powershell
+# 1) Load the token from the Windows user env var — never print it, never ask for it
+$env:CODEMAGIC_API_TOKEN = [Environment]::GetEnvironmentVariable('CODEMAGIC_API_TOKEN','User')
+if ([string]::IsNullOrWhiteSpace($env:CODEMAGIC_API_TOKEN)) { throw 'CODEMAGIC_API_TOKEN absent' }
 $headers = @{ "x-auth-token" = $env:CODEMAGIC_API_TOKEN }
-$body = @{
-  appId = "<CODEMAGIC_APP_ID>"
-  workflowId = "ios-testflight"
-  branch = "main"
-} | ConvertTo-Json
-Invoke-RestMethod -Method Post `
-  -Uri "https://api.codemagic.io/builds" `
-  -Headers $headers `
-  -ContentType "application/json" `
-  -Body $body
+
+# 2) Find the app id (DZMarketAI) if not already known
+$apps = Invoke-RestMethod -Method Get -Uri "https://api.codemagic.io/apps" -Headers $headers
+$apps.applications | Where-Object { $_.appName -like "*DZMarket*" } |
+  Select-Object _id, appName
+
+# 3) Trigger the build
+$body = @{ appId = "<APP_ID>"; workflowId = "ios-testflight"; branch = "main" } | ConvertTo-Json
+$result = Invoke-RestMethod -Method Post -Uri "https://api.codemagic.io/builds" `
+  -Headers $headers -ContentType "application/json" -Body $body
+$result.buildId
+
+# 4) Poll until terminal (run this with run_in_background — a full build takes 10-20+ min)
+$terminal = @("finished","failed","canceled","cancelled","timeout")
+do {
+  Start-Sleep -Seconds 30
+  $b = Invoke-RestMethod -Method Get -Uri "https://api.codemagic.io/builds/$($result.buildId)" -Headers $headers
+} while ($terminal -notcontains $b.build.status)
+$b.build.status
+$b.build.appStoreConnectTasks   # "finished" with no errorMessage = actually in TestFlight
 ```
+
+A `finished` top-level build status only means the pipeline ran to
+completion — check `buildActions` (per-step status) and
+`appStoreConnectTasks` separately; a build can finish `failed` specifically
+at the `Publishing` step while `Build IPA` succeeded.
+
+### Build-number collision across platforms (hit 2026-11-19, costs a wasted build)
+
+Apple's App Store Connect rejects re-uploading an IPA whose build number
+was already accepted for that version string, **even if the source code
+changed** — the error surfaces as a generic `"Publishing failed ... Failed
+to publish <app>.ipa to App Store Connect."` with no further detail from
+the Codemagic API. This repo keeps Android `versionCode` and iOS
+`CFBundleVersion` numerically identical by convention (`pubspec.yaml`
+`version:` and `codemagic.yaml` `APP_BUILD_NUMBER` both read the same
+number), but **Google Play and App Store Connect track build-number reuse
+independently** — one store accepting a number says nothing about the
+other. Before trusting a build number is still free on iOS specifically:
+
+```powershell
+# List recent iOS TestFlight builds and check which commit/build number already succeeded
+$builds = Invoke-RestMethod -Method Get `
+  -Uri "https://api.codemagic.io/builds?appId=<APP_ID>&workflowId=ios-testflight" -Headers $headers
+$builds.builds | Select-Object -First 5 _id, status, startedAt, finishedAt
+```
+
+If a prior successful build already used the current `APP_BUILD_NUMBER`
+and new commits have landed on `main` since that build's commit, iOS needs
+its own incremented build number (e.g. Android stays `49`, iOS moves to
+`50`) to carry the new code to TestFlight — **always ask the founder before
+bumping**, even when the only reason is this collision, since it breaks the
+usual Android/iOS number parity.
 
 ## Required Secrets Checklist
 
