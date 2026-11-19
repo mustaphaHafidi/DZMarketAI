@@ -148,7 +148,7 @@ Future<Map<String, String>> _loadWebRuntimeConfig() async {
     // Always load runtime config from site root, otherwise nested routes such
     // as /auth/callback resolve to /auth/config.json and break callback flows.
     final uri = Uri.base.resolve('/config.json');
-    final resp = await http.get(uri);
+    final resp = await http.get(uri).timeout(const Duration(seconds: 3));
     if (resp.statusCode < 200 || resp.statusCode >= 300) return {};
     final data = jsonDecode(resp.body);
     if (data is! Map) return {};

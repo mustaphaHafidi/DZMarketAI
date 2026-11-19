@@ -689,6 +689,17 @@
       if (!isMarketingRoot) {
         return;
       }
+      // Human visitors skip straight to the listings app; crawlers/social-preview
+      // bots (which don't run this script, or explicitly opt out via ?stay=1)
+      // still see the full marketing HTML below, so SEO/Open Graph/JSON-LD stay intact.
+      var staySearchParams = new URLSearchParams(window.location.search || '');
+      var wantsToStay = staySearchParams.get('stay') === '1';
+      var ua = (navigator.userAgent || '').toLowerCase();
+      var isKnownCrawler = /bot|crawl|spider|slurp|facebookexternalhit|whatsapp|telegrambot|discordbot|slackbot|linkedinbot|pinterest|embedly|outbrain|redditbot|applebot|headlesschrome|lighthouse|duckduckgo|yandex|baidu|mj12bot|ahrefsbot|semrushbot/.test(ua);
+      if (!wantsToStay && !isKnownCrawler) {
+        window.location.replace('https://app.dzmarket.pro/');
+        return;
+      }
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations()
           .then(function (registrations) {
