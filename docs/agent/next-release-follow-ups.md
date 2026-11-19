@@ -53,18 +53,33 @@ Tentative de publication mobile uniquement (Android + iOS), web non touche.
   visuelle Play Console non faite depuis cette session (pas d'acces
   navigateur authentifie) — statut de deploiement (pourcentage de
   rollout/review Google) a confirmer cote fondateur.
-- **Publication iOS (Codemagic)** : declenchement via l'API Codemagic
-  **non effectue** — jeton API Codemagic absent de cette machine/session
-  (volontairement local-only, jamais commite, aucun MCP Codemagic
-  disponible). Ce n'est pas un blocage de permission mais une absence
-  reelle d'acces. Le workflow `DZMarket iOS TestFlight` existe toujours
-  dans `codemagic.yaml` ; a lancer manuellement par le fondateur depuis
-  l'interface Codemagic, ou fournir le jeton pour que l'agent le fasse.
-- **Statut** : toutes les validations qualite et USB sont vertes ; **aucune
-  publication store n'a ete effectuee** (Play Console et App Store Connect
-  inchanges) faute d'autorisation de l'agent pour ces actions irreversibles.
-  Build Android pret localement ; commit source deja sur `origin/main`
-  (aucun changement de code n'a ete necessaire pour cette release).
+- **Publication iOS (Codemagic)** : jeton fourni par le fondateur (stocke en
+  variable utilisateur Windows, jamais affiche/commite). Workflow
+  `ios-testflight` ("DZMarket iOS TestFlight") declenche via l'API sur
+  `main` (build Codemagic `6aff3106a662b69e384ea3c4`, commit `9bd2d46`).
+  Build IPA reussi (signature via l'integration `app_store_connect`
+  existante, aucun certificat/profil/secret modifie) mais **etape
+  "Publishing" en echec** : "Failed to publish dzmarket.ipa to App Store
+  Connect." **Cause identifiee** : un build iOS anterieur du meme jour
+  (Codemagic `6afefe1ebcb86bdf9f72d1a1`, commit `0707f35`, publie avec
+  succes sur App Store Connect a 14:00 UTC) avait deja utilise le build
+  number `49` pour la version `1.0.10` — Apple refuse la reutilisation
+  d'un build number deja enregistre pour la meme version. **Consequence
+  importante** : ce build iOS deja present sur TestFlight (0707f35) ne
+  contient PAS le correctif `cdc88db` ("tri explicite + classification
+  erreurs reseau admin", merge le 19/11 a 17:03, donc apres ce build iOS)
+  alors que l'Android deja publie sur Play (versionCode 49) le contient
+  bien — **les deux stores ne sont plus sur le meme contenu source sous le
+  meme numero de version/build**. Pour publier le code actuel de `main` sur
+  iOS, le build number iOS doit etre incremente (ex. `50`) — **non fait
+  dans cette session**, un bump de version/build nécessitant toujours
+  l'accord explicite du fondateur.
+- **Statut** : Android **publie** (versionCode 49, track production,
+  confirme par l'API Android Publisher). iOS **non publie** — build 49 deja
+  pris sur App Store Connect par une version anterieure au correctif du
+  19/11 ; decision a prendre : soit accepter que TestFlight reste sur
+  l'ancien code jusqu'a la prochaine release, soit bump le build iOS a `50`
+  (confirmation explicite requise avant de le faire).
 
 ## A corriger - Android
 
