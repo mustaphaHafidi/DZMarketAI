@@ -71,15 +71,22 @@ Tentative de publication mobile uniquement (Android + iOS), web non touche.
   alors que l'Android deja publie sur Play (versionCode 49) le contient
   bien — **les deux stores ne sont plus sur le meme contenu source sous le
   meme numero de version/build**. Pour publier le code actuel de `main` sur
-  iOS, le build number iOS doit etre incremente (ex. `50`) — **non fait
-  dans cette session**, un bump de version/build nécessitant toujours
-  l'accord explicite du fondateur.
-- **Statut** : Android **publie** (versionCode 49, track production,
-  confirme par l'API Android Publisher). iOS **non publie** — build 49 deja
-  pris sur App Store Connect par une version anterieure au correctif du
-  19/11 ; decision a prendre : soit accepter que TestFlight reste sur
-  l'ancien code jusqu'a la prochaine release, soit bump le build iOS a `50`
-  (confirmation explicite requise avant de le faire).
+  iOS, le build number iOS doit etre incremente — fait avec l'accord
+  explicite du fondateur (`92ed48b`, `codemagic.yaml` `APP_BUILD_NUMBER`
+  `49` -> `50`, Android reste a `49` deja publie).
+- **Retry iOS build 50** : workflow `ios-testflight` redeclenche sur
+  `main` (commit `92ed48b`, build Codemagic `6aff38fc13f5ba3222d1a627`).
+  Tous les steps verts, y compris "Publishing" cette fois. Tache
+  "App Store Connect distribution" **`finished` sans erreur** a
+  18:13:04 UTC (verifie via polling API, pas suppose). **iOS 1.0.10 (50)
+  est maintenant sur TestFlight avec le code actuel de `main`**, y compris
+  le correctif `cdc88db`.
+- **Statut final** : Android publie (versionCode 49, track production) ;
+  iOS publie (build 50, TestFlight, App Store Connect distribution
+  confirmee). Les deux stores portent maintenant le meme contenu source
+  (`main` a `92ed48b`), sous des numeros de build differents par
+  plateforme (Android 49 / iOS 50) — divergence intentionnelle et
+  documentee, pas une erreur.
 
 ## A corriger - Android
 
