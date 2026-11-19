@@ -1,8 +1,67 @@
 # DZMarket - Suivi prochaine version
 
-Mis a jour : 2026-11-13. Cette fiche ne contient que les constats utiles
+Mis a jour : 2026-11-19. Cette fiche ne contient que les constats utiles
 depuis les dernieres releases. Elle ne remplace ni les logs de production ni
 les tests de release.
+
+## Release mobile 1.0.10+49 - 2026-11-19
+
+Tentative de publication mobile uniquement (Android + iOS), web non touche.
+
+- **Repo** : `origin/main` propre, HEAD `6efd7e2`. `pubspec.yaml` et
+  `codemagic.yaml` deja alignes sur `1.0.10+49`, aucun bump necessaire.
+- **Qualite** : `flutter analyze --no-pub` -> 2 avertissements benins
+  preexistants (`auth_service.dart`, `unawaited_return_in_try_block`), aucune
+  nouvelle erreur. `flutter test --no-pub --reporter expanded` -> **180
+  passes, 0 echec** (2 skip).
+- **Build Android prod** : APK puis AAB generes via
+  `.\scripts\build_android_prod.ps1` (flavor `prod`, signature release reelle
+  via `android/key.properties`), version confirmee `1.0.10+49`.
+- **Scenarios USB (Samsung `R5CNC13Y7WN`, APK prod fraichement installe)** :
+  demarrage (splash + prompt notification natif, aucun crash) ; connexion
+  Google reussie (compte reel du fondateur, deja existant, aucun nouveau
+  compte cree) ; profil + bascule Mode vendeur ; parcours/annonces (grille
+  sans overflow) ; categorie Vehicules confirmee live en prod avec ses 6
+  sous-categories (Voitures, Motos & Scooters, Utilitaires, Camions, Engins,
+  Bateaux) ; creation complete d'une annonce Voitures avec tous les champs
+  vehicule (marque/modele/annee/kilometrage/carburant/boite/carrosserie),
+  livraison forcee sur "a convenir" comme prevu ; modification de l'annonce
+  (prix) sauvegardee avec succes ("Annonce mise a jour"). Chat non teste
+  (necessite un second compte reel pour un echange de messages, pas
+  disponible dans cette session) ; admin non teste (le compte utilise n'a pas
+  de role admin, aucune entree admin visible dans son profil).
+- **Nettoyage test** : l'annonce de test (`TEST QA Release 1.0.10 49 a
+  supprimer`) a ete **archivee** (retiree de toute recherche/liste publique)
+  via le menu vendeur. Aucun bouton de suppression definitive n'existe cote
+  app pour une annonce (seulement Ouvrir/Modifier/Archiver-Restaurer) ; une
+  suppression definitive demanderait une requete SQL directe sur
+  `dzm-app-01`, explicitement hors perimetre de cette tache (web/Supabase/
+  serveurs) et bloquee par le classificateur de securite de l'agent.
+- **Constat UI note (pas corrige, hors perimetre de cette passe)** : l'ecran
+  "Modifier l'annonce" existant n'affiche aucun champ specifique vehicule
+  (modele/annee/kilometrage/carburant/boite/carrosserie) et le champ
+  Categorie y apparait vide — deja documente comme limitation connue
+  (`updateProduct` non etendu pour les vehicules lors de l'ajout de la
+  categorie). Le prix a bien ete modifiable et sauvegarde.
+- **Publication Android (Play Console)** : build prêt
+  (`build/app/outputs/bundle/prodRelease/app-prod-release.aab`,
+  `1.0.10+49`), mais l'upload reel via
+  `tools/upload_play_bundle.py --track production --status completed` a ete
+  **bloque par le classificateur de securite de l'agent** (action jugee
+  destructive/irreversible sur un service de production avec utilisateurs
+  reels). Non execute. Nécessite une action manuelle du fondateur ou une
+  regle de permission explicite.
+- **Publication iOS (Codemagic)** : declenchement via l'API Codemagic
+  egalement **bloque par le classificateur** (lecture meme de la variable
+  d'environnement du token refusee comme "Unauthorized Access"). Non
+  execute. Le workflow `DZMarket iOS TestFlight` existe toujours dans
+  `codemagic.yaml` et peut etre lance manuellement par le fondateur depuis
+  l'interface Codemagic.
+- **Statut** : toutes les validations qualite et USB sont vertes ; **aucune
+  publication store n'a ete effectuee** (Play Console et App Store Connect
+  inchanges) faute d'autorisation de l'agent pour ces actions irreversibles.
+  Build Android pret localement ; commit source deja sur `origin/main`
+  (aucun changement de code n'a ete necessaire pour cette release).
 
 ## A corriger - Android
 
