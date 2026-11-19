@@ -939,3 +939,17 @@ sans risque ni régression.
 - Aucun bundle Play, build TestFlight, push ou deploiement web n'est encore
   lance. Le bundle Android, le commit exact et les publications restent a faire
   apres revue finale de l'etat Git.
+
+### 2026-11-19 - Codex - deploiement web commit 0707f35
+
+- Web uniquement: l'artefact du commit `0707f35` a ete construit puis valide
+  par `verify_web_artifact.ps1`. La suite Flutter est a `178 OK, 2 ignores`;
+  `flutter analyze --no-pub` ne remonte que les deux warnings historiques.
+- Le compte SSH limite `claude-deploy` ne peut pas renommer le repertoire
+  actif (sticky bit sur `/var/www`) ni creer dans `dzmarket-web-releases`.
+  Une copie complete de retour arriere a donc ete creee avant synchronisation
+  des seuls fichiers web; `config.json` prod a ete exclu et conserve.
+- Verification post-deploiement: le hash de `main.dart.js` servi correspond a
+  l'artefact local, et `www`, `app`, `robots.txt`, `sitemap.xml`, les deux
+  pages auth-email et l'API repondent tous HTTP 200. Android et iOS restent
+  explicitement hors de ce deploiement et a la charge de Claude.
