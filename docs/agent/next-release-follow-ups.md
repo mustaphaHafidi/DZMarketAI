@@ -1,8 +1,41 @@
 # DZMarket - Suivi prochaine version
 
-Mis a jour : 2026-11-19. Cette fiche ne contient que les constats utiles
+Mis a jour : 2026-11-20. Cette fiche ne contient que les constats utiles
 depuis les dernieres releases. Elle ne remplace ni les logs de production ni
 les tests de release.
+
+## Edition categorie vehicule + numero de telephone optionnel - 2026-11-20
+
+Code partage Flutter (Android/iOS/web) corrige/etendu, **deploiement web
+seul** cette passe (Android/iOS deja publies la veille, non refaits sur
+demande explicite du fondateur).
+
+- Bug corrige : l'ecran "Modifier l'annonce" n'offrait aucun vrai selecteur
+  de categorie (slug) -- seulement un texte libre decoratif qui n'ecrivait
+  jamais `category_id`/`category_slug`. Une annonce existante sans
+  categorie vehicule reconnue restait donc bloquee sur l'affichage
+  generique (COD/colis/assurance) sans aucun moyen de la corriger. Corrige
+  via un nouveau `lib/src/utils/category_picker_helper.dart` (extrait du
+  selecteur deja utilise a la creation) reutilise par l'ecran d'edition ;
+  `category_id` est maintenant bien envoye par `ProductService.updateProduct`.
+- Nouvelle fonctionnalite : interrupteur optionnel "Afficher mon numero de
+  telephone sur cette annonce" (creation + edition), qui reutilise le
+  numero de profil vendeur deja valide (format DZ 05/06/07) au lieu d'un
+  nouveau champ texte libre par annonce. Bouton "Appeler" sur la fiche
+  produit cote acheteur quand active.
+- Migration additive `20261120100000_add_show_seller_phone.sql` (colonne
+  `show_seller_phone boolean not null default false` sur `products`) --
+  statut en prod : **[a completer apres application]**.
+- Tests : `flutter analyze` propre (2 avertissements historiques
+  seulement), `flutter test` -> **180 passes, 2 ignores, 0 echec**. Deux
+  tests (`edit_product_vehicle_test.dart`) adaptes pour scroller
+  explicitement jusqu'aux champs verifies (`dragUntilVisible`) -- la page
+  est devenue plus haute (nouveau selecteur + interrupteur), pas un bug
+  d'affichage.
+- Hors scope : Android/iOS non reconstruits/non publies cette passe (meme
+  code source corrige) ; l'annonce "ibiza 2019" du fondateur n'est pas
+  modifiee directement -- a recategoriser par lui-meme via le nouveau
+  selecteur une fois le web deploye.
 
 ## Deploiement web - correctif chargement infini + acces direct - 2026-11-19
 

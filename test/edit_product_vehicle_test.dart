@@ -48,11 +48,36 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-
     expect(
-      find.text(L10n.trLocale('fr', 'listing.add.vehicle_section_title')),
-      findsOneWidget,
+      find.text(
+        L10n.trLocale('fr', 'listing.add.stock_label'),
+        skipOffstage: false,
+      ),
+      findsNothing,
     );
+    expect(
+      find.text(
+        L10n.trLocale('fr', 'listing.add.size_label'),
+        skipOffstage: false,
+      ),
+      findsNothing,
+    );
+    expect(find.byType(CheckboxListTile), findsNothing);
+    // The form grew taller (category picker + optional phone toggle), so the
+    // vehicle-specific fields under test now sit past the initial viewport/
+    // cache extent and need an incremental scroll to be mounted.
+    final vehicleSectionFinder = find.text(
+      L10n.trLocale('fr', 'listing.add.vehicle_section_title'),
+      skipOffstage: false,
+    );
+    await tester.dragUntilVisible(
+      vehicleSectionFinder,
+      find.byType(ListView),
+      const Offset(0, -300),
+    );
+    await tester.pumpAndSettle();
+
+    expect(vehicleSectionFinder, findsOneWidget);
     expect(
       find.text(
         L10n.trLocale('fr', 'listing.add.model_label'),
@@ -115,14 +140,25 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(
-      find.text(
-        L10n.trLocale('fr', 'listing.add.size_label'),
-        skipOffstage: false,
-      ),
-      findsOneWidget,
+    // The form grew taller (category picker + optional phone toggle), so the
+    // size field and parcel controls under test now sit past the initial
+    // viewport/cache extent and need an incremental scroll to be mounted.
+    final sizeLabelFinder = find.text(
+      L10n.trLocale('fr', 'listing.add.size_label'),
+      skipOffstage: false,
     );
-    await tester.fling(find.byType(ListView), const Offset(0, -2400), 3000);
+    await tester.dragUntilVisible(
+      sizeLabelFinder,
+      find.byType(ListView),
+      const Offset(0, -300),
+    );
+    await tester.pumpAndSettle();
+    expect(sizeLabelFinder, findsOneWidget);
+    await tester.dragUntilVisible(
+      find.byType(CheckboxListTile),
+      find.byType(ListView),
+      const Offset(0, -300),
+    );
     await tester.pumpAndSettle();
     expect(find.byType(CheckboxListTile), findsWidgets);
   });

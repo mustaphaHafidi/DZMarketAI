@@ -315,6 +315,7 @@ class ProductService {
     bool shippingFree = false,
     bool exchangeAfterDelivery = false,
     bool insuranceActive = false,
+    bool showSellerPhone = false,
     double? declaredValue,
     int? weightKg,
     int? heightCm,
@@ -516,6 +517,7 @@ class ProductService {
       'shipping_free': shippingFree,
       'exchange_after_delivery': exchangeAfterDelivery,
       'insurance_active': insuranceActive,
+      'show_seller_phone': showSellerPhone,
       'declared_value': safeDeclaredValue,
       'weight_kg': safeWeight,
       'height_cm': safeHeight,
@@ -594,6 +596,7 @@ class ProductService {
     bool? shippingFree,
     bool? exchangeAfterDelivery,
     bool? insuranceActive,
+    bool? showSellerPhone,
     double? declaredValue,
     int? weightKg,
     int? heightCm,
@@ -730,6 +733,9 @@ class ProductService {
       payload['exchange_after_delivery'] = exchangeAfterDelivery;
     }
     if (insuranceActive != null) payload['insurance_active'] = insuranceActive;
+    if (showSellerPhone != null) {
+      payload['show_seller_phone'] = showSellerPhone;
+    }
     if (declaredValue != null) payload['declared_value'] = declaredValue;
     if (weightKg != null) payload['weight_kg'] = weightKg;
     if (heightCm != null) payload['height_cm'] = heightCm;
@@ -756,14 +762,34 @@ class ProductService {
       });
     }
     if (payload.isEmpty) return;
-    await RateLimiter.instance.run(
-      'products.update',
-      () => supabase
-          .from(SupabaseTables.products)
-          .update(payload)
-          .eq('id', safeId)
-          .eq('owner_id', userId),
-    );
+    await _updateProductWithSchemaFallback(payload, safeId, userId);
+  }
+
+  Future<void> _updateProductWithSchemaFallback(
+    Map<String, dynamic> payload,
+    String id,
+    String ownerId,
+  ) async {
+    final mutable = Map<String, dynamic>.from(payload);
+    while (true) {
+      try {
+        await RateLimiter.instance.run(
+          'products.update',
+          () => supabase
+              .from(SupabaseTables.products)
+              .update(mutable)
+              .eq('id', id)
+              .eq('owner_id', ownerId),
+        );
+        return;
+      } on PostgrestException catch (e) {
+        if (e.code != '42703') rethrow;
+        final missing = _extractMissingColumn(e.message);
+        if (missing == null || !mutable.containsKey(missing)) rethrow;
+        mutable.remove(missing);
+        if (mutable.isEmpty) return;
+      }
+    }
   }
 
   Future<void> deleteProduct(dynamic id) async {

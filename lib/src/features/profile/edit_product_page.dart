@@ -2,12 +2,15 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:dzmarket/src/models/product.dart';
+import 'package:dzmarket/src/services/auth_service.dart';
+import 'package:dzmarket/src/services/category_service.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/product_service.dart';
 import 'package:dzmarket/src/services/shipping_service.dart';
 import 'package:dzmarket/src/services/storage_service.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
+import 'package:dzmarket/src/utils/category_picker_helper.dart';
 import 'package:dzmarket/src/utils/vehicle_specs.dart';
 
 class EditProductPage extends StatefulWidget {
@@ -58,8 +61,16 @@ class _EditProductPageState extends State<EditProductPage> {
   static const int _maxWeightKg = 60;
   static const _conditions = ['new', 'like new', 'good', 'fair'];
 
-  bool get _isVehicleListing =>
-      VehicleSpecs.isVehicleCategory(widget.product.categorySlug);
+  String? _categoryId;
+  String? _categorySlug;
+  bool _loadingCategories = false;
+  String? _categoryLoadError;
+  List<Map<String, String>> _categories = const [];
+  bool _showSellerPhone = false;
+  String? _sellerPhone;
+  bool _loadingSellerPhone = true;
+
+  bool get _isVehicleListing => VehicleSpecs.isVehicleCategory(_categorySlug);
 
   String _conditionLabel(BuildContext context, String value) {
     switch (value) {
@@ -142,6 +153,47 @@ class _EditProductPageState extends State<EditProductPage> {
       text: (widget.product.lengthCm ?? 0).toString(),
     );
     _existingImages.addAll(widget.product.imageUrls);
+    _categoryId = widget.product.categoryId;
+    _categorySlug = widget.product.categorySlug;
+    _showSellerPhone = widget.product.showSellerPhone;
+    _loadCategories();
+    _loadSellerPhone();
+  }
+
+  Future<void> _loadCategories() async {
+    setState(() {
+      _loadingCategories = true;
+      _categoryLoadError = null;
+    });
+    final items = await CategoryService().fetchCategories();
+    if (!mounted) return;
+    setState(() {
+      _categories = items;
+      _loadingCategories = false;
+      if (items.isEmpty) {
+        _categoryLoadError = L10n.tr(
+          context,
+          'listing.add.error_no_categories',
+        );
+      }
+    });
+  }
+
+  Future<void> _loadSellerPhone() async {
+    try {
+      final profile = await AuthService.instance.fetchProfile();
+      if (!mounted) return;
+      setState(() {
+        _sellerPhone = profile?.phone;
+        _loadingSellerPhone = false;
+        if ((_sellerPhone ?? '').trim().isEmpty) {
+          _showSellerPhone = false;
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingSellerPhone = false);
+    }
   }
 
   @override
@@ -251,15 +303,13 @@ class _EditProductPageState extends State<EditProductPage> {
       }
       final vehicleYear = _parseOptionalDigits(_vehicleYearCtrl.text);
       final vehicleMileageKm = _parseOptionalDigits(_vehicleMileageCtrl.text);
-      final vehicleEngine =
-          VehicleSpecs.supportsRoadSpecs(widget.product.categorySlug)
+      final vehicleEngine = VehicleSpecs.supportsRoadSpecs(_categorySlug)
           ? InputSanitizer.sanitizeOptionalText(
               _vehicleEngineCtrl.text,
               maxLength: 60,
             )
           : null;
-      final vehiclePowerHp =
-          VehicleSpecs.supportsRoadSpecs(widget.product.categorySlug)
+      final vehiclePowerHp = VehicleSpecs.supportsRoadSpecs(_categorySlug)
           ? _parseOptionalDigits(_vehiclePowerHpCtrl.text)
           : null;
       final weight = isVehicle
@@ -419,7 +469,9 @@ class _EditProductPageState extends State<EditProductPage> {
         description: description,
         imageUrl: imageUrl,
         imageUrls: allImages,
+        categoryId: _categoryId,
         categoryName: categoryName,
+        showSellerPhone: _showSellerPhone,
         condition: _condition,
         brand: brand,
         size: size,
@@ -616,6 +668,87 @@ class _EditProductPageState extends State<EditProductPage> {
               textInputAction: TextInputAction.newline,
             ),
             const SizedBox(height: 12),
+            Text(
+              L10n.tr(context, 'listing.add.category_label'),
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            const SizedBox(height: 8),
+            if (_categoryLoadError != null)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _categoryLoadError!,
+                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton(
+                    onPressed: _loadCategories,
+                    child: Text(L10n.tr(context, 'common.retry')),
+                  ),
+                ],
+              )
+            else
+              InkWell(
+                onTap: _loadingCategories
+                    ? null
+                    : () async {
+                        final picked = await CategoryPickerHelper.show(
+                          context: context,
+                          categories: _categories,
+                          currentCategoryId: _categoryId,
+                        );
+                        if (picked == null) return;
+                        final pickedId = picked['id'] ?? '';
+                        if (pickedId.isEmpty) return;
+                        setState(() {
+                          _categoryId = pickedId;
+                          _categorySlug = picked['slug'];
+                          _categoryCtrl.text = CategoryPickerHelper.itemLabel(
+                            context,
+                            picked,
+                          );
+                        });
+                      },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Theme.of(context).dividerColor),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.category_outlined,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          CategoryPickerHelper.labelForId(
+                            context,
+                            _categories,
+                            _categoryId,
+                          ),
+                        ),
+                      ),
+                      if (_loadingCategories)
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      else
+                        const Icon(Icons.chevron_right),
+                    ],
+                  ),
+                ),
+              ),
+            const SizedBox(height: 12),
             if (!isVehicle) ...[
               TextField(
                 controller: _categoryCtrl,
@@ -625,6 +758,21 @@ class _EditProductPageState extends State<EditProductPage> {
               ),
               const SizedBox(height: 12),
             ],
+            SwitchListTile(
+              value: _showSellerPhone,
+              onChanged: _loadingSellerPhone || (_sellerPhone ?? '').trim().isEmpty
+                  ? null
+                  : (value) => setState(() => _showSellerPhone = value),
+              title: Text(
+                L10n.tr(context, 'listing.add.show_phone_label'),
+              ),
+              subtitle: Text(
+                (_sellerPhone ?? '').trim().isEmpty
+                    ? L10n.tr(context, 'listing.add.show_phone_hint_missing')
+                    : L10n.tr(context, 'listing.add.show_phone_hint'),
+              ),
+            ),
+            const SizedBox(height: 12),
             TextField(
               controller: _brandCtrl,
               decoration: InputDecoration(
@@ -669,9 +817,7 @@ class _EditProductPageState extends State<EditProductPage> {
                   labelText: L10n.tr(context, 'listing.add.model_label'),
                 ),
               ),
-              if (VehicleSpecs.supportsRoadSpecs(
-                widget.product.categorySlug,
-              )) ...[
+              if (VehicleSpecs.supportsRoadSpecs(_categorySlug)) ...[
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -781,9 +927,7 @@ class _EditProductPageState extends State<EditProductPage> {
                     )
                     .toList(),
               ),
-              if (VehicleSpecs.supportsBodyType(
-                widget.product.categorySlug,
-              )) ...[
+              if (VehicleSpecs.supportsBodyType(_categorySlug)) ...[
                 const SizedBox(height: 12),
                 Text(
                   L10n.tr(context, 'listing.add.body_type_label'),

@@ -446,6 +446,7 @@ class L10n {
     'courier_settings.zrexpress_tenant_label': 'Tenant ID ZR Express',
     'cta.buy_agreed': 'Acheter {price} DA',
     'cta.buy_now': 'Acheter',
+    'cta.call_seller': 'Appeler',
     'cta.chat': 'Discuter',
     'cta.contact': 'Contacter',
     'cta.out_of_stock': 'Rupture de stock',
@@ -603,6 +604,12 @@ class L10n {
     'listing.add.search_tags_label': 'Tags de recherche',
     'listing.add.select_commune': 'Choisir une daïra / commune',
     'listing.add.select_wilaya': 'Choisir une wilaya',
+    'listing.add.show_phone_hint':
+        'Votre numéro de profil sera visible sur cette annonce.',
+    'listing.add.show_phone_hint_missing':
+        'Ajoutez un numéro de téléphone à votre profil pour activer cette option.',
+    'listing.add.show_phone_label':
+        'Afficher mon numéro de téléphone sur cette annonce',
     'listing.add.size_label': 'Taille (optionnel)',
     'listing.add.step_category': 'Catégorie',
     'listing.add.step_delivery': 'Livraison',
@@ -1520,6 +1527,7 @@ class L10n {
     'courier_settings.zrexpress_tenant_label': 'معرّف المستأجر ZR Express',
     'cta.buy_agreed': 'شراء {price} دج',
     'cta.buy_now': 'اشترِ',
+    'cta.call_seller': 'اتصال',
     'cta.chat': 'دردشة',
     'cta.contact': 'تواصل',
     'cta.out_of_stock': 'نفاد المخزون',
@@ -1659,6 +1667,10 @@ class L10n {
     'listing.add.search_tags_label': 'وسوم البحث',
     'listing.add.select_commune': 'اختر الدائرة / البلدية',
     'listing.add.select_wilaya': 'اختر الولاية',
+    'listing.add.show_phone_hint': 'رقم هاتف ملفك الشخصي سيظهر في هذا الإعلان.',
+    'listing.add.show_phone_hint_missing':
+        'أضف رقم هاتف إلى ملفك الشخصي لتفعيل هذا الخيار.',
+    'listing.add.show_phone_label': 'إظهار رقم هاتفي في هذا الإعلان',
     'listing.add.size_label': 'المقاس (اختياري)',
     'listing.add.step_category': 'الفئة',
     'listing.add.step_delivery': 'التوصيل',

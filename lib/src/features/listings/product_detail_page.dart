@@ -36,6 +36,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ProductDetailPage extends StatefulWidget {
   const ProductDetailPage({super.key, required this.productId});
@@ -281,7 +282,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         'profiles.wilaya.seller',
         () => supabase
             .from('profiles')
-            .select('wilaya, full_name, avatar_url, is_public')
+            .select('wilaya, full_name, avatar_url, is_public, phone')
             .eq('id', data['owner_id'])
             .maybeSingle(),
       );
@@ -2077,6 +2078,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             sellerName: _sellerProfile?['full_name']?.toString(),
             sellerAvatar: _sellerProfile?['avatar_url']?.toString(),
             sellerIsPublic: sellerIsPublic,
+            sellerPhone: _product!.showSellerPhone
+                ? (_sellerProfile?['phone']?.toString())
+                : null,
             onContact: _contactSeller,
             onViewProfile: viewSellerProfile,
           ),
@@ -2163,6 +2167,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             sellerName: _sellerProfile?['full_name']?.toString(),
             sellerAvatar: _sellerProfile?['avatar_url']?.toString(),
             sellerIsPublic: sellerIsPublic,
+            sellerPhone: _product!.showSellerPhone
+                ? (_sellerProfile?['phone']?.toString())
+                : null,
             onContact: _contactSeller,
             onViewProfile: viewSellerProfile,
           ),
@@ -2302,6 +2309,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             sellerName: _sellerProfile?['full_name']?.toString(),
             sellerAvatar: _sellerProfile?['avatar_url']?.toString(),
             sellerIsPublic: sellerIsPublic,
+            sellerPhone: _product!.showSellerPhone
+                ? (_sellerProfile?['phone']?.toString())
+                : null,
             onContact: _contactSeller,
             onViewProfile: viewSellerProfile,
           ),
@@ -4311,6 +4321,7 @@ class _SellerRowFixed extends StatelessWidget {
     this.sellerName,
     this.sellerAvatar,
     this.sellerIsPublic = false,
+    this.sellerPhone,
     this.onContact,
     this.onViewProfile,
   });
@@ -4319,6 +4330,7 @@ class _SellerRowFixed extends StatelessWidget {
   final String? sellerName;
   final String? sellerAvatar;
   final bool sellerIsPublic;
+  final String? sellerPhone;
   final VoidCallback? onContact;
   final VoidCallback? onViewProfile;
 
@@ -4440,6 +4452,19 @@ class _SellerRowFixed extends StatelessWidget {
                     icon: const Icon(Icons.chat_bubble_outline),
                     label: Text(L10n.tr(context, 'cta.contact')),
                   ),
+                  if (PhoneFormatter.normalizeDzMobileE164(
+                    sellerPhone ?? '',
+                  ).isNotEmpty)
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        final e164 = PhoneFormatter.normalizeDzMobileE164(
+                          sellerPhone ?? '',
+                        );
+                        launchUrl(Uri(scheme: 'tel', path: e164));
+                      },
+                      icon: const Icon(Icons.call_outlined),
+                      label: Text(L10n.tr(context, 'cta.call_seller')),
+                    ),
                 ],
               ),
             ],

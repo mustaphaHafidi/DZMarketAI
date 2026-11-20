@@ -1015,3 +1015,64 @@ sans risque ni régression.
   conserve (celui de ce deploiement).
 - **Hors scope, non touche**: Android, iOS, base de donnees/migrations,
   secrets, autres serveurs.
+
+### 2026-11-20 - Claude - edition categorie vehicule + numero de telephone optionnel
+
+- **Signale par le fondateur** (captures ecran web) : en modifiant une
+  annonce "voiture" deja publiee, l'ecran "Modifier l'annonce" affichait
+  les champs generiques (paiement a la livraison, livraison, details
+  colis, assurance) au lieu des champs vehicule, avec le champ Categorie
+  vide. Il a aussi signale l'absence d'un numero de telephone optionnel
+  par annonce.
+- **Diagnostic** (lecture de code) : cette annonce precise n'a pas de
+  `category_id`/`category_slug` vehicule enregistre, et l'ecran d'edition
+  (`edit_product_page.dart`), contrairement a l'ecran de creation,
+  n'offrait aucun vrai selecteur de categorie pour la corriger -- seulement
+  un champ texte libre (`category` affiche) qui n'a jamais ecrit
+  `category_id`/`category_slug`. Resultat : une fois une annonce sans
+  categorie vehicule reconnue, aucun moyen de la reparer depuis l'app.
+- **Corrige dans le code partage Flutter** (Android/iOS/web, un seul code
+  source) :
+  - nouveau `lib/src/utils/category_picker_helper.dart`, extrait du
+    selecteur de categorie deja utilise a la creation (`add_listing_page.dart`
+    non modifie dans son comportement, juste laisse intact) et reutilise
+    par l'ecran d'edition, qui dispose maintenant d'un vrai selecteur
+    categorie -> sous-categorie ; `_categorySlug` devient un etat mutable
+    reactif dans `edit_product_page.dart` (au lieu d'une lecture figee de
+    `widget.product.categorySlug`), donc changer de categorie met
+    immediatement a jour l'affichage vehicule/generique dans le meme ecran.
+  - `ProductService.updateProduct` branche maintenant `categoryId` (deja
+    accepte cote payload depuis longtemps, jamais envoye par cet ecran).
+  - nouvel interrupteur optionnel "Afficher mon numero de telephone sur
+    cette annonce" (creation et edition), actif uniquement si le profil
+    vendeur a deja un numero valide (reutilise le numero de profil deja
+    valide au format algerien 05/06/07, pas un nouveau champ texte libre
+    par annonce a valider) ; la fiche produit (cote acheteur) affiche un
+    bouton "Appeler" (`tel:`) quand l'option est activee et qu'un numero
+    existe.
+  - migration additive `supabase/migrations/20261120100000_add_show_seller_phone.sql`
+    (colonne `show_seller_phone boolean not null default false` sur
+    `products`, aucune ligne/colonne existante modifiee).
+  - `ProductService.updateProduct` rendu tolerant a un schema pas encore
+    migre (meme repli "colonne manquante -> retrait et nouvelle tentative"
+    deja utilise par `createProduct`), pour ne jamais bloquer une
+    sauvegarde si la colonne n'existe pas encore cote serveur.
+- **Regression de test corrigee en cours de route** (pas un bug d'app) :
+  en ajoutant le nouveau selecteur + l'interrupteur, l'ecran d'edition est
+  devenu plus haut, ce qui a pousse les champs verifies par
+  `test/edit_product_vehicle_test.dart` hors de la fenetre de rendu
+  initiale du `ListView` de test (les widgets existent bien, simplement
+  pas encore montes tant que le scroll ne les atteint pas). Corrige en
+  remplacant le `fling` a distance fixe par `dragUntilVisible` (scroll
+  incremental jusqu'a trouver la cible), plus robuste qu'une distance de
+  scroll devinee.
+- **Validation** : `flutter analyze --no-pub` sans nouvelle erreur (2
+  avertissements historiques `auth_service.dart` seulement), `flutter test
+  --no-pub` -> **180 passes, 2 ignores, 0 echec**. Build web +
+  `verify_web_artifact.ps1` reussis.
+- **Hors scope, non touche** : Android, iOS (meme code source corrige,
+  mais aucun build/publication -- deja publies la veille, le fondateur a
+  explicitement demande de ne pas refaire ces releases maintenant) ;
+  l'annonce "ibiza 2019" existante du fondateur n'est pas modifiee
+  directement par cette passe -- il pourra la recategoriser lui-meme via le
+  nouveau selecteur une fois le web deploye ; secrets, autres serveurs.

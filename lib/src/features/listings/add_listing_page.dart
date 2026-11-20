@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dzmarket/src/features/profile/my_listings_page.dart';
+import 'package:dzmarket/src/services/auth_service.dart';
 import 'package:dzmarket/src/services/category_service.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/i18n.dart';
@@ -66,6 +67,9 @@ class _AddListingPageState extends State<AddListingPage> {
   bool _exchangeAfterDelivery = false;
   bool _insuranceActive = false;
   bool _allowStopdesk = true;
+  bool _showSellerPhone = false;
+  String? _sellerPhone;
+  bool _loadingSellerPhone = true;
   bool _sellerHasEnabledCouriers = true;
   CourierCapabilities _courierCaps = CourierCapabilities.all;
   CourierParcelRules _parcelRules = CourierParcelRules.generic;
@@ -118,6 +122,7 @@ class _AddListingPageState extends State<AddListingPage> {
     _loadLocations();
     _loadEnabledCouriers();
     _loadRecentCategories();
+    _loadSellerPhone();
     _titleCtrl.addListener(_onFieldChanged);
     _descCtrl.addListener(_onFieldChanged);
     _priceCtrl.addListener(_onFieldChanged);
@@ -173,6 +178,20 @@ class _AddListingPageState extends State<AddListingPage> {
       }
     });
     _scheduleSuggestionRefresh();
+  }
+
+  Future<void> _loadSellerPhone() async {
+    try {
+      final profile = await AuthService.instance.fetchProfile();
+      if (!mounted) return;
+      setState(() {
+        _sellerPhone = profile?.phone;
+        _loadingSellerPhone = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingSellerPhone = false);
+    }
   }
 
   Future<void> _loadRecentCategories() async {
@@ -1460,6 +1479,7 @@ class _AddListingPageState extends State<AddListingPage> {
           shippingFree: isVehicle ? false : _freeShipping,
           exchangeAfterDelivery: isVehicle ? false : _exchangeAfterDelivery,
           insuranceActive: isVehicle ? false : _insuranceActive,
+          showSellerPhone: _showSellerPhone,
           allowStopdesk: isVehicle ? false : _allowStopdesk,
           declaredValue: declaredValue,
           weightKg: weight,
@@ -2125,6 +2145,23 @@ class _AddListingPageState extends State<AddListingPage> {
                       setState(() => _condition = value ?? 'new'),
                   decoration: InputDecoration(
                     labelText: L10n.tr(context, 'listing.add.condition_label'),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SwitchListTile(
+                  value: _showSellerPhone,
+                  onChanged:
+                      _loadingSellerPhone ||
+                          (_sellerPhone ?? '').trim().isEmpty
+                      ? null
+                      : (value) => setState(() => _showSellerPhone = value),
+                  title: Text(
+                    L10n.tr(context, 'listing.add.show_phone_label'),
+                  ),
+                  subtitle: Text(
+                    (_sellerPhone ?? '').trim().isEmpty
+                        ? L10n.tr(context, 'listing.add.show_phone_hint_missing')
+                        : L10n.tr(context, 'listing.add.show_phone_hint'),
                   ),
                 ),
                 const SizedBox(height: 12),
