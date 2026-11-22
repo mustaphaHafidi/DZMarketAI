@@ -131,6 +131,14 @@ log) → dans ce cas, passer par la voie 1.
   reconstruit et verifie. Le test Android USB reste a refaire: aucun appareil
   n'etait connecte durant cette passe. Publication mobile volontairement
   reportee a la prochaine version.
+- Deploiement web : commit `36734f5`, migration appliquee avant bascule,
+  archive portable verifiee, swap atomique et `config.json` conserve. Le hash
+  du `main.dart.js` public correspond au build local; `www`, `app`, `api`,
+  `robots.txt`, `sitemap.xml` et les deux polices d'icones repondent HTTP 200.
+  Playwright en session fraiche confirme la requete publique `products` avec
+  `contact_phone` en HTTP 200 et aucune erreur/alerte console. Un rollback est
+  conserve; l'ancien rollback, la release staged echouee et les archives sont
+  supprimes apres verification.
 
 ### 2026-11-15 - Codex - audit lecture seule des erreurs recentes
 

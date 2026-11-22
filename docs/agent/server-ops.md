@@ -36,6 +36,10 @@ Check whether the problem is token registration or FCM/APNs delivery:
 
 - Prefer exact source state, then deploy artifact from that state.
 - Do not mix unrelated local worktree changes into a deploy.
+- Before transfer, verify that `claude-deploy` can create a directory under
+  `/var/www/dzmarket-web-releases/`. If its ACL blocks that staging path, do
+  not attempt a partial swap; use the configured root operator only for the
+  same documented atomic release and rollback flow.
 - Never copy local secrets into tracked docs.
 - On every web deploy, replace the old web files only after the new artifact is ready.
 - Keep the active `/var/www/dzmarket-web` and exactly **one** rollback directory
