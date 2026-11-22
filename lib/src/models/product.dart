@@ -37,6 +37,7 @@ class Product {
     this.exchangeAfterDelivery = false,
     this.insuranceActive = false,
     this.showSellerPhone = false,
+    this.contactPhone,
     this.declaredValue,
     this.weightKg,
     this.heightCm,
@@ -85,6 +86,7 @@ class Product {
   final bool exchangeAfterDelivery;
   final bool insuranceActive;
   final bool showSellerPhone;
+  final String? contactPhone;
   final double? declaredValue;
   final int? weightKg;
   final int? heightCm;
@@ -190,6 +192,7 @@ class Product {
     exchangeAfterDelivery: json['exchange_after_delivery'] as bool? ?? false,
     insuranceActive: json['insurance_active'] as bool? ?? false,
     showSellerPhone: json['show_seller_phone'] as bool? ?? false,
+    contactPhone: json['contact_phone'] as String?,
     declaredValue: (json['declared_value'] as num?)?.toDouble(),
     weightKg: (json['weight_kg'] as num?)?.toInt(),
     heightCm: (json['height_cm'] as num?)?.toInt(),

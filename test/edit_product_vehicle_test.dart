@@ -63,6 +63,13 @@ void main() {
       findsNothing,
     );
     expect(find.byType(CheckboxListTile), findsNothing);
+    expect(
+      find.text(
+        L10n.trLocale('fr', 'listing.add.vehicle_contact_phone_toggle'),
+        skipOffstage: false,
+      ),
+      findsOneWidget,
+    );
     // The form grew taller (category picker + optional phone toggle), so the
     // vehicle-specific fields under test now sit past the initial viewport/
     // cache extent and need an incremental scroll to be mounted.
@@ -161,5 +168,12 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byType(CheckboxListTile), findsWidgets);
+    expect(
+      find.text(
+        L10n.trLocale('fr', 'listing.add.vehicle_contact_phone_toggle'),
+        skipOffstage: false,
+      ),
+      findsNothing,
+    );
   });
 }

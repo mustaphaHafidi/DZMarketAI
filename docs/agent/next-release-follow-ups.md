@@ -4,6 +4,19 @@ Mis a jour : 2026-11-20. Cette fiche ne contient que les constats utiles
 depuis les dernieres releases. Elle ne remplace ni les logs de production ni
 les tests de release.
 
+## Numero de contact par annonce vehicule - 2026-11-22
+
+- Le precedent interrupteur reutilisait `profiles.phone`, ce qui ne permettait
+  pas au vendeur de choisir un numero different pour son vehicule. Il est
+  remplace dans le code partage par `products.contact_phone`, nullable et
+  propre a l'annonce; les annonces et profils existants ne sont pas modifies.
+- Le champ ne parait que pour les vehicules, reste facultatif, accepte
+  `05`/`06`/`07` ou `+213`, se normalise en E.164, puis s'affiche avec les
+  actions Chat et Appeler. Un vendeur peut le modifier ou l'effacer.
+- Migration additive : `20261122120000_add_vehicle_contact_phone.sql`.
+  Le web peut etre deploye apres verification de la colonne. Android/iOS
+  restent sur la version precedente jusqu'a la prochaine publication mobile.
+
 ## Edition categorie vehicule + numero de telephone optionnel - 2026-11-20
 
 Code partage Flutter (Android/iOS/web) corrige/etendu, **deploiement web

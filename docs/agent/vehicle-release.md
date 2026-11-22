@@ -8,6 +8,10 @@ Use this gate for every change touching `vehicles` or `vehicles-*`.
   parcel dimensions, stock, insurance or exchange-after-delivery controls.
 - Required fields are brand and model. Year, mileage, fuel, gearbox, body,
   engine and horsepower stay optional.
+- A vehicle may expose one optional contact number stored on the listing, never
+  copied from the seller profile. Accept only Algerian mobile formats
+  `05`/`06`/`07` or `+213`; display it in the listing contact block with chat
+  and call actions.
 - Do not collect registration, VIN, plate number or identity documents.
 - Browse filters are hierarchical: a root category, then an optional
   sub-category. Vehicle-only fields appear only for `vehicles` selections;

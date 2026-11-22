@@ -117,6 +117,21 @@ log) → dans ce cas, passer par la voie 1.
 
 ## Journal des changements (plus récent en haut)
 
+### 2026-11-22 - Codex - numero de contact propre a l'annonce vehicule
+
+- Remplace dans le code partage le mecanisme qui reutilisait le numero de
+  profil par `products.contact_phone`, facultatif et propre a chaque vehicule.
+  Le formulaire creation/modification ne l'affiche que pour Vehicules;
+  validation mobile DZ `05`/`06`/`07` ou `+213`, affichage formate et appel
+  depuis la fiche. Les profils et annonces existantes restent inchanges.
+- Migration additive `20261122120000_add_vehicle_contact_phone.sql` appliquee
+  sur production; colonne nullable `public.products.contact_phone` verifiee.
+- Validation locale : analyse avec les 2 avertissements historiques inchanges;
+  suite Flutter complete `181 passes, 2 ignores, 0 echec`; artefact web
+  reconstruit et verifie. Le test Android USB reste a refaire: aucun appareil
+  n'etait connecte durant cette passe. Publication mobile volontairement
+  reportee a la prochaine version.
+
 ### 2026-11-15 - Codex - audit lecture seule des erreurs recentes
 
 - Controle production sans ecriture: stack Supabase saine; `www.dzmarket.pro`

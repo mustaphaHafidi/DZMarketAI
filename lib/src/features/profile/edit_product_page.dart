@@ -2,7 +2,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:dzmarket/src/models/product.dart';
-import 'package:dzmarket/src/services/auth_service.dart';
 import 'package:dzmarket/src/services/category_service.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/i18n.dart';
@@ -36,6 +35,7 @@ class _EditProductPageState extends State<EditProductPage> {
   late final TextEditingController _vehicleMileageCtrl;
   late final TextEditingController _vehicleEngineCtrl;
   late final TextEditingController _vehiclePowerHpCtrl;
+  late final TextEditingController _vehicleContactPhoneCtrl;
   late final TextEditingController _wilayaCtrl;
   late final TextEditingController _dairaCtrl;
   late final TextEditingController _declaredValueCtrl;
@@ -66,9 +66,7 @@ class _EditProductPageState extends State<EditProductPage> {
   bool _loadingCategories = false;
   String? _categoryLoadError;
   List<Map<String, String>> _categories = const [];
-  bool _showSellerPhone = false;
-  String? _sellerPhone;
-  bool _loadingSellerPhone = true;
+  bool _showVehicleContactPhone = false;
 
   bool get _isVehicleListing => VehicleSpecs.isVehicleCategory(_categorySlug);
 
@@ -119,6 +117,11 @@ class _EditProductPageState extends State<EditProductPage> {
     _vehiclePowerHpCtrl = TextEditingController(
       text: widget.product.vehiclePowerHp?.toString() ?? '',
     );
+    _vehicleContactPhoneCtrl = TextEditingController(
+      text: widget.product.contactPhone ?? '',
+    );
+    _showVehicleContactPhone =
+        widget.product.contactPhone?.trim().isNotEmpty ?? false;
     _vehicleFuel = widget.product.vehicleFuel;
     _vehicleTransmission = widget.product.vehicleTransmission;
     _vehicleBodyType = widget.product.vehicleBodyType;
@@ -155,9 +158,7 @@ class _EditProductPageState extends State<EditProductPage> {
     _existingImages.addAll(widget.product.imageUrls);
     _categoryId = widget.product.categoryId;
     _categorySlug = widget.product.categorySlug;
-    _showSellerPhone = widget.product.showSellerPhone;
     _loadCategories();
-    _loadSellerPhone();
   }
 
   Future<void> _loadCategories() async {
@@ -179,23 +180,6 @@ class _EditProductPageState extends State<EditProductPage> {
     });
   }
 
-  Future<void> _loadSellerPhone() async {
-    try {
-      final profile = await AuthService.instance.fetchProfile();
-      if (!mounted) return;
-      setState(() {
-        _sellerPhone = profile?.phone;
-        _loadingSellerPhone = false;
-        if ((_sellerPhone ?? '').trim().isEmpty) {
-          _showSellerPhone = false;
-        }
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _loadingSellerPhone = false);
-    }
-  }
-
   @override
   void dispose() {
     _titleCtrl.dispose();
@@ -211,6 +195,7 @@ class _EditProductPageState extends State<EditProductPage> {
     _vehicleMileageCtrl.dispose();
     _vehicleEngineCtrl.dispose();
     _vehiclePowerHpCtrl.dispose();
+    _vehicleContactPhoneCtrl.dispose();
     _wilayaCtrl.dispose();
     _dairaCtrl.dispose();
     _declaredValueCtrl.dispose();
@@ -471,7 +456,10 @@ class _EditProductPageState extends State<EditProductPage> {
         imageUrls: allImages,
         categoryId: _categoryId,
         categoryName: categoryName,
-        showSellerPhone: _showSellerPhone,
+        contactPhone: isVehicle && _showVehicleContactPhone
+            ? _vehicleContactPhoneCtrl.text
+            : null,
+        updateContactPhone: true,
         condition: _condition,
         brand: brand,
         size: size,
@@ -679,7 +667,9 @@ class _EditProductPageState extends State<EditProductPage> {
                 children: [
                   Text(
                     _categoryLoadError!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   OutlinedButton(
@@ -758,21 +748,37 @@ class _EditProductPageState extends State<EditProductPage> {
               ),
               const SizedBox(height: 12),
             ],
-            SwitchListTile(
-              value: _showSellerPhone,
-              onChanged: _loadingSellerPhone || (_sellerPhone ?? '').trim().isEmpty
-                  ? null
-                  : (value) => setState(() => _showSellerPhone = value),
-              title: Text(
-                L10n.tr(context, 'listing.add.show_phone_label'),
+            if (isVehicle) ...[
+              SwitchListTile(
+                value: _showVehicleContactPhone,
+                onChanged: (value) =>
+                    setState(() => _showVehicleContactPhone = value),
+                title: Text(
+                  L10n.tr(context, 'listing.add.vehicle_contact_phone_toggle'),
+                ),
+                subtitle: Text(
+                  L10n.tr(context, 'listing.add.vehicle_contact_phone_hint'),
+                ),
               ),
-              subtitle: Text(
-                (_sellerPhone ?? '').trim().isEmpty
-                    ? L10n.tr(context, 'listing.add.show_phone_hint_missing')
-                    : L10n.tr(context, 'listing.add.show_phone_hint'),
-              ),
-            ),
-            const SizedBox(height: 12),
+              if (_showVehicleContactPhone) ...[
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _vehicleContactPhoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(
+                    labelText: L10n.tr(
+                      context,
+                      'listing.add.vehicle_contact_phone_label',
+                    ),
+                    helperText: L10n.tr(
+                      context,
+                      'listing.add.vehicle_contact_phone_format',
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+            ],
             TextField(
               controller: _brandCtrl,
               decoration: InputDecoration(

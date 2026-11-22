@@ -21,6 +21,11 @@ void main() {
     expect(PhoneFormatter.normalizeDzMobileE164('+33612345678'), isEmpty);
   });
 
+  test('formatDzMobile renders a canonical Algerian mobile number', () {
+    expect(PhoneFormatter.formatDzMobile('+213555010203'), '055 501 02 03');
+    expect(PhoneFormatter.formatDzMobile('0211234567'), isEmpty);
+  });
+
   test('normalizeDzE164 cleans +2130 prefix', () {
     expect(PhoneFormatter.normalizeDzE164('+2130555010203'), '+213555010203');
   });

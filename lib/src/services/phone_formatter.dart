@@ -20,6 +20,14 @@ class PhoneFormatter {
     return '';
   }
 
+  static String formatDzMobile(String value) {
+    final normalized = normalizeDzMobileE164(value);
+    if (normalized.isEmpty) return '';
+    final national = '0${normalized.substring(4)}';
+    return '${national.substring(0, 3)} ${national.substring(3, 6)} '
+        '${national.substring(6, 8)} ${national.substring(8)}';
+  }
+
   static String normalizeDzE164(String value) {
     final raw = value.trim();
     if (raw.isEmpty) return '';

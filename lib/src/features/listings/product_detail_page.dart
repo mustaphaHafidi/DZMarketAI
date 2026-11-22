@@ -282,7 +282,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         'profiles.wilaya.seller',
         () => supabase
             .from('profiles')
-            .select('wilaya, full_name, avatar_url, is_public, phone')
+            .select('wilaya, full_name, avatar_url, is_public')
             .eq('id', data['owner_id'])
             .maybeSingle(),
       );
@@ -2078,9 +2078,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             sellerName: _sellerProfile?['full_name']?.toString(),
             sellerAvatar: _sellerProfile?['avatar_url']?.toString(),
             sellerIsPublic: sellerIsPublic,
-            sellerPhone: _product!.showSellerPhone
-                ? (_sellerProfile?['phone']?.toString())
-                : null,
+            sellerPhone: _product!.contactPhone,
             onContact: _contactSeller,
             onViewProfile: viewSellerProfile,
           ),
@@ -2167,9 +2165,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             sellerName: _sellerProfile?['full_name']?.toString(),
             sellerAvatar: _sellerProfile?['avatar_url']?.toString(),
             sellerIsPublic: sellerIsPublic,
-            sellerPhone: _product!.showSellerPhone
-                ? (_sellerProfile?['phone']?.toString())
-                : null,
+            sellerPhone: _product!.contactPhone,
             onContact: _contactSeller,
             onViewProfile: viewSellerProfile,
           ),
@@ -2309,9 +2305,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             sellerName: _sellerProfile?['full_name']?.toString(),
             sellerAvatar: _sellerProfile?['avatar_url']?.toString(),
             sellerIsPublic: sellerIsPublic,
-            sellerPhone: _product!.showSellerPhone
-                ? (_sellerProfile?['phone']?.toString())
-                : null,
+            sellerPhone: _product!.contactPhone,
             onContact: _contactSeller,
             onViewProfile: viewSellerProfile,
           ),
@@ -4357,6 +4351,7 @@ class _SellerRowFixed extends StatelessWidget {
             ? sellerName!.trim()
             : fallbackName;
         final hasSellerName = sellerName?.trim().isNotEmpty ?? false;
+        final displayPhone = PhoneFormatter.formatDzMobile(sellerPhone ?? '');
 
         final card = Container(
           padding: const EdgeInsets.all(12),
@@ -4455,15 +4450,21 @@ class _SellerRowFixed extends StatelessWidget {
                   if (PhoneFormatter.normalizeDzMobileE164(
                     sellerPhone ?? '',
                   ).isNotEmpty)
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        final e164 = PhoneFormatter.normalizeDzMobileE164(
-                          sellerPhone ?? '',
-                        );
-                        launchUrl(Uri(scheme: 'tel', path: e164));
-                      },
-                      icon: const Icon(Icons.call_outlined),
-                      label: Text(L10n.tr(context, 'cta.call_seller')),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(displayPhone),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            final e164 = PhoneFormatter.normalizeDzMobileE164(
+                              sellerPhone ?? '',
+                            );
+                            launchUrl(Uri(scheme: 'tel', path: e164));
+                          },
+                          icon: const Icon(Icons.call_outlined),
+                          label: Text(L10n.tr(context, 'cta.call_seller')),
+                        ),
+                      ],
                     ),
                 ],
               ),

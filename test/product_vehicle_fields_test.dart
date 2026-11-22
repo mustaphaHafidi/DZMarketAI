@@ -17,6 +17,7 @@ void main() {
         'vehicle_body_type': 'hatchback',
         'vehicle_engine': '1.5 dCi',
         'vehicle_power_hp': 90,
+        'contact_phone': '+213555010203',
       });
 
       expect(product.vehicleModel, 'Golf 7');
@@ -27,6 +28,7 @@ void main() {
       expect(product.vehicleBodyType, 'hatchback');
       expect(product.vehicleEngine, '1.5 dCi');
       expect(product.vehiclePowerHp, 90);
+      expect(product.contactPhone, '+213555010203');
     });
 
     test(
@@ -47,6 +49,7 @@ void main() {
         expect(product.vehicleBodyType, isNull);
         expect(product.vehicleEngine, isNull);
         expect(product.vehiclePowerHp, isNull);
+        expect(product.contactPhone, isNull);
       },
     );
   });

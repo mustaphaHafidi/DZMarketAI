@@ -3,6 +3,7 @@ import 'package:dzmarket/src/models/product.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/i18n.dart';
 import 'package:dzmarket/src/services/locale_service.dart';
+import 'package:dzmarket/src/services/phone_formatter.dart';
 import 'package:dzmarket/src/services/rate_limiter.dart';
 import 'package:dzmarket/src/services/supabase_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -17,6 +18,7 @@ class ProductService {
       'categories(name_fr, name_ar, slug),condition,brand,size,color,'
       'vehicle_model,vehicle_year,vehicle_mileage_km,vehicle_fuel,'
       'vehicle_transmission,vehicle_body_type,vehicle_engine,vehicle_power_hp,'
+      'contact_phone,'
       'location_wilaya,location_daira,delivery_options,is_negotiable,'
       'shipping_free,stock_quantity,sold_count,is_archived,created_at';
 
@@ -315,7 +317,7 @@ class ProductService {
     bool shippingFree = false,
     bool exchangeAfterDelivery = false,
     bool insuranceActive = false,
-    bool showSellerPhone = false,
+    String? contactPhone,
     double? declaredValue,
     int? weightKg,
     int? heightCm,
@@ -399,6 +401,7 @@ class ProductService {
         (vehicleMileageKm != null && vehicleMileageKm >= 0)
         ? vehicleMileageKm
         : null;
+    final safeContactPhone = _normalizeContactPhone(contactPhone, locale);
     final safeWilaya = InputSanitizer.sanitizeOptionalText(
       locationWilaya,
       maxLength: 60,
@@ -517,7 +520,7 @@ class ProductService {
       'shipping_free': shippingFree,
       'exchange_after_delivery': exchangeAfterDelivery,
       'insurance_active': insuranceActive,
-      'show_seller_phone': showSellerPhone,
+      'contact_phone': safeContactPhone,
       'declared_value': safeDeclaredValue,
       'weight_kg': safeWeight,
       'height_cm': safeHeight,
@@ -596,7 +599,8 @@ class ProductService {
     bool? shippingFree,
     bool? exchangeAfterDelivery,
     bool? insuranceActive,
-    bool? showSellerPhone,
+    String? contactPhone,
+    bool updateContactPhone = false,
     double? declaredValue,
     int? weightKg,
     int? heightCm,
@@ -669,6 +673,7 @@ class ProductService {
       vehicleEngine,
       maxLength: 60,
     );
+    final safeContactPhone = _normalizeContactPhone(contactPhone, locale);
     final safeWilaya = InputSanitizer.sanitizeOptionalText(
       locationWilaya,
       maxLength: 60,
@@ -733,8 +738,8 @@ class ProductService {
       payload['exchange_after_delivery'] = exchangeAfterDelivery;
     }
     if (insuranceActive != null) payload['insurance_active'] = insuranceActive;
-    if (showSellerPhone != null) {
-      payload['show_seller_phone'] = showSellerPhone;
+    if (updateContactPhone) {
+      payload['contact_phone'] = isVehicleListing ? safeContactPhone : null;
     }
     if (declaredValue != null) payload['declared_value'] = declaredValue;
     if (weightKg != null) payload['weight_kg'] = weightKg;
@@ -790,6 +795,18 @@ class ProductService {
         if (mutable.isEmpty) return;
       }
     }
+  }
+
+  String? _normalizeContactPhone(String? value, String locale) {
+    final raw = value?.trim() ?? '';
+    if (raw.isEmpty) return null;
+    final normalized = PhoneFormatter.normalizeDzMobileE164(raw);
+    if (normalized.isEmpty) {
+      throw FormatException(
+        L10n.trLocale(locale, 'listing.add.error_contact_phone'),
+      );
+    }
+    return normalized;
   }
 
   Future<void> deleteProduct(dynamic id) async {

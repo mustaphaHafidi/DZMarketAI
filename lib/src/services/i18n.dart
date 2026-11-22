@@ -610,6 +610,14 @@ class L10n {
         'Ajoutez un numéro de téléphone à votre profil pour activer cette option.',
     'listing.add.show_phone_label':
         'Afficher mon numéro de téléphone sur cette annonce',
+    'listing.add.vehicle_contact_phone_toggle':
+        'Afficher un numéro pour cette annonce',
+    'listing.add.vehicle_contact_phone_hint':
+        'Ce numéro est public uniquement sur cette annonce de véhicule.',
+    'listing.add.vehicle_contact_phone_label': 'Numéro de contact',
+    'listing.add.vehicle_contact_phone_format': '05, 06, 07 ou +213',
+    'listing.add.error_contact_phone':
+        'Saisissez un numéro mobile algérien valide.',
     'listing.add.size_label': 'Taille (optionnel)',
     'listing.add.step_category': 'Catégorie',
     'listing.add.step_delivery': 'Livraison',
@@ -1671,6 +1679,12 @@ class L10n {
     'listing.add.show_phone_hint_missing':
         'أضف رقم هاتف إلى ملفك الشخصي لتفعيل هذا الخيار.',
     'listing.add.show_phone_label': 'إظهار رقم هاتفي في هذا الإعلان',
+    'listing.add.vehicle_contact_phone_toggle': 'إظهار رقم لهذا الإعلان',
+    'listing.add.vehicle_contact_phone_hint':
+        'سيظهر الرقم علنًا في إعلان المركبة هذا فقط.',
+    'listing.add.vehicle_contact_phone_label': 'رقم التواصل',
+    'listing.add.vehicle_contact_phone_format': '05 أو 06 أو 07 أو +213',
+    'listing.add.error_contact_phone': 'أدخل رقم هاتف جوال جزائري صحيح.',
     'listing.add.size_label': 'المقاس (اختياري)',
     'listing.add.step_category': 'الفئة',
     'listing.add.step_delivery': 'التوصيل',

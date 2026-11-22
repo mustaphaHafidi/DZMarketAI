@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:dzmarket/src/features/profile/my_listings_page.dart';
-import 'package:dzmarket/src/services/auth_service.dart';
 import 'package:dzmarket/src/services/category_service.dart';
 import 'package:dzmarket/src/services/input_sanitizer.dart';
 import 'package:dzmarket/src/services/i18n.dart';
@@ -45,6 +44,7 @@ class _AddListingPageState extends State<AddListingPage> {
   final _vehicleMileageCtrl = TextEditingController();
   final _vehicleEngineCtrl = TextEditingController();
   final _vehiclePowerHpCtrl = TextEditingController();
+  final _vehicleContactPhoneCtrl = TextEditingController();
   String? _vehicleFuel;
   String? _vehicleTransmission;
   String? _vehicleBodyType;
@@ -67,9 +67,7 @@ class _AddListingPageState extends State<AddListingPage> {
   bool _exchangeAfterDelivery = false;
   bool _insuranceActive = false;
   bool _allowStopdesk = true;
-  bool _showSellerPhone = false;
-  String? _sellerPhone;
-  bool _loadingSellerPhone = true;
+  bool _showVehicleContactPhone = false;
   bool _sellerHasEnabledCouriers = true;
   CourierCapabilities _courierCaps = CourierCapabilities.all;
   CourierParcelRules _parcelRules = CourierParcelRules.generic;
@@ -122,7 +120,6 @@ class _AddListingPageState extends State<AddListingPage> {
     _loadLocations();
     _loadEnabledCouriers();
     _loadRecentCategories();
-    _loadSellerPhone();
     _titleCtrl.addListener(_onFieldChanged);
     _descCtrl.addListener(_onFieldChanged);
     _priceCtrl.addListener(_onFieldChanged);
@@ -152,6 +149,7 @@ class _AddListingPageState extends State<AddListingPage> {
     _vehicleMileageCtrl.dispose();
     _vehicleEngineCtrl.dispose();
     _vehiclePowerHpCtrl.dispose();
+    _vehicleContactPhoneCtrl.dispose();
     _declaredValueCtrl.dispose();
     _weightCtrl.dispose();
     _heightCtrl.dispose();
@@ -178,20 +176,6 @@ class _AddListingPageState extends State<AddListingPage> {
       }
     });
     _scheduleSuggestionRefresh();
-  }
-
-  Future<void> _loadSellerPhone() async {
-    try {
-      final profile = await AuthService.instance.fetchProfile();
-      if (!mounted) return;
-      setState(() {
-        _sellerPhone = profile?.phone;
-        _loadingSellerPhone = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _loadingSellerPhone = false);
-    }
   }
 
   Future<void> _loadRecentCategories() async {
@@ -1479,7 +1463,9 @@ class _AddListingPageState extends State<AddListingPage> {
           shippingFree: isVehicle ? false : _freeShipping,
           exchangeAfterDelivery: isVehicle ? false : _exchangeAfterDelivery,
           insuranceActive: isVehicle ? false : _insuranceActive,
-          showSellerPhone: _showSellerPhone,
+          contactPhone: isVehicle && _showVehicleContactPhone
+              ? _vehicleContactPhoneCtrl.text
+              : null,
           allowStopdesk: isVehicle ? false : _allowStopdesk,
           declaredValue: declaredValue,
           weightKg: weight,
@@ -2148,23 +2134,43 @@ class _AddListingPageState extends State<AddListingPage> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                SwitchListTile(
-                  value: _showSellerPhone,
-                  onChanged:
-                      _loadingSellerPhone ||
-                          (_sellerPhone ?? '').trim().isEmpty
-                      ? null
-                      : (value) => setState(() => _showSellerPhone = value),
-                  title: Text(
-                    L10n.tr(context, 'listing.add.show_phone_label'),
+                if (_isVehicleListing) ...[
+                  SwitchListTile(
+                    value: _showVehicleContactPhone,
+                    onChanged: (value) =>
+                        setState(() => _showVehicleContactPhone = value),
+                    title: Text(
+                      L10n.tr(
+                        context,
+                        'listing.add.vehicle_contact_phone_toggle',
+                      ),
+                    ),
+                    subtitle: Text(
+                      L10n.tr(
+                        context,
+                        'listing.add.vehicle_contact_phone_hint',
+                      ),
+                    ),
                   ),
-                  subtitle: Text(
-                    (_sellerPhone ?? '').trim().isEmpty
-                        ? L10n.tr(context, 'listing.add.show_phone_hint_missing')
-                        : L10n.tr(context, 'listing.add.show_phone_hint'),
-                  ),
-                ),
-                const SizedBox(height: 12),
+                  if (_showVehicleContactPhone) ...[
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _vehicleContactPhoneCtrl,
+                      keyboardType: TextInputType.phone,
+                      decoration: InputDecoration(
+                        labelText: L10n.tr(
+                          context,
+                          'listing.add.vehicle_contact_phone_label',
+                        ),
+                        helperText: L10n.tr(
+                          context,
+                          'listing.add.vehicle_contact_phone_format',
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                ],
                 TextField(
                   controller: _brandCtrl,
                   decoration: InputDecoration(
